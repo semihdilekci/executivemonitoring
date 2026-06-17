@@ -42,12 +42,19 @@ Veri kaynağını temsil eder. Her kaynak bir collector tipi ile ilişkilidir.
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() | — |
 | `updated_at` | TIMESTAMPTZ | NOT NULL | — |
 
-`config` JSONB yapısı tipe göre değişir:
-- **rss:** `{"feed_url": "https://...", "language": "tr"}`
-- **email:** `{"imap_host": "imap.gmail.com", "sender_filter": "newsletter@economist.com", "folder": "INBOX"}`
-- **rest_api:** `{"endpoint": "https://...", "auth_type": "api_key", "headers": {}}`
+`config` JSONB yapısı tipe göre değişir. Tüm MVP-0 kaynaklarında ortak alanlar:
+
+| Alan | Tip | Açıklama |
+| ---- | --- | -------- |
+| `ingest_mode` | `"all"` \| `"filtered"` | `"all"`: tüm makaleler kabul; `"filtered"`: keyword gate zorunlu (`Docs/04` §8.3) |
+| `default_category` | string | Kategori eşitliği tie-break ve `ingest_mode: "all"` routing |
+
+Tip-spesifik alanlar:
+- **rss:** `{"feed_url": "https://...", "language": "tr", "ingest_mode": "all", "default_category": "fmcg"}`
+- **email:** `{"imap_host": "imap.gmail.com", "sender_filter": "newsletter@economist.com", "folder": "INBOX", "ingest_mode": "filtered", "default_category": "strategy"}`
+- **rest_api:** `{"endpoint": "https://...", "auth_type": "api_key", "headers": {}, "ingest_mode": "filtered", "default_category": "finance"}`
 - **websocket:** `{"ws_url": "wss://...", "reconnect_interval_seconds": 30}`
-- **gov:** `{"feed_url": "https://...", "parser": "tcmb|kap|resmi_gazete"}`
+- **gov:** `{"feed_url": "https://...", "parser": "tcmb|kap|resmi_gazete", "ingest_mode": "all", "default_category": "macro"}`
 
 ### 2.3 RawItem
 
@@ -217,7 +224,7 @@ Sistem olayı kaydı.
 | `payload` | JSONB | NULLABLE | Olay detayları |
 | `created_at` | TIMESTAMPTZ | NOT NULL, INDEX | Olay zamanı |
 
-Loglanacak `event_type` değerleri: `user.login`, `user.logout`, `user.created`, `user.deleted`, `user.role_changed`, `user.deactivated`, `source.created`, `source.deleted`, `source.status_changed`, `prompt_template.updated`, `api_key.created`, `api_key.deleted`, `digest.started`, `digest.completed`, `digest.failed`, `system.error`, `password.reset_initiated`.
+Loglanacak `event_type` değerleri: `user.login`, `user.logout`, `user.created`, `user.deleted`, `user.role_changed`, `user.deactivated`, `source.created`, `source.deleted`, `source.status_changed`, `prompt_template.updated`, `api_key.created`, `api_key.deleted`, `digest.started`, `digest.completed`, `digest.failed`, `system.error`, `password.reset_initiated`, `password.reset_completed`.
 
 Retention: 90 gün aktif tabloda, sonra S3 arşivine taşınır.
 
@@ -501,7 +508,7 @@ erDiagram
 ### ProcessedItem
 
 - Her ProcessedItem tam olarak bir RawItem'dan üretilir (1:1 ilişki).
-- `relevance_score` 0-1 aralığındadır; 0 = alakasız, 1 = çok alakalı. Skor AI tarafından pipeline'ın enrich aşamasında hesaplanır.
+- `relevance_score` 0-1 aralığındadır; 0 = düşük öncelik, 1 = yüksek öncelik. Skor pipeline enrich aşamasında deterministik formülle hesaplanır (`keyword_intensity * 0.6 + freshness * 0.4`; `Docs/04` §8.4). Gate'i geçemeyen makaleler için `processed_items` oluşturulmaz.
 - `schema_category` alanı DB schema bölümleme kategorisine karşılık gelir (news, market, geo, transport, fmcg).
 - İşlenmiş item üzerinden content chunk'lar oluşturulur.
 

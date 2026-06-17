@@ -616,12 +616,15 @@ Processor, SQS queue'lardan mesaj tüketen ve makaleyi adım adım işleyen Lamb
 flowchart LR
     A["SQS Queue"] --> B["Dedup"]
     B --> C["Normalize"]
-    C --> D["Enrich"]
-    D --> E["Score"]
+    C --> D["Gate"]
+    D --> E["Enrich + Score"]
     E --> F["Chunk"]
     F --> G["PostgreSQL"]
     B -->|"Duplicate"| H["Atla"]
+    D -->|"No keyword match"| I["DROP"]
 ```
+
+> **MVP-0 pipeline kararı (K1–K5):** Keyword-based enrichment; LLM enrichment yok. Keyword gate normalize sonrası çalışır — eşleşmeyen makaleler `processed_items` ve `content_chunks`'a yazılmaz. `relevance_score` deterministik formül (`§8.4`); source reliability weight kaldırıldı.
 
 ### 8.1 Dedup
 
@@ -640,26 +643,83 @@ MVP-0'da fuzzy dedup (title similarity) yok — yalnızca hash bazlı dedup. Fuz
 - Tarih parse: farklı formatları ISO 8601 `Europe/Istanbul` timezone'a normalize et.
 - Min length filtre: 10 kelimeden kısa içerik → pipeline skip (graceful).
 
-### 8.3 Enrich
+### 8.3 Gate (Keyword Filter)
 
-> **MVP-0 kararı:** Keyword/rules tabanlı enrichment tek doğruluk kaynağıdır. LLM enrichment MVP-1 upgrade path'tir (`EnricherProcessor` → `LLMEnricherProcessor` swap; `BaseProcessor` chain değişmez). Gerekçe: LLM bütçesi digest + chatbot'a ayrılır; pipeline LLM outage'da da çalışmalıdır.
+Normalize edilmiş metin üzerinde keyword gate çalışır (`GateProcessor`). Gate hem filtre hem enrichment önkoşuludur — keyword eşleşmesi olmayan makaleler işlenmiş veri katmanına **yazılmaz** (`processed_items`, `content_chunks` INSERT yok).
 
-#### MVP-0 — Keyword/rules enricher
+#### `sources.config` — `ingest_mode`
 
-**Kategori** (`topics` JSONB dizisine yazılır) — `source_type` + keyword mapping:
+| Alan | Tip | Zorunlu | Açıklama |
+| ---- | --- | ------- | -------- |
+| `ingest_mode` | `"all"` \| `"filtered"` | Evet (MVP-0 seed) | Tüm makaleleri kabul et veya keyword gate uygula |
+| `default_category` | string | Evet | Kategori eşitliği ve `ingest_mode: "all"` kaynaklarda schema routing fallback |
 
-```python
-CATEGORY_RULES = {
-    "macro":        {"source_types": ["gov"], "keywords": ["tcmb", "faiz", "enflasyon", "büyüme", "gsyih", "imf"]},
-    "fmcg":         {"source_types": [],      "keywords": ["fmcg", "gıda", "perakende", "tüketici", "snack", "dairy", "bakery", "confectionery", "grocery"]},
-    "finance":      {"source_types": [],      "keywords": ["borsa", "hisse", "kur", "tahvil", "bist", "dolar", "euro", "kap"]},
-    "geopolitical": {"source_types": [],      "keywords": ["savaş", "yaptırım", "nato", "güvenlik", "jeopolitik", "sanctions"]},
-    "strategy":     {"source_types": [],      "keywords": ["strateji", "inovasyon", "dijital", "ai", "leadership", "disruption", "transformation"]},
-    "regulatory":   {"source_types": ["gov"], "keywords": ["resmi gazete", "yönetmelik", "kanun", "mevzuat", "regülasyon"]},
+Örnek config:
+
+```json
+{
+  "feed_url": "https://bloomberght.com/rss",
+  "ingest_mode": "filtered",
+  "default_category": "finance"
 }
 ```
 
-Öncelik: `source_type` match → keyword match (title + body birleşik, case-insensitive) → fallback `"macro"`.
+```json
+{
+  "feed_url": "https://foodnavigator.com/rss",
+  "ingest_mode": "all",
+  "default_category": "fmcg"
+}
+```
+
+#### Gate akışı
+
+```
+Makale geldi (normalize edilmiş title + body)
+  → sources.config.ingest_mode oku
+    → "all" (domain-specific kaynak)
+      → KABUL — keyword araması yapılmaz
+    → "filtered" (geniş kapsamlı kaynak)
+      → Master keyword havuzunda ≥1 eşleşme var mı? (title + body, case-insensitive, NFC)
+        → EVET: KABUL → enrich + DB yazımı
+        → HAYIR: DROP → processed_items / content_chunks yazılmaz
+```
+
+**Master keyword havuzu:** `CATEGORY_RULES` (§8.4) içindeki tüm keyword'lerin birleşimi. Gate yalnızca “en az bir eşleşme var mı?” sorusunu sorar; kategori çözümlemesi enricher'da yapılır.
+
+**`ingest_mode` seçim kriteri:**
+
+| `ingest_mode` | Kaynak örnekleri |
+| ------------- | ---------------- |
+| `"all"` | foodnavigator, confectionerynews, grocerydive, bakeryandsnacks, dairyreporter, fooddive, retaildive, foodmanufacture, perakende.org, tcmb.gov.tr, kap.org.tr, resmigazete |
+| `"filtered"` | bloomberght, fortuneturkey, dunya.com, gazeteoksijen, hbr.org, mckinsey.com, sloanreview.mit.edu, technologyreview.com, economist, apollo, morganstanley, bcg |
+
+Gate DROP path: pipeline `None` döner (skip); metrik `processor.gate.dropped` loglanır. Collector aşamasında oluşmuş `raw_items` satırı kalabilir; işlenmiş veri üretilmez.
+
+### 8.4 Enrich ve Score
+
+> **MVP-0 kararı (K1):** Keyword/rules tabanlı enrichment tek doğruluk kaynağıdır. LLM enrichment MVP-1 upgrade path'tir (`EnricherProcessor` → `LLMEnricherProcessor` swap; `BaseProcessor` chain değişmez). Gerekçe: 35+ kaynak × 15 dk polling → saatte yüzlerce makale; LLM maliyeti sürdürülemez; pipeline LLM outage'da da çalışmalıdır; Yıldız etki analizi digest generator LLM'inde yapılır.
+
+`EnricherProcessor` gate'i geçen makalelerde kategori çözümler, `topics` yazar ve `relevance_score` hesaplar (`ScorerProcessor` aynı iterasyonda veya enricher içinde çağrılabilir).
+
+#### Kategori çözümleme (`CATEGORY_RULES`)
+
+```python
+CATEGORY_RULES = {
+    "macro":        {"keywords": ["tcmb", "faiz", "enflasyon", "büyüme", "gsyih", "imf", "merkez bankası", "cari açık"]},
+    "fmcg":         {"keywords": ["fmcg", "gıda", "perakende", "tüketici", "snack", "dairy", "bakery", "confectionery", "grocery", "cpg", "tüketim", "market", "raf"]},
+    "finance":      {"keywords": ["borsa", "hisse", "kur", "tahvil", "bist", "dolar", "euro", "kap", "halka arz", "bilanço", "faiz oranı"]},
+    "geopolitical": {"keywords": ["savaş", "yaptırım", "nato", "güvenlik", "jeopolitik", "sanctions", "ambargo", "çatışma"]},
+    "strategy":     {"keywords": ["strateji", "inovasyon", "dijital", "ai", "leadership", "disruption", "transformation", "sürdürülebilirlik"]},
+    "regulatory":   {"keywords": ["resmi gazete", "yönetmelik", "kanun", "mevzuat", "regülasyon", "düzenleme", "kvkk"]},
+}
+```
+
+**Çözümleme sırası:**
+
+1. Keyword match (title + body, case-insensitive) → en çok eşleşen kategori kazanır.
+2. Eşitlik → `sources.config.default_category` kazanır.
+3. `ingest_mode: "all"` → her zaman `sources.config.default_category` (domain-specific kaynak).
 
 **Schema routing** — kategori → PostgreSQL schema (`schema_category`):
 
@@ -674,30 +734,39 @@ CATEGORY_RULES = {
 
 `transport` schema'sı MVP-0'da kullanılmaz (AIS/OpenSky MVP-2).
 
-**Tag extraction:** Eşleşen keyword'ler `topics` dizisine eklenir (duplicate yok).
+**Tag extraction:** Eşleşen keyword'ler `topics` JSONB dizisine eklenir (duplicate yok). `entities` MVP-0'da boş `[]` kalır.
 
-**MVP-0'da yok:** sentiment analizi, entity extraction, LLM tabanlı Yıldız ilgi skoru, enrichment için LLM çağrısı.
+#### `relevance_score` (K4)
+
+Gate'i geçen makaleler arasında sıralama skoru — **deterministik**, admin müdahalesi yok. `source_reliability_weight` kaldırıldı (K3).
+
+```python
+def calculate_relevance_score(article: ProcessedArticle) -> float:
+    keyword_intensity = _calc_keyword_intensity(article.content, article.matched_keywords)
+    freshness = _calc_freshness(article.published_at)
+    return keyword_intensity * 0.6 + freshness * 0.4
+```
+
+| Bileşen | Ağırlık | Hesaplama |
+| ------- | ------- | --------- |
+| Keyword yoğunluğu | %60 | (eşleşen farklı keyword sayısı / master havuz büyüklüğü) × frekans normalize |
+| Güncellik | %40 | Son 24 saat: 1.0; son 72 saat: 0.5; daha eski: 0.2 |
+
+Sonuç: `{schema}.processed_items.relevance_score` (0.0–1.0; `Docs/02` CHECK).
+
+**`relevance_score` kullanım yerleri:**
+
+| Kullanım | Davranış |
+| -------- | -------- |
+| Digest makale seçimi | Top N makale `relevance_score DESC` |
+| RAG chatbot ranking | pgvector cosine similarity × `relevance_score` hybrid sıralama |
+| Dashboard | Digest içi öne çıkan haberler `relevance_score` sıralı |
+
+**MVP-0'da yok:** sentiment analizi, entity extraction, LLM tabanlı Yıldız ilgi skoru, source reliability weight, keyword eşleşmeyen makalelerin işlenmiş veri katmanına yazılması.
 
 #### MVP-1 — LLM enricher (upgrade path)
 
-`LLMEnricherProcessor` aynı çıktı alanlarını üretir: kategori, sentiment, entity listesi (`entities` JSONB), gelişmiş ilgi sinyali. Batch LLM çağrısı (5–10 makale/prompt) token maliyetini düşürür. Scorer ve chunk adımları değişmez.
-
-### 8.4 Score
-
-Makalenin digest'e dahil edilme önceliğini belirler. MVP-0'da **rule-based** `relevance_score` (0.0–1.0; `Docs/02` check constraint):
-
-```python
-score = (
-    source_reliability_weight * 0.4    # sources.config, varsayılan 0.5
-    + freshness_score * 0.3            # son 24 saat: 1.0; 72 saat: 0.5; eski: 0.2
-    + keyword_match_score * 0.3        # kategori keyword yoğunluğu, normalize
-)
-```
-
-- `source_reliability_weight`: admin tanımlı, `sources.config` içinde (varsayılan `0.5`).
-- Threshold altı skorlar **discard edilmez** — `relevance_score` yazılır; digest seçiminde düşük öncelik (Faz 4 digest generator filtreler).
-
-Sonuç: `{schema}.processed_items.relevance_score` float alanına yazılır.
+`LLMEnricherProcessor` swap: sentiment, entity extraction (`entities` JSONB), LLM-based Yıldız ilgi skoru (0–10). Batch LLM (5–10 makale/prompt). Gate, chunk ve embedding adımları değişmez.
 
 ### 8.5 Chunk
 
@@ -790,6 +859,7 @@ Chatbot sorusu geldiğinde çalışan akış:
 Kullanıcı sorusu
     → Embedding üretimi (embedding_client)
     → pgvector similarity search (top-10 chunk, threshold > 0.7)
+    → Hybrid sıralama: cosine_similarity × processed_item.relevance_score
     → Context assembly (chunk'lar + metadata birleştirilir)
     → System prompt + context + soru → LLM çağrısı
     → Yanıt + kaynak referansları
@@ -799,7 +869,8 @@ Kullanıcı sorusu
 Context assembly kuralları:
 - Maksimum 10 chunk context'e eklenir.
 - Her chunk'ın kaynak bilgisi (makale title, URL, yayın tarihi) korunur.
-- Toplam context token limiti: 8000 token. Aşarsa en düşük similarity score'lu chunk'lar çıkarılır.
+- Hybrid skor: semantik benzerlik yüksek ama `relevance_score` düşükse sıralamada geri düşer (`Docs/04` §8.4).
+- Toplam context token limiti: 8000 token. Aşarsa en düşük hybrid skorlu chunk'lar çıkarılır.
 - System prompt: "Sen YıldızHolding Global Intelligence Platform'un AI asistanısın. Yalnızca sağlanan context'ten yanıt ver. Context'te bilgi yoksa 'Bu konuda elimde yeterli veri yok' de. Her yanıtın sonunda kullandığın kaynakları listele."
 
 ### 9.4 Chatbot Service

@@ -117,10 +117,15 @@ async def test_dedup_allows_new_hash():
 - Whitespace düzenleme: çoklu boşluk → tek boşluk
 - Türkçe karakter koruması: `ışığın` bozulmamalı
 
+**Gate:**
+- `ingest_mode: "all"` → keyword araması olmadan geçer
+- `ingest_mode: "filtered"` + master havuzda eşleşme → geçer
+- `ingest_mode: "filtered"` + eşleşme yok → DROP (`processed_items` yazılmaz)
+
 **Score:**
-- Bilinen ağırlıklarla deterministik skor hesabı
-- Edge case: tüm ağırlıklar 0 → skor 0
+- Deterministik formül: `keyword_intensity * 0.6 + freshness * 0.4`
 - Edge case: `relevance_score` her zaman 0.0–1.0 aralığında
+- Source reliability weight yok (K3 kararı)
 
 ### 3.3 AI Engine Testleri
 

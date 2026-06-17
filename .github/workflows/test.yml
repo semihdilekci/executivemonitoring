@@ -40,6 +40,11 @@ jobs:
       - name: Unit tests
         run: pytest tests/unit -v --cov=apps --cov=services --cov=packages --cov-report=xml
 
+      - name: Run database migrations
+        run: alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/ygip_test
+
       - name: Integration tests
         run: pytest tests/integration -v --cov-append --cov-report=xml
         env:

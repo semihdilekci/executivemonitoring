@@ -498,23 +498,38 @@ Testler:
 
 ---
 
-### 3.4 — Enricher ve Scorer
+### 3.4 — Gate Processor (Keyword Filter)
 
-**Çıktı:** Metadata zenginleştirme ve relevance skorlama
+**Çıktı:** `ingest_mode` + master keyword havuzu ile filtreleme; eşleşmeyen makaleler işlenmiş veri katmanına yazılmaz
 
 Oluşturulacaklar:
-- `services/processor/enricher.py` — `EnricherProcessor(BaseProcessor)`: schema routing (source_type + content analiz → news/market/geo/transport/fmcg), tag extraction (keyword bazlı), metadata normalization
-- `services/processor/scorer.py` — `ScorerProcessor(BaseProcessor)`: relevance_score hesaplama (0.0–1.0), ağırlık faktörleri (kaynak güvenilirliği, güncellik, anahtar kelime eşleşmesi), threshold altı → low priority flag
+- `services/processor/gate_processor.py` — `GateProcessor(BaseProcessor)`: `sources.config.ingest_mode` okuma (`"all"` → otomatik kabul; `"filtered"` → master keyword havuzu eşleşmesi zorunlu), normalize edilmiş title+body üzerinde case-insensitive arama, eşleşme yoksa DROP (`None` döner)
+- `services/processor/keyword_pool.py` — `CATEGORY_RULES` birleşiminden master havuz; gate ve enricher paylaşır
 
 Testler:
-- `tests/unit/processor/test_enricher.py` — schema routing doğru, tag extraction
-- `tests/unit/processor/test_scorer.py` — deterministik skor, edge case'ler (tüm ağırlık 0, max skor)
+- `tests/unit/processor/test_gate.py` — `ingest_mode: "all"` geçer; `filtered` + keyword match geçer; `filtered` + no match DROP; Türkçe NFC eşleşme
 
-**Cursor context:** `services/processor/base_processor.py`, `packages/shared/enums.py` (schema_name enum)
+**Cursor context:** `services/processor/base_processor.py`, `packages/shared/models/source.py`, `Docs/04` §8.3
 
 ---
 
-### 3.5 — Chunker ve Embedding
+### 3.5 — Enricher ve Scorer
+
+**Çıktı:** Kategori çözümleme, schema routing, tag extraction ve deterministik `relevance_score`
+
+Oluşturulacaklar:
+- `services/processor/enricher.py` — `EnricherProcessor(BaseProcessor)`: `CATEGORY_RULES` ile kategori (en çok eşleşme → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`), schema routing (news/market/geo/fmcg), `topics` tag extraction
+- `services/processor/scorer.py` — `ScorerProcessor(BaseProcessor)`: `relevance_score` 0.0–1.0 (`keyword_intensity * 0.6 + freshness * 0.4`); source reliability weight yok
+
+Testler:
+- `tests/unit/processor/test_enricher.py` — kategori çözümleme, schema routing, `ingest_mode: "all"` default_category
+- `tests/unit/processor/test_scorer.py` — deterministik skor, freshness bucket'ları, skor 0.0–1.0 aralığı
+
+**Cursor context:** `services/processor/base_processor.py`, `services/processor/keyword_pool.py`, `packages/shared/enums.py` (schema_name enum)
+
+---
+
+### 3.6 — Chunker ve Embedding
 
 **Çıktı:** Text splitting ve pgvector embedding üretimi
 
@@ -530,19 +545,19 @@ Testler:
 
 ---
 
-### 3.6 — Pipeline Entegrasyonu
+### 3.7 — Pipeline Entegrasyonu
 
 **Çıktı:** Tüm processor adımlarının zincir halinde çalıştığı end-to-end pipeline
 
 Oluşturulacaklar:
-- `services/processor/pipeline_orchestrator.py` — Pipeline zinciri tanımı: SQS message → DedupProcessor → NormalizerProcessor → EnricherProcessor → ScorerProcessor → ChunkerProcessor → EmbeddingService → processed_items INSERT → embeddings INSERT
+- `services/processor/pipeline_orchestrator.py` — Pipeline zinciri: SQS message → DedupProcessor → NormalizerProcessor → GateProcessor → EnricherProcessor → ScorerProcessor → ChunkerProcessor → EmbeddingService → processed_items INSERT → embeddings INSERT
 - Pipeline konfigürasyonu: adım sırası, hata yönetimi (bir adım fail → loglama, pipeline durur, DLQ'ya yönlendir)
 - `raw_items` → `processed_items` mapping logic
 
 Testler:
 - `tests/integration/test_pipeline_e2e.py` — fixture raw_item → tam pipeline → processed_item + embedding DB'de doğru yazılmış
 
-**Cursor context:** 3.1-3.5 tüm processor dosyaları, `packages/shared/models/processed_item.py`
+**Cursor context:** 3.1-3.6 tüm processor dosyaları, `packages/shared/models/processed_item.py`
 
 ---
 
@@ -791,8 +806,8 @@ Testler:
 
 Oluşturulacaklar:
 - `apps/web/` proje yapısı: Next.js + TypeScript + Tailwind CSS
-- `lib/api-client.ts` — axios/fetch wrapper, base URL config, auth header injection (httpOnly cookie), error interceptor (401 → login redirect, 429 → rate limit toast)
-- `lib/auth-context.tsx` — AuthProvider, useAuth hook (user, role, isAdmin, login, logout)
+- `lib/api-client.ts` — axios wrapper, base URL config, `withCredentials`, error interceptor (401 → refresh → login, 429 → toast)
+- `hooks/use-auth.ts` + `components/providers.tsx` — AuthProvider, useAuth (user, role, isAdmin, login, logout)
 - `app/(dashboard)/layout.tsx` — rol bazlı shell: `viewer` → `PillNav` + tam genişlik; `admin` → `Sidebar` + `ml-[260px]`
 - `components/layout/pill-nav.tsx` — viewer navigasyonu (Ana Sayfa, Bültenler, AI Chatbot); React Bits pattern, `next/link`, `gsap`
 - `components/layout/sidebar.tsx` — **yalnızca admin**; Ana Menü + Yönetim linkleri
@@ -812,8 +827,8 @@ Testler: Bu iterasyonda test yok (frontend unit test MVP-0'da kapsam dışı —
 **Çıktı:** Login page, reset-password page
 
 Oluşturulacaklar:
-- `app/login/page.tsx` — email + şifre formu, hata state'leri, rate limit feedback, login sonrası redirect
-- `app/reset-password/page.tsx` — token query param → yeni şifre formu, başarı/hata state'leri
+- `app/(auth)/login/page.tsx` — email + şifre formu, hata state'leri, rate limit feedback, login sonrası redirect
+- `app/(auth)/reset-password/[token]/page.tsx` — URL token → yeni şifre formu, başarı/hata state'leri
 - Cookie handling: login response'dan httpOnly cookie set (API proxy route veya backend Set-Cookie)
 
 **Cursor context:** `lib/api-client.ts`, `lib/auth-context.tsx`, auth API kontratları
@@ -827,7 +842,7 @@ Oluşturulacaklar:
 Oluşturulacaklar:
 - `app/(dashboard)/page.tsx` — Executive Brief kartı, en fazla 3 okunmamış teaser, "Tüm bültenleri gör" → `/digests`, chatbot kısayolu
 - `components/home/executive-brief.tsx` — brief API + istatistik bandı
-- `lib/hooks/use-brief.ts` — `GET /briefs/today`
+- `hooks/use-brief.ts` — `GET /briefs/today`
 
 **Cursor context:** 6.1 çıktıları, brief API kontratları
 
@@ -840,7 +855,7 @@ Oluşturulacaklar:
 Oluşturulacaklar:
 - `app/(dashboard)/digests/page.tsx` — yeni/önceki bülten bölümleri, tip filtre, cursor pagination
 - `components/digest/digest-card.tsx` — bülten tipi badge, teaser, Yıldız etki bandı, ReadToggle
-- `lib/hooks/use-digests.ts` — React Query ile digest list fetching
+- `hooks/use-digests.ts` — React Query ile digest list fetching
 
 **Cursor context:** 6.1 çıktıları, digest API kontratları (`GET /digests`)
 
@@ -851,7 +866,7 @@ Oluşturulacaklar:
 **Çıktı:** Digest section'larını gösteren detay sayfası
 
 Oluşturulacaklar:
-- `app/dashboard/digest/[id]/page.tsx` — digest başlık, tarih, section'lar (sıralı), haber linkleri (tıklanabilir), "Yıldız için" etki notları (vurgulu kutu)
+- `app/(dashboard)/digests/[id]/page.tsx` — digest başlık, tarih, section'lar (sıralı), haber linkleri (tıklanabilir), "Yıldız için" etki notları (vurgulu kutu)
 - `components/digest/digest-section.tsx` — section başlık, içerik render, kaynak referansları
 - Print-friendly layout (CSS @media print)
 
@@ -864,7 +879,7 @@ Oluşturulacaklar:
 **Çıktı:** Chat interface
 
 Oluşturulacaklar:
-- `app/dashboard/chatbot/page.tsx` — sohbet arayüzü, mesaj gönder/al, scroll-to-bottom
+- `app/(dashboard)/chatbot/page.tsx` — sohbet arayüzü, mesaj gönder/al, scroll-to-bottom
 - `components/chatbot/chat-message.tsx` — kullanıcı/bot mesaj balonu, loading indicator
 - `components/chatbot/source-card.tsx` — kaynak referans kartları (başlık, URL, skor)
 - Rate limit feedback: 429 → "Lütfen biraz bekleyin" toast
@@ -878,7 +893,7 @@ Oluşturulacaklar:
 **Çıktı:** Kullanıcı CRUD sayfası
 
 Oluşturulacaklar:
-- `app/admin/users/page.tsx` — kullanıcı listesi tablosu (email, ad, rol, durum, son giriş), pagination
+- `app/(dashboard)/admin/users/page.tsx` — kullanıcı listesi tablosu (email, ad, rol, durum, son giriş), pagination
 - `components/admin/user-form-modal.tsx` — oluştur/düzenle modal (email, ad, rol seçimi, aktif/pasif), şifre sıfırlama butonu
 - Confirmation dialog: kullanıcı pasif yapma/silme onayı
 
@@ -891,7 +906,7 @@ Oluşturulacaklar:
 **Çıktı:** Kaynak CRUD sayfası
 
 Oluşturulacaklar:
-- `app/admin/sources/page.tsx` — kaynak listesi tablosu (ad, tip, durum, son çekim, hata sayısı), filtre (tipe göre)
+- `app/(dashboard)/admin/sources/page.tsx` — kaynak listesi tablosu (ad, tip, durum, son çekim, hata sayısı), filtre (tipe göre)
 - `components/admin/source-form-modal.tsx` — oluştur/düzenle modal (ad, tip seçimi, config JSON editör, polling interval), aktif/pasif toggle
 - Son çekim durumu badge: başarılı (yeşil), hata (kırmızı), beklemede (gri)
 
@@ -904,9 +919,8 @@ Oluşturulacaklar:
 **Çıktı:** Prompt editor, API key yönetimi, sistem ayarları sayfaları
 
 Oluşturulacaklar:
-- `app/admin/prompts/page.tsx` — bülten tipi bazlı şablon listesi, inline editor (system_prompt + user_prompt_template), kaydet butonu
-- `app/admin/api-keys/page.tsx` — API key listesi (alias, provider, durum), ekle/sil, kullanım grafiği (recharts: günlük token tüketimi, key bazlı kırılım)
-- `app/admin/settings/page.tsx` — JWT süreleri, chatbot parametreleri, düzenle + kaydet
+- `app/(dashboard)/admin/prompt-templates/page.tsx` — bülten tipi bazlı şablon listesi, inline editor (system_prompt + user_prompt_template), kaydet butonu
+- `app/(dashboard)/admin/api-keys/page.tsx` — API key listesi (alias, provider, durum), ekle/sil, kullanım grafiği (recharts: günlük token tüketimi, key bazlı kırılım)
 - `components/admin/usage-chart.tsx` — recharts BarChart/LineChart
 
 **Cursor context:** 6.1 çıktıları, prompt/api-key/settings API kontratları
@@ -918,9 +932,9 @@ Oluşturulacaklar:
 **Çıktı:** Kalan admin sayfaları
 
 Oluşturulacaklar:
-- `app/admin/audit-logs/page.tsx` — filtrelenebilir tablo (tarih aralığı, event type, actor), pagination, payload detay expandable row
-- `app/admin/chat-history/page.tsx` — kullanıcı bazlı chatbot geçmişi, soru/yanıt listesi, tarih filtre
-- `app/admin/notifications/page.tsx` — bildirim alıcı listesi yönetimi, zamanlama görüntüleme
+- `app/(dashboard)/admin/audit-logs/page.tsx` — filtrelenebilir tablo (tarih aralığı, event type, actor), pagination, payload detay expandable row
+- `app/(dashboard)/admin/chat-history/page.tsx` — kullanıcı bazlı chatbot geçmişi, soru/yanıt listesi, tarih filtre
+- `app/(dashboard)/admin/notifications/page.tsx` — bildirim alıcı listesi, zamanlama + JWT/chatbot ayarları (`Docs/05` §4 route tablosu)
 
 **Cursor context:** 6.1 çıktıları, audit/chatbot-history/notification API kontratları
 

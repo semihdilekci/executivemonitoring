@@ -113,7 +113,7 @@ description: "[Faz 2] Collector'lar — 6 iterasyon/chat (BaseCollector → sour
 
 **Uygulama planı:**
 1. `CreateSourceRequest` — `source_type`, `config`, `polling_interval_minutes`, `category`, `target_phase` (`Docs/03` §4 POST)
-2. Config validation tip bazlı — rss: `feed_url` zorunlu (Pydantic model per type)
+2. Config validation tip bazlı — rss: `feed_url` zorunlu; MVP-0: `ingest_mode` (`all`|`filtered`) + `default_category` zorunlu (`Docs/04` §8.3, `Docs/02` §4.2)
 3. `GET` filtreler: `source_type`, `status`, `category`; pagination max 100 (`Docs/03` §4)
 4. `DELETE` — CASCADE raw_items; response `deleted_raw_items_count` (`Docs/03` §4 DELETE)
 5. `PATCH /status` — `error→active` resets `error_count` (`Docs/03` §4 PATCH)
@@ -135,7 +135,8 @@ description: "[Faz 2] Collector'lar — 6 iterasyon/chat (BaseCollector → sour
 | source_type values | `Docs/03` §4 | `rest_api` not `api` |
 | status enum | `Docs/02` §3 | active/inactive/error |
 | DELETE cascade | `Docs/02` §4.3 | ON DELETE CASCADE |
-| Viewer deny | `Docs/03` §12 | 403 |
+| Config ingest_mode | `Docs/04` §8.3 | `all` / `filtered` |
+| default_category | `Docs/02` §4.2 | processor gate + enrich |
 
 **Kalite kapıları:**
 - [ ] Integration CRUD + RBAC deny

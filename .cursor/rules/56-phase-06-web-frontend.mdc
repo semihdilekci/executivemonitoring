@@ -1,127 +1,686 @@
 ---
-description: "[Faz 6] Web frontend — 9 iterasyon/chat (Next.js → login → home → digest → chat → admin users → sources → AI settings → audit/chat/notif). Mesajda \"Faz 6 — İterasyon M\" belirt."
+description: "[Faz 6] Web frontend — 9 iterasyon/chat (Next.js → login → home+digests → detail → chat → admin users → sources → prompts+keys → audit/chat/notif). Mesajda \"Faz 6 — İterasyon M\" belirt."
 ---
 
 # Faz 6: Web Frontend
 
 ## Goal
 
-Next.js dashboard: viewer (ana sayfa, bülten detay, chatbot) + admin (7 yönetim sayfası). Auth guard, React Query, Türkçe UI.
+Next.js dashboard: viewer (S-HOME, S-DIGESTS-LIST, S-DIGEST-DETAIL, S-CHATBOT) + admin (7 yönetim sayfası). Rol bazlı shell (PillNav vs Sidebar), React Query, httpOnly cookie auth, Türkçe UI, CSP middleware.
 
 ## Feature branch (zorunlu)
 
-`feature/mvp-0`. Öncül: Faz 1 (API) + Faz 4–5 (digest/chat/notification API'leri).
+`feature/mvp-0` (`Docs/09_DEV_WORKFLOW.md` §2). **Önkoşul:** Faz 1 (auth/users API) + Faz 4 (digest/chat API) + Faz 5 (notification API) Done.
+
+**Stop (İterasyon 1, kod öncesi):** [ ] Faz 1–5 API'leri local çalışır; [ ] `feature/mvp-0` güncel; [ ] `NEXT_PUBLIC_API_URL` `.env` tanımlı.
 
 ## Bu fazın çalışma modeli
 
-`@56-phase-06-web-frontend` + **「Faz 6 — İterasyon M」**. Yalnızca `apps/web/` — mobil yok.
+- Her chat: `@56-phase-06-web-frontend` + **「Faz 6 — İterasyon M」**.
+- Katman: yalnızca `apps/web/` — backend değişikliği yok (gerekirse ayrı PR, Faz 1–5).
+- Agent yalnızca iterasyonun **Docs okuma sırasını** okur; Plan moduna geçme.
+- Route/path çelişkisinde **`Docs/05_FRONTEND_SPEC.md` §2 ve §4 kazanır** (`Docs/10` path isimleri bu referansa hizalandı).
+- İterasyon 3, roadmap `§6.3` + `§6.3b` birleşik (9 chat disiplini).
 
 ---
 
 ### İterasyon 1 — Next.js Boilerplate (6.1)
 
-**Hedef:** App Router, providers, API client, middleware iskelet, layout.
+**Hedef:** Çalışan boş dashboard shell; middleware CSP + auth redirect; API client + AuthProvider; rol bazlı layout; `npm run build` yeşil.
 
-**Minimum bağlam:** `Docs/10` §6.1; `Docs/05` §1–2, §6.
+**Teslim çıktısı:**
+- `apps/web/` — Next.js 14+ App Router, TypeScript, Tailwind CSS
+- `apps/web/middleware.ts` — güvenlik header'ları, public/protected redirect, `/admin/*` role guard
+- `apps/web/lib/api-client.ts`, `lib/auth.ts`, `lib/constants.ts`
+- `apps/web/components/providers.tsx` — QueryClientProvider + AuthProvider
+- `apps/web/app/layout.tsx`, `app/(dashboard)/layout.tsx`
+- `apps/web/components/layout/pill-nav.tsx`, `sidebar.tsx`, `user-menu.tsx`, `admin-topbar.tsx`
+- `apps/web/components/common/empty-state.tsx`, `loading-skeleton.tsx` (iskelet)
+- `apps/web/.env.example` — `NEXT_PUBLIC_API_URL`
 
-**Stop:** [ ] `npm run build` OK; [ ] CSP middleware.
+**Önkoşullar:**
+- [ ] Faz 1 Stop — auth API çalışır
+- [ ] `apps/web/package.json` scaffold mevcut
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1 — çıktı listesi
+2. `Docs/05_FRONTEND_SPEC.md` §1–2 — klasör yapısı, isimlendirme
+3. `Docs/05_FRONTEND_SPEC.md` §4 — route tablosu, middleware örneği, rol shell
+4. `Docs/05_FRONTEND_SPEC.md` §5–6 — React Query provider, API client interceptor
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §10.1–10.2 — cookie, RBAC UI; §10 CSP (`Docs/05` §13 ile çapraz)
+
+**Uygulama planı:**
+1. `npx create-next-app@latest` veya manuel scaffold — `app/`, `components/`, `hooks/`, `lib/`, `types/` (`Docs/05` §2)
+2. `lib/api-client.ts` — axios instance, `withCredentials: true`, 401 → refresh retry → `/login` (`Docs/05` §6)
+3. `lib/auth.ts` + `hooks/use-auth.ts` + `components/providers.tsx` — `user`, `isAdmin`, `login`, `logout` (`Docs/05` §5.2)
+4. `middleware.ts` — `PUBLIC_PATHS`, `ADMIN_PATHS`, CSP + HSTS + X-Frame-Options (`Docs/05` §4, §13)
+5. `(dashboard)/layout.tsx` — `isAdmin` branch: Sidebar+`ml-[260px]` vs PillNav+`w-full` (`Docs/05` §4.1, `Docs/07` §10.2)
+6. Layout bileşenleri — `VIEWER_NAV_ITEMS` sabit (`Docs/05` §4.1); admin sidebar Yönetim linkleri `/admin/*`
+7. `components/ui/` atom iskelet — Button, Input, Card (shadcn veya minimal Tailwind)
+8. Placeholder `(dashboard)/page.tsx` — "YGIP Dashboard" metni; build doğrulama
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/web/app/**`, `components/**`, `lib/**`, `hooks/use-auth.ts`, `middleware.ts`, `tailwind.config.ts`, `next.config.js`, `.env.example` |
+| Güncelle | `apps/web/package.json` (next, react-query, axios, tailwind, gsap) |
+| Dokunma | Login sayfası, digest/chat ekranları, admin CRUD |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Viewer/admin ayrı shell | `Docs/05` §4.1 | İkisi aynı anda mount edilmez |
+| Token localStorage yasak | `Docs/07` §10.1 | httpOnly cookie; memory yalnızca UI state |
+| `/admin/*` viewer redirect | `Docs/05` §4 | middleware JWT role decode |
+| CSP header | `Docs/05` §13 | `connect-src` API origin |
+| QueryClient defaults | `Docs/05` §5.1 | staleTime 5dk, 401 retry yok |
+
+**Kalite kapıları:**
+- [ ] `cd apps/web && npm run build` yeşil
+- [ ] `npm run lint` yeşil (eslint config dahil)
+- [ ] Middleware: token yok → `/login` redirect (manuel veya minimal smoke)
+- [ ] Frontend unit/E2E yok — MVP-0 kapsam dışı (`Docs/08`)
+
+**Bu iterasyonda yok:**
+- Login formu, digest/chat verisi, admin sayfaları, `packages/shared` TS client
+
+**Risk / dikkat:**
+- `Docs/10` `lib/auth-context.tsx` → **`hooks/use-auth.ts` + `providers.tsx`** (`Docs/05` §2)
+- `gsap` animasyonları `prefers-reduced-motion` ile devre dışı (`Docs/05` §4.1)
+- Dev'de `Secure` cookie için HTTPS veya proxy notu README'de
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] `npm run lint`
+- [ ] PR/onay → İterasyon 2
 
 ---
 
 ### İterasyon 2 — Login ve Şifre Sıfırlama (6.2)
 
-**Hedef:** S-LOGIN, S-RESET-PW, token refresh cycle.
+**Hedef:** S-LOGIN ve S-RESET-PW çalışır; login→dashboard redirect; 401 otomatik login'e; token refresh cycle entegre.
 
-**Minimum bağlam:** `Docs/10` §6.2; `Docs/06` Grup 1.
+**Teslim çıktısı:**
+- `app/(auth)/layout.tsx` — ortalanmış kart layout
+- `app/(auth)/login/page.tsx` — S-LOGIN
+- `app/(auth)/reset-password/[token]/page.tsx` — S-RESET-PW
+- `components/auth/login-form.tsx`, `reset-password-form.tsx`
+- Cookie handling — backend `Set-Cookie` veya `app/api/auth/[...]/route.ts` proxy (gerekirse)
 
-**Stop:** [ ] Login→dashboard; [ ] 401 redirect.
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] `POST /api/v1/auth/login`, `refresh`, `logout`, password reset API hazır (Faz 1)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.2
+2. `Docs/06_SCREEN_CATALOG.md` — S-LOGIN, S-RESET-PW (Grup 1)
+3. `Docs/03_API_CONTRACTS.md` §2 — login/refresh/logout/reset contract
+4. `Docs/05_FRONTEND_SPEC.md` §7 — login akışı, refresh cycle, logout
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §2 — auth rate limit 10/dk; §10.1 cookie
+
+**Uygulama planı:**
+1. `(auth)/layout.tsx` — navigasyon yok, ortalanmış kart (`Docs/06` S-LOGIN layout)
+2. `login-form.tsx` — email+password, validation, Türkçe hata (`UNAUTHORIZED`, `RATE_LIMIT_EXCEEDED`) (`Docs/03` §2)
+3. Login success → AuthContext user set + redirect `/` (`Docs/05` §7.1)
+4. Rate limit 429 → toast "Çok fazla deneme" (`Docs/07` §2)
+5. `reset-password-form.tsx` — token URL param, şifre politikası göstergesi (`Docs/06` S-RESET-PW)
+6. API client 401 interceptor → `POST /auth/refresh` → retry (`Docs/05` §7.2)
+7. Logout → `POST /auth/logout` + cookie clear + `/login` (`Docs/05` §7.3)
+8. Public path'te token varsa → `/` redirect (middleware, İterasyon 1)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(auth)/**`, `components/auth/**`, opsiyonel `app/api/auth/**` proxy |
+| Güncelle | `lib/auth.ts`, `lib/api-client.ts`, `middleware.ts` (PUBLIC_PATHS) |
+| Dokunma | Dashboard içerik, admin sayfaları |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Login body | `Docs/03` §2.1 | email + password |
+| Hatalı credential | `Docs/03` §2.1 | `UNAUTHORIZED`, bilgi sızıntısı yok |
+| Refresh rotation | `Docs/03` §2.2 | interceptor tek retry |
+| Şifre politikası UI | `Docs/06` S-RESET-PW | min 8, 1 büyük, 1 rakam göstergesi |
+| Auth rate limit UX | `Docs/07` §2 | 429 Türkçe toast |
+
+**Kalite kapıları:**
+- [ ] Manuel: login admin/viewer → `/` redirect
+- [ ] Manuel: logout → `/login`
+- [ ] Manuel: yanlış şifre → Türkçe hata, token set edilmez
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Digest listesi, admin CRUD, session-expired modal (opsiyonel sonraki)
+
+**Risk / dikkat:**
+- Şifre/token API response veya console'a loglanmaz
+- `reset-password` route `[token]` segment — query param değil (`Docs/05` §4)
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: login→dashboard, logout→login, reset-password form render
+- [ ] PR/onay → İterasyon 3
 
 ---
 
-### İterasyon 3 — Ana Sayfa (6.3)
+### İterasyon 3 — Ana Sayfa ve Bülten Listesi (6.3 + 6.3b)
 
-**Hedef:** S-HOME digest listesi, loading/empty states.
+**Hedef:** S-HOME (Executive Brief + teaser) ve S-DIGESTS-LIST (`/digests`) çalışır; loading/empty/error state'ler; cursor pagination ve ReadToggle.
 
-**Minimum bağlam:** `Docs/10` §6.3; `Docs/06` S-HOME.
+**Teslim çıktısı:**
+- `app/(dashboard)/page.tsx` — S-HOME
+- `components/home/executive-brief.tsx`, `components/home/unread-teasers.tsx`, `components/home/chatbot-shortcut.tsx`
+- `app/(dashboard)/digests/page.tsx` — S-DIGESTS-LIST
+- `components/digest/digest-card.tsx`, `components/digest/read-toggle.tsx`
+- `hooks/use-brief.ts`, `hooks/use-digests.ts`
+- `components/common/error-view.tsx` (paylaşımlı)
 
-**Stop:** [ ] Cursor pagination veya sayfalama.
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop
+- [ ] Faz 4 digest API + brief endpoint hazır (seed veya fixture veri)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3, §6.3b — birleşik kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-HOME, S-DIGESTS-LIST (state tabloları, skeleton)
+3. `Docs/03_API_CONTRACTS.md` §7 — `GET /digests`, read toggle endpoint'leri
+4. `Docs/05_FRONTEND_SPEC.md` §8 — React Query hooks, cursor pagination, empty/loading
+5. `Docs/YGIP_screen_reference_mockup.html` — görsel referans (mockup)
+
+**Uygulama planı:**
+1. `use-brief.ts` — `GET /api/v1/briefs/today`; queryKey `["brief", "today"]` (`Docs/06` S-HOME §1)
+2. `executive-brief.tsx` — navy gradient kart, istatistik bandı, highlight class (`Docs/06` S-HOME)
+3. `page.tsx` — en fazla 3 okunmamış teaser `GET /digests?is_read=false&limit=3`; "Tüm bültenleri gör" → `/digests`
+4. `chatbot-shortcut.tsx` — Enter → `/chatbot?q=...` (`Docs/06` S-HOME §3)
+5. `use-digests.ts` — liste + cursor; `queryKeys.digests` (`Docs/05` §5.1, §8.3)
+6. `digests/page.tsx` — Yeni/Önceki bölümler, tip filtre chip'leri (`Docs/06` S-DIGESTS-LIST)
+7. `digest-card.tsx` — tip badge, Yıldız etki bandı, tıklanınca `/digests/[id]`
+8. `read-toggle.tsx` — `POST/DELETE /digests/{id}/read`; optimistic update (`Docs/06` S-DIGESTS-LIST)
+9. Loading skeleton + EmptyState + ErrorView (`Docs/06` state tabloları)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/page.tsx`, `digests/page.tsx`, `components/home/**`, `components/digest/digest-card.tsx`, `read-toggle.tsx`, `hooks/use-brief.ts`, `use-digests.ts`, `components/common/error-view.tsx` |
+| Güncelle | `lib/constants.ts` (digest tip renkleri), `types/api.ts` |
+| Dokunma | Digest detay, chatbot, admin |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Executive Brief veri | `Docs/06` S-HOME | `briefs/today` — contract `Docs/03` ile doğrula |
+| Okunmamış teaser max 3 | `Docs/06` S-HOME §2 | `is_read=false&limit=3` |
+| Digest list pagination | `Docs/03` §7 | cursor param; "Daha fazla yükle" |
+| ReadToggle görsel | `Docs/06` S-DIGESTS-LIST | altın border / yeşil okundu |
+| PillNav active | `Docs/05` §4.1 | `/digests` → `activeHref="/digests"` |
+
+**Kalite kapıları:**
+- [ ] Manuel: viewer login → ana sayfa brief veya empty state
+- [ ] Manuel: `/digests` liste, filtre, pagination
+- [ ] Manuel: ReadToggle API çağrısı
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Digest detay sayfası, chatbot tam ekran, admin paneli
+
+**Risk / dikkat:**
+- **Context üst sınır:** ~11 dosya — yalnızca home+digest list; detay sonraki iterasyon
+- `briefs/today` `Docs/03`'te eksikse Faz 4 contract ile hizala veya geçici mock
+- Mockup admin sidebar layout; viewer'da içerik tam genişlik (`Docs/06` not)
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: S-HOME + S-DIGESTS-LIST veri/empty/loading
+- [ ] PR/onay → İterasyon 4
 
 ---
 
 ### İterasyon 4 — Rapor Detay (6.4)
 
-**Hedef:** S-DIGEST-DETAIL iki kolon, TOC, bölüm kartları.
+**Hedef:** S-DIGEST-DETAIL (`/digests/[id]`) iki kolon layout, TOC, section kartları, structured render (ham HTML yok), print CSS.
 
-**Minimum bağlam:** `Docs/10` §6.4; `Docs/06` S-DIGEST-DETAIL.
+**Teslim çıktısı:**
+- `app/(dashboard)/digests/[id]/page.tsx`
+- `components/digest/digest-detail-hero.tsx`
+- `components/digest/digest-section.tsx`
+- `components/digest/digest-toc.tsx`
+- `hooks/use-digest-detail.ts`
+- `styles/print.css` veya `globals.css` `@media print` bloğu
 
-**Stop:** [ ] Viewer erişir; [ ] sanitize HTML render.
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop
+- [ ] `GET /api/v1/digests/{id}` response örnek veri mevcut
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4
+2. `Docs/06_SCREEN_CATALOG.md` — S-DIGEST-DETAIL (hero, TOC, section, FAB notu)
+3. `Docs/03_API_CONTRACTS.md` §7 — digest detail response shape
+4. `Docs/05_FRONTEND_SPEC.md` §13.3 — XSS; structured JSON render
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §10 — URL protocol whitelist
+
+**Uygulama planı:**
+1. `use-digest-detail.ts` — `queryKeys.digests.detail(id)` (`Docs/05` §5.1)
+2. Hero kart — tip badge, period, TL;DR kutusu (`Docs/06` S-DIGEST-DETAIL §1)
+3. İki kolon — sol TOC sticky, sağ section list (`Docs/06` S-DIGEST-DETAIL §2)
+4. `digest-section.tsx` — başlık, özet, haber linkleri (`https://` whitelist), Yıldız etki vurgu kutusu
+5. TOC scroll-spy veya anchor link (`Docs/06` S-DIGEST-DETAIL)
+6. `dangerouslySetInnerHTML` **kullanma** — JSON alanlarından React tree (`Docs/05` §13.3)
+7. Print stylesheet — sidebar/PillNav gizle, içerik tek kolon (`Docs/10` §6.4)
+8. Detay açılınca read mark (opsiyonel `POST .../read`)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/digests/[id]/page.tsx`, `components/digest/digest-detail-hero.tsx`, `digest-section.tsx`, `digest-toc.tsx`, `hooks/use-digest-detail.ts` |
+| Güncelle | `styles/globals.css` (print), `types/api.ts` (DigestDetail) |
+| Dokunma | Chatbot FAB (İterasyon 5), admin |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Route | `Docs/05` §4 | `/digests/[id]` |
+| Section sırası | `Docs/03` §7 | API `sections[]` order |
+| Haber URL güvenliği | `Docs/05` §13.3 | `javascript:` reddet |
+| Yıldız etki kutusu | `Docs/06` S-DIGEST-DETAIL | gold vurgu bandı |
+| Viewer erişim | `Docs/03` §12 | admin+viewer GET |
+
+**Kalite kapıları:**
+- [ ] Manuel: viewer digest detay açar
+- [ ] Manuel: external link yeni sekme + rel noopener
+- [ ] Print preview smoke (browser)
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Chatbot FAB, streaming chat, admin özellikleri
+
+**Risk / dikkat:**
+- Ham HTML digest içeriği varsa sanitize pipeline gerekir — MVP'de structured fields tercih et
+- Uzun digest'te TOC scroll performansı — section id anchor
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: `/digests/{id}` viewer + print preview
+- [ ] PR/onay → İterasyon 5
 
 ---
 
 ### İterasyon 5 — AI Chatbot (6.5)
 
-**Hedef:** S-CHATBOT, kaynak linkleri, FAB (detay sayfasında).
+**Hedef:** S-CHATBOT (`/chatbot`) sohbet arayüzü; kaynak kartları; loading/streaming veya typing indicator; 429 Türkçe feedback; detay sayfasında FAB (opsiyonel stub).
 
-**Minimum bağlam:** `Docs/10` §6.5; `Docs/06` S-CHATBOT.
+**Teslim çıktısı:**
+- `app/(dashboard)/chatbot/page.tsx`
+- `components/chatbot/chat-window.tsx`, `chat-message.tsx`, `chat-input.tsx`, `source-card.tsx`
+- `hooks/use-chatbot.ts` — mutation + session mesaj state
+- Opsiyonel: `components/chatbot/chat-fab.tsx` — digest detayda mount
 
-**Stop:** [ ] Streaming veya loading state; [ ] hata Türkçe.
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop
+- [ ] `POST /api/v1/chatbot/ask` hazır (Faz 4)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5
+2. `Docs/06_SCREEN_CATALOG.md` — S-CHATBOT (boş state, chip örnekleri)
+3. `Docs/03_API_CONTRACTS.md` §8 — ask request/response, source references
+4. `Docs/05_FRONTEND_SPEC.md` §8.2 — mutation pattern, optimistic append
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §2 — chatbot rate limit UX
+
+**Uygulama planı:**
+1. `chatbot/page.tsx` — mesaj listesi + input; boş state chip'leri (`Docs/06` S-CHATBOT)
+2. `use-chatbot.ts` — `useMutation` ask; mesajlar local state array (`Docs/05` §5.1 cache tablosu)
+3. `chat-message.tsx` — user/bot balon, markdown veya plain text (XSS-safe)
+4. `source-card.tsx` — başlık, URL, relevance skor (`Docs/03` §8)
+5. Loading indicator — bot yanıt beklerken (`Docs/06` empty/loading)
+6. 429 → toast "Lütfen biraz bekleyin" (`Docs/10` §6.5)
+7. `?q=` query param — ana sayfa kısayolundan prefill (`Docs/06` S-HOME)
+8. Scroll-to-bottom on new message; `ref` container
+9. Opsiyonel FAB digest detay sayfasına import
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/chatbot/page.tsx`, `components/chatbot/**`, `hooks/use-chatbot.ts` |
+| Güncelle | `digests/[id]/page.tsx` (FAB opsiyonel) |
+| Dokunma | Admin chat-history (read-only admin) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Ask endpoint | `Docs/03` §8 | POST body question |
+| Kaynak referansları | `Docs/06` S-CHATBOT | source-card listesi |
+| Boş state | `Docs/06` empty table | örnek soru chip'leri |
+| Rate limit | `Docs/07` §2 | 429 Türkçe |
+| Kullanıcı girdisi render | `Docs/05` §13.3 | text escape |
+
+**Kalite kapıları:**
+- [ ] Manuel: soru gönder → bot yanıt + kaynak kartları
+- [ ] Manuel: 429 simülasyonu veya mock
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Admin chat geçmişi sayfası, SSE streaming (API desteklemiyorsa loading yeterli)
+
+**Risk / dikkat:**
+- LLM yanıt süresi uzun — timeout 30s (`Docs/05` §6 axios timeout)
+- Chat history persist session-only; DB history admin iterasyon 9
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: chatbot soru-cevap akışı
+- [ ] PR/onay → İterasyon 6
 
 ---
 
 ### İterasyon 6 — Admin Kullanıcılar (6.6)
 
-**Hedef:** S-ADMIN-USERS, create/edit, RoleGate.
+**Hedef:** S-ADMIN-USERS CRUD; create/edit modal; viewer `/admin/*` erişemez (middleware + RoleGate UX).
 
-**Minimum bağlam:** `Docs/10` §6.6; `Docs/06` Grup 3 users.
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/users/page.tsx`
+- `components/admin/user-table.tsx`, `user-form-modal.tsx`
+- `components/common/confirm-dialog.tsx`, `data-table.tsx`
+- `hooks/use-users.ts`
+- `components/auth/role-gate.tsx` — admin-only wrapper (UX)
 
-**Stop:** [ ] Viewer /admin 403 veya redirect.
+**Önkoşullar:**
+- [ ] İterasyon 5 Stop
+- [ ] User CRUD API (Faz 1) hazır
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.6
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-USERS, S-ADMIN-USER-CREATE/EDIT
+3. `Docs/03_API_CONTRACTS.md` §3 — users CRUD, `/users/me`
+4. `Docs/05_FRONTEND_SPEC.md` §9 — form pattern, validation
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §10.2 — admin UI DOM'da viewer'da yok
+
+**Uygulama planı:**
+1. `use-users.ts` — list mutation create/update/delete; invalidation (`Docs/05` §5.1)
+2. `user-table.tsx` — email, ad, rol, durum, son giriş; cursor pagination (`Docs/06` S-ADMIN-USERS)
+3. `user-form-modal.tsx` — create/edit; rol select; aktif toggle (`Docs/06` S-ADMIN-USER-CREATE)
+4. Pasif yapma/silme → `ConfirmDialog` Türkçe (`Docs/10` §6.6)
+5. Şifre sıfırlama butonu — admin trigger API (`Docs/03` §3)
+6. `role-gate.tsx` — `isAdmin` false → null/redirect (UX; backend 403 zorunlu)
+7. Viewer smoke: `/admin/users` → redirect `/` (middleware)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/admin/users/page.tsx`, `components/admin/user-*.tsx`, `hooks/use-users.ts`, `components/common/confirm-dialog.tsx`, `data-table.tsx`, `role-gate.tsx` |
+| Güncelle | `components/layout/sidebar.tsx` (Users link) |
+| Dokunma | Sources, prompts, audit |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Admin-only GET /users | `Docs/03` §12 | viewer 403 |
+| Create user body | `Docs/03` §3 POST | email, full_name, role, password |
+| Self-servis kayıt yok | `Docs/07` §1 | yalnızca admin create |
+| Empty state | `Docs/06` empty table | "Kullanıcı Oluştur" CTA |
+| Audit yan etki | `Docs/07` §9 | backend; FE yalnızca toast |
+
+**Kalite kapıları:**
+- [ ] Manuel: admin CRUD akışı
+- [ ] Manuel: viewer `/admin/users` redirect veya 403 sayfası
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Kaynak/prompt yönetimi, digest trigger UI
+
+**Risk / dikkat:**
+- RoleGate UX only — API 403'ü kullanıcıya Türkçe göster
+- Şifre alanı log/audit'e düşmez
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: admin user create/edit; viewer admin deny
+- [ ] PR/onay → İterasyon 7
 
 ---
 
 ### İterasyon 7 — Admin Kaynaklar (6.7)
 
-**Hedef:** S-ADMIN-SOURCES, create form, source_type config.
+**Hedef:** S-ADMIN-SOURCES CRUD; source_type config JSON editor; son çekim durumu badge; tip filtre.
 
-**Minimum bağlam:** `Docs/10` §6.7; `Docs/06` sources.
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/sources/page.tsx`
+- `components/admin/source-table.tsx`, `source-form-modal.tsx`
+- `hooks/use-sources.ts`
 
-**Stop:** [ ] JSON config validation UI.
+**Önkoşullar:**
+- [ ] İterasyon 6 Stop
+- [ ] Source API (Faz 2) hazır
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.7
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-SOURCES, S-ADMIN-SOURCE-CREATE
+3. `Docs/03_API_CONTRACTS.md` §4 — sources CRUD, status patch
+4. `Docs/01_DOMAIN_MODEL.md` — source types, collector config
+5. `Docs/05_FRONTEND_SPEC.md` §9.3 — admin form JSON editor
+
+**Uygulama planı:**
+1. `use-sources.ts` — list + filtre params (`Docs/05` §5.1 queryKeys.sources)
+2. `source-table.tsx` — ad, tip, durum, son çekim, hata sayısı (`Docs/06` S-ADMIN-SOURCES)
+3. Durum badge — başarılı/hata/beklemede renk (`Docs/10` §6.7)
+4. `source-form-modal.tsx` — tip select → config schema hint; JSON textarea + client validation
+5. Aktif/pasif `PATCH .../status` (`Docs/03` §4)
+6. Tip filtre chip'leri tablo üstü
+7. Empty state — "Kaynak Ekle" (`Docs/06` empty table)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/admin/sources/page.tsx`, `components/admin/source-*.tsx`, `hooks/use-sources.ts` |
+| Güncelle | `sidebar.tsx`, `types/api.ts` (SourceConfig) |
+| Dokunma | Collector worker, prompts |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| source_type enum | `Docs/01` + `Docs/03` §4 | rss/email/gov/api |
+| Config JSON | `Docs/06` S-ADMIN-SOURCE-CREATE | tip bazlı alan ipucu |
+| Delete confirm | `Docs/03` §4 DELETE | ConfirmDialog |
+| Admin-only | `Docs/03` §12 | viewer 403 |
+| Son çekim metadata | `Docs/06` S-ADMIN-SOURCES | badge renkleri |
+
+**Kalite kapıları:**
+- [ ] Manuel: kaynak ekle/düzenle/sil
+- [ ] Manuel: geçersiz JSON → form hata Türkçe
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Manuel collector tetikleme UI, digest trigger
+
+**Risk / dikkat:**
+- Config'te API key plaintext gösterimi — maskeli veya backend encrypt (`Docs/07` §3)
+- JSON editor MVP'de textarea yeterli; Monaco sonraki dalga
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: source CRUD + filtre
+- [ ] PR/onay → İterasyon 8
 
 ---
 
-### İterasyon 8 — Prompt, API Key, Ayarlar (6.8)
+### İterasyon 8 — Prompt ve API Key (6.8)
 
-**Hedef:** S-ADMIN-PROMPTS, S-ADMIN-API-KEYS, bildirim/JWT ayarları bölümü.
+**Hedef:** S-ADMIN-PROMPTS (`/admin/prompt-templates`) inline editor; S-ADMIN-API-KEYS maskeli liste + usage chart (recharts).
 
-**Minimum bağlam:** `Docs/10` §6.8; `Docs/06` Grup 4.
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/prompt-templates/page.tsx`
+- `app/(dashboard)/admin/api-keys/page.tsx`
+- `components/admin/prompt-editor.tsx`, `api-key-card.tsx`, `usage-chart.tsx`
+- `hooks/use-prompts.ts`, `hooks/use-api-keys.ts`
 
-**Stop:** [ ] API key maskeli; [ ] usage grafik placeholder veya chart.
+**Önkoşullar:**
+- [ ] İterasyon 7 Stop
+- [ ] Prompt + API key API (Faz 4) hazır
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.8
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-PROMPTS, S-ADMIN-PROMPT-EDIT, S-ADMIN-API-KEYS
+3. `Docs/03_API_CONTRACTS.md` §5–6 — prompt templates, api keys, usage
+4. `Docs/05_FRONTEND_SPEC.md` §5.1 — apiKeys queryKeys.usage
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §3 — API key maskleme, log yasağı
+
+**Uygulama planı:**
+1. `prompt-templates/page.tsx` — digest tipi bazlı liste; system_prompt + user_prompt_template editor (`Docs/06` S-ADMIN-PROMPTS)
+2. Kaydet → `PUT` prompt API; başarı toast (`Docs/03` §5)
+3. `api-keys/page.tsx` — alias, provider, durum; key değeri **maskeli** (`Docs/06` S-ADMIN-API-KEYS)
+4. Ekle/sil modal — secret input type password; response'ta full key bir kez gösterilir uyarısı
+5. `usage-chart.tsx` — recharts BarChart/LineChart; günlük token (`Docs/10` §6.8)
+6. `use-api-keys.ts` — `usage` query per key + date range
+7. Empty state'ler (`Docs/06` empty table)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/admin/prompt-templates/page.tsx`, `api-keys/page.tsx`, `components/admin/prompt-editor.tsx`, `api-key-card.tsx`, `usage-chart.tsx`, `hooks/use-prompts.ts`, `use-api-keys.ts` |
+| Güncelle | `package.json` (recharts), `sidebar.tsx` |
+| Dokunma | JWT settings (İterasyon 9 notifications sayfasında), audit |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Prompt route | `Docs/05` §4 | `/admin/prompt-templates` |
+| API key mask | `Docs/06` S-ADMIN-API-KEYS | `sk-...xxxx` format |
+| Usage endpoint | `Docs/03` §6 | chart data source |
+| Admin-only | `Docs/03` §12 | tüm mutasyonlar |
+| Secret plaintext yasak | `Docs/07` §3 | state'te tutma süresi min |
+
+**Kalite kapıları:**
+- [ ] Manuel: prompt kaydet; API key ekle (maskeli liste)
+- [ ] Manuel: usage chart veri veya empty
+- [ ] `npm run build` yeşil
+
+**Bu iterasyonda yok:**
+- Bildirim/JWT ayarları (İterasyon 9), digest manuel tetikleme onay modalı
+
+**Risk / dikkat:**
+- Yeni API key tam değeri yalnızca create response'ta — copy UX bir kez
+- Prompt uzun metin — textarea auto-resize; unsaved leave uyarısı opsiyonel
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Smoke: prompt edit save; api-key list + chart render
+- [ ] PR/onay → İterasyon 9
 
 ---
 
-### İterasyon 9 — Audit, Sohbet, Bildirim (6.9)
+### İterasyon 9 — Audit, Sohbet ve Bildirim (6.9)
 
-**Hedef:** S-ADMIN-AUDIT-LOGS, S-ADMIN-CHAT-HISTORY, S-ADMIN-NOTIFICATIONS.
+**Hedef:** S-ADMIN-AUDIT-LOGS, S-ADMIN-CHAT-HISTORY, S-ADMIN-NOTIFICATIONS (alıcı listesi + JWT/chatbot ayarları); filtreleme; temel a11y.
 
-**Minimum bağlam:** `Docs/10` §6.9; `Docs/06` Grup 5.
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/audit-logs/page.tsx`
+- `app/(dashboard)/admin/chat-history/page.tsx`
+- `app/(dashboard)/admin/notifications/page.tsx`
+- `components/admin/audit-log-table.tsx`, `chat-history-table.tsx`, `notification-settings-form.tsx`
+- `hooks/use-audit-logs.ts`, `use-chat-history.ts`, `use-notifications.ts`
 
-**Stop:** [ ] Filtreleme; [ ] a11y temel kontroller.
+**Önkoşullar:**
+- [ ] İterasyon 8 Stop
+- [ ] Audit, chat history, notification/settings API (Faz 1 + 4 + 5) hazır
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.9
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-AUDIT-LOGS, S-ADMIN-CHAT-HISTORY, S-ADMIN-NOTIFICATIONS, S-CHAT-DETAIL-MODAL
+3. `Docs/03_API_CONTRACTS.md` §9–11 — notifications, audit, settings
+4. `Docs/05_FRONTEND_SPEC.md` §12.1 — a11y temel (label, focus, aria)
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §9.4 — audit erişim admin-only
+
+**Uygulama planı:**
+1. `audit-logs/page.tsx` — tarih aralığı, event_type, actor filtre; expandable payload row (`Docs/06` S-ADMIN-AUDIT-LOGS)
+2. `use-audit-logs.ts` — paginated list (`Docs/03` §10)
+3. `chat-history/page.tsx` — kullanıcı filtresi, soru/yanıt listesi; detay modal (`Docs/06` S-CHAT-DETAIL-MODAL)
+4. `notifications/page.tsx` — alıcı listesi CRUD + JWT süreleri + chatbot parametreleri (`Docs/05` §4 route tablosu, `Docs/06` S-ADMIN-NOTIFICATIONS)
+5. `notification-settings-form.tsx` — `PUT` settings API (`Docs/03` §11)
+6. Tablolarda keyboard nav ve `aria-label` (`Docs/05` §12.1)
+7. Tüm admin sidebar linkleri son kontrol — 7 sayfa erişilebilir
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/admin/audit-logs/page.tsx`, `chat-history/page.tsx`, `notifications/page.tsx`, `components/admin/audit-log-table.tsx`, `chat-history-table.tsx`, `notification-settings-form.tsx`, `hooks/use-audit-logs.ts`, `use-chat-history.ts`, `use-notifications.ts` |
+| Güncelle | `sidebar.tsx` (tüm admin linkler), `lib/constants.ts` (admin routes) |
+| Dokunma | Backend API, mobil |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Audit admin-only | `Docs/07` §9.4 | viewer menüde yok |
+| Payload expand | `Docs/06` S-ADMIN-AUDIT-LOGS | hassas alan mask |
+| Chat history filtre | `Docs/06` S-ADMIN-CHAT-HISTORY | user_id + tarih |
+| Bildirim tercihleri | `Docs/03` §9 | admin yönetir |
+| JWT settings | `Docs/03` §11 | notifications sayfasında bölüm |
+
+**Kalite kapıları:**
+- [ ] Manuel: audit filtre + expand row
+- [ ] Manuel: chat history detay modal
+- [ ] Manuel: notification alıcı + settings kaydet
+- [ ] `npm run build` + `npm run lint` yeşil
+- [ ] Lighthouse a11y smoke ≥90 hedef (`04-quality-gates` MVP-1; temel kontrol MVP-0)
+
+**Bu iterasyonda yok:**
+- E2E Playwright, mobil, production deploy
+
+**Risk / dikkat:**
+- Audit payload'da email/IP — ekranda truncate; copy hassas veri uyarısı
+- 3 sayfa tek iterasyonda — yalnızca liste+form; karmaşık wizard yok
+
+**Stop:**
+- [ ] `cd apps/web && npm run build && npm run lint`
+- [ ] Smoke: 3 admin sayfası filtre/form
+- [ ] Faz 6 Done Definition; roadmap işareti
+- [ ] PR: `feat: [MVP-0 / Faz 6] web frontend complete`
+
+---
 
 ## Required Context
 
-- `Docs/10` Faz 6; `Docs/05_FRONTEND_SPEC.md`; `Docs/06_SCREEN_CATALOG.md`
-- `Docs/09_DEV_WORKFLOW.md` §4 PR checklist
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 6 (§6.1–6.9; İterasyon 3 = §6.3+§6.3b)
+- `Docs/05_FRONTEND_SPEC.md` — §1–9, §12–14 (route, state, API client, güvenlik)
+- `Docs/06_SCREEN_CATALOG.md` — tüm `S-*` ekranlar ve state tabloları
+- `Docs/03_API_CONTRACTS.md` — §2–11, §12 yetki matrisi
+- `Docs/07_SECURITY_IMPLEMENTATION.md` — §2, §10 (frontend auth/CSP/RBAC UI)
+- `Docs/08_TESTING_STRATEGY.md` — §1 (E2E MVP-0 dışı; manuel smoke)
+- `Docs/09_DEV_WORKFLOW.md` — §4 PR checklist
 
 ## Done Definition
 
-- [ ] MVP-0 başarı kriteri #2, #6 (`Docs/00` §8) web tarafı
-- [ ] Admin UI backend guard ile uyumlu
-- [ ] `npm run build` + lint green
+- [ ] MVP-0 başarı kriteri #2, #6 (`Docs/00` §8) web tarafı karşılanır
+- [ ] Viewer: S-HOME, S-DIGESTS-LIST, S-DIGEST-DETAIL, S-CHATBOT route'ları çalışır
+- [ ] Admin: 7 yönetim sayfası (`Docs/05` §4 route tablosu) admin rolüyle erişilir
+- [ ] Viewer `/admin/*` erişemez (middleware redirect)
+- [ ] Token `localStorage`'da yok; CSP middleware aktif
+- [ ] `cd apps/web && npm run build && npm run lint` yeşil
+- [ ] Admin UI backend RBAC ile uyumlu (403 Türkçe)
 
 ## Explicit Don'ts
 
 - React Native (Faz 7)
-- Backend API değişikliği (gerekirse ayrı PR Faz 1–5)
+- Backend API değişikliği (gerekirse ayrı PR, Faz 1–5)
+- Playwright E2E (`Docs/08` — MVP-1)
+- `dangerouslySetInnerHTML` digest/chat içeriğinde
+- Viewer sidebar veya admin linklerinin DOM'da render edilmesi
 
 ---
 
-Phase done → `Docs/10` Faz 6 tamamlandı.
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 6 tamamlandı.

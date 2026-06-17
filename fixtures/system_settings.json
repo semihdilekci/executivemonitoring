@@ -1,0 +1,42 @@
+[
+  {
+    "key": "jwt_access_token_minutes",
+    "value": 60,
+    "description": "Access token geçerlilik süresi (dk)"
+  },
+  {
+    "key": "jwt_refresh_token_days",
+    "value": 30,
+    "description": "Refresh token geçerlilik süresi (gün)"
+  },
+  {
+    "key": "digest_schedule_strategy_weekly",
+    "value": "0 8 * * 5",
+    "description": "Strateji bülteni cron (Cuma 08:00 UTC)"
+  },
+  {
+    "key": "digest_schedule_turkish_media_weekly",
+    "value": "0 8 * * 6",
+    "description": "Türk Medyası bülteni cron (Cumartesi 08:00 UTC)"
+  },
+  {
+    "key": "digest_schedule_fmcg_weekly",
+    "value": "0 10 * * 6",
+    "description": "FMCG bülteni cron (Cumartesi 10:00 UTC)"
+  },
+  {
+    "key": "embedding_model",
+    "value": "openai/text-embedding-3-small",
+    "description": "Aktif embedding modeli"
+  },
+  {
+    "key": "embedding_chunk_size",
+    "value": 512,
+    "description": "Chunk boyutu (token)"
+  },
+  {
+    "key": "embedding_chunk_overlap",
+    "value": 64,
+    "description": "Chunk overlap (token)"
+  }
+]

@@ -13,7 +13,7 @@
 |--------|-----------------|----------|
 | Özet rapor / bülten | `digest` | AI tarafından üretilen haftalık/günlük rapor |
 | Kaynak | `source` | RSS beslemesi, API veya e-posta newsletter kaynağı |
-| İşleyici | `processor` | Dedup → normalize → enrich → score pipeline worker |
+| İşleyici | `processor` | Dedup → normalize → gate → enrich → score pipeline worker |
 | Toplayıcı | `collector` | Dış kaynaklardan veri çeken worker |
 | Yönetici | `admin` | Sistem yönetimi rolü |
 | Görüntüleyici | `viewer` | Salt-okuma kullanıcı rolü |
@@ -218,6 +218,18 @@
 
 ---
 
+## 13.5 Processor Pipeline — MVP-0 Enrichment ve Gate
+
+**Karar [PROC-001]:** MVP-0'da processor enrichment **keyword/rules tabanlıdır**; LLM enrichment yok. LLM bütçesi digest + chatbot'a ayrılır. MVP-1'de `LLMEnricherProcessor` swap ile sentiment, entity extraction ve LLM ilgi skoru eklenir.
+
+**Karar [PROC-002]:** Keyword matching yalnızca enrichment değil **gate** mekanizmasıdır. `sources.config.ingest_mode`: `"all"` (domain-specific kaynaklar, otomatik kabul) veya `"filtered"` (master keyword havuzunda ≥1 eşleşme zorunlu). Eşleşmeyen makaleler `processed_items` ve `content_chunks`'a yazılmaz. Gate normalize sonrası çalışır.
+
+**Karar [PROC-003]:** `relevance_score` deterministik formül: `keyword_intensity * 0.6 + freshness * 0.4`. Source reliability weight kaldırıldı — tüm kaynaklar admin-curated. Kategori çözümleme: en çok keyword eşleşmesi → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`.
+
+Detay: `Docs/04_BACKEND_SPEC.md` §8.3–8.4; `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 3 §3.4–3.7.
+
+---
+
 ## 14. Tech Stack
 
 **Karar [TS-001]:** Backend dili Python'dur. Collector worker'lar, processor pipeline ve AI/RAG katmanı için ekosistem olgunluğu (feedparser, trafilatura, imaplib, SQLAlchemy, LangChain) nedeniyle tercih edilmiştir.
@@ -298,7 +310,7 @@
   /mobile       → React Native iOS + Android
 /services
   /collectors   → RSS, email, API, gov, WebSocket worker'lar
-  /processor    → dedup, normalize, enrich, score pipeline
+  /processor    → dedup, normalize, gate, enrich, score pipeline
   /ai-engine    → digest üretici, RAG pipeline, alarm motoru, chatbot
 /packages
   /shared       → ortak tipler, utils, DB schema (SQLAlchemy models)

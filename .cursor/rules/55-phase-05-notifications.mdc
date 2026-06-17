@@ -6,81 +6,368 @@ description: "[Faz 5] Bildirim backend — 5 iterasyon/chat (SMTP → FCM → to
 
 ## Goal
 
-Digest hazır bildirimi: SMTP e-posta ("yeni rapor hazır"), FCM push, token kayıt API, orchestration ve kullanıcı bildirim tercihleri.
+Digest `ready` olduğunda alıcılara kurumsal SMTP e-posta (teaser + platform linki) ve FCM push gönderimi; FCM token kayıt API; `NotificationOrchestrator` fan-out; admin bildirim tercihleri yönetimi. LLM/digest üretimi Faz 4'te tamamlanmış olmalı — bu faz yalnızca teslimat kanalları.
 
 ## Feature branch (zorunlu)
 
-`feature/mvp-0`. Öncül: Faz 4 (digest tamamlanınca tetikleme).
+`feature/mvp-0` (`Docs/09` §2). **Önkoşul:** Faz 4 Done (`DigestGenerator` + digest API); Faz 1 `notification_preferences` seed (user create).
+
+**Stop (İterasyon 1):** [ ] `notification_preferences` modeli/migration mevcut; [ ] Faz 4 digest `ready` status akışı çalışıyor.
 
 ## Bu fazın çalışma modeli
 
-`@55-phase-05-notifications` + **「Faz 5 — İterasyon M」**. Backend notification servisleri + API.
+- Her chat: `@55-phase-05-notifications` + **「Faz 5 — İterasyon M」**.
+- Katman: `services/ai-engine/` (mail/push/orchestrator) + `apps/api/` (router/service) + `tests/`.
+- Plan moduna geçme; iterasyon blueprint yeterli.
+- **API path kaynağı:** `Docs/03` §9 (`Docs/06` recipients path'leri MVP-0 API'de yok — preferences API kullan).
 
 ---
 
 ### İterasyon 1 — SMTP Mail Service (5.1)
 
-**Hedef:** Kurumsal SMTP wrapper, şablon (içerik link only, hassas veri yok). Dev: Gmail SMTP; prod: kurumsal relay.
+**Hedef:** `SMTPMailService` async wrapper + Jinja2 `digest_ready` HTML şablonu; mock SMTP unit test; Türkçe subject/body; e-postada yalnızca teaser + link.
 
-**Minimum bağlam:** `Docs/10` §5.1; `Docs/04` §11.
+**Teslim çıktısı:**
+- `services/ai-engine/mail_service.py` — `SMTPMailService.send(to, subject, html_body)`
+- `services/ai-engine/templates/digest_notification.html` (veya `templates/email/`)
+- `tests/unit/services/test_mail_service.py`
 
-**Stop:** [ ] Mock SMTP unit test; [ ] Türkçe subject/body.
+**Önkoşullar:**
+- [ ] Faz 4 Stop
+- [ ] `.env.example` SMTP placeholder'ları
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §5.1
+2. `Docs/04_BACKEND_SPEC.md` §11 — SMTPMailService, şablon tipleri
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §8 — SMTP secrets `.env`/Secrets Manager
+4. `Docs/03` Explicit Don'ts — bülten tam içeriği mailde yok
+5. `.cursor/rules/03-security-baseline.mdc` — secret log yasağı
+
+**Uygulama planı:**
+1. `aiosmtplib` async send — `SMTP_HOST`, `PORT`, `USER`, `PASSWORD`, `FROM`, `USE_TLS` (`Docs/04` §12)
+2. Jinja2 render — `digest_title`, `teaser`, `digest_url` (`WEB_BASE_URL` + `/digests/{id}`)
+3. Türkçe subject örn: `"Yeni bülten hazır: {title}"`
+4. HTML: başlık, kısa teaser, CTA "Raporu Görüntüle" — **tam section içeriği yok**
+5. Retry: 1–2 deneme transient fail; sonra exception yukarı
+6. Unit: template render assert; SMTP `aiosmtplib.send` mock
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `mail_service.py`, template HTML, unit test |
+| Güncelle | `.env.example` (`SMTP_*`, `WEB_BASE_URL`) |
+| Dokunma | FCM, router, orchestrator |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Kurumsal SMTP | `Docs/04` §11 | SES değil |
+| Dev Gmail | `Docs/10` §5.1 | smtp.gmail.com:587 |
+| digest_ready template | `Docs/04` §11 | teaser + link only |
+| UTF-8 Türkçe | `Docs/04` §11 | charset utf-8 |
+| password_reset template | `Docs/04` §11 | iter 1 yok (Faz 1 stub) |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/services/test_mail_service.py -v`
+- [ ] Deny: template'e full digest sections inject edilmez
+- [ ] SMTP password log/exception'ta yok
+
+**Bu iterasyonda yok:**
+- FCM, HTTP endpoint, `notification_logs`
+
+**Risk / dikkat:**
+- `00-project-identity` SES mention → runtime **SMTP** (`Docs/04` §11 esas)
+- Prod SMTP Secrets Manager — iter 1 dev `.env` yeterli
+
+**Stop:**
+- [ ] `pytest tests/unit/services/test_mail_service.py -v`
+- [ ] `ruff` + `mypy services/ai-engine/mail_service.py`
+- [ ] PR/onay → İterasyon 2
 
 ---
 
 ### İterasyon 2 — FCM Push Service (5.2)
 
-**Hedef:** Firebase Admin SDK push gönderimi.
+**Hedef:** `FCMPushService` Firebase Admin SDK multicast; invalid token temizleme; mock unit test.
 
-**Minimum bağlam:** `Docs/10` §5.2.
+**Teslim çıktısı:**
+- `services/ai-engine/push_service.py`
+- `tests/unit/services/test_push_service.py`
 
-**Stop:** [ ] Mock FCM; [ ] invalid token handling.
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §5.2
+2. `Docs/04_BACKEND_SPEC.md` §11 — FCMPushService, UNREGISTERED cleanup
+3. `packages/shared/models/notification_preference.py` — `fcm_token` kolonu
+4. `Docs/02_DATABASE_SCHEMA.md` §4.13 — token `notification_preferences` içinde
+5. `Docs/07` §8 — FCM service account secret handling
+
+**Uygulama planı:**
+1. Firebase Admin init — creds env `FCM_SERVICE_ACCOUNT_JSON` veya path
+2. `send_multicast(tokens, title, body, data)` — `data`: `digest_id`, `digest_type`
+3. Türkçe push: title `"Yeni bülten hazır"`, body teaser kısaltılmış
+4. Response iterate — UNREGISTERED/invalid → `clear_fcm_token(user_id)` DB
+5. Batch: kullanıcı başına tek token (MVP-0 model); multi-device MVP-1
+6. Unit: firebase `send_each_for_multicast` mock; invalid token cleanup assert
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `push_service.py`, unit test |
+| Güncelle | `.env.example` (`FCM_*`), `requirements.txt` (firebase-admin) |
+| Dokunma | HTTP router, orchestrator |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Multicast | `Docs/04` §11 | `send_each_for_multicast` |
+| Invalid token cleanup | `Docs/04` §11 | `fcm_token = NULL` |
+| Token storage | `Docs/02` §4.13 | not ayrı `notification_tokens` |
+| `Docs/04` notification_tokens | `Docs/02` esas | preferences tablosu |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/services/test_push_service.py -v`
+- [ ] Deny: boş token list → no-op, no crash
+
+**Bu iterasyonda yok:**
+- Token registration API, orchestration
+
+**Risk / dikkat:**
+- CI'da Firebase mock zorunlu — gerçek FCM çağrısı yok
+- Service account JSON repo'ya commit edilmez
+
+**Stop:**
+- [ ] `pytest tests/unit/services/test_push_service.py -v`
+- [ ] PR/onay → İterasyon 3
 
 ---
 
 ### İterasyon 3 — FCM Token Registration API (5.3)
 
-**Hedef:** Mobil/web token kayıt endpoint.
+**Hedef:** `POST /api/v1/notifications/fcm-token` auth required; token `notification_preferences` güncelleme; integration test.
 
-**Minimum bağlam:** `Docs/10` §5.3; `Docs/03` notifications.
+**Teslim çıktısı:**
+- `apps/api/routers/notifications.py`
+- `apps/api/schemas/notification.py` — `RegisterFCMTokenRequest`
+- `apps/api/services/notification_service.py` (iskelet — token kayıt metodu)
+- `tests/integration/test_notification_endpoints.py` (fcm-token bölümü)
 
-**Stop:** [ ] Auth required; [ ] token per user/device.
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop
+- [ ] Faz 1 auth + user `notification_preferences` kaydı
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §5.3
+2. `Docs/03_API_CONTRACTS.md` §9 — POST fcm-token request/response
+3. `Docs/03` §12 — admin + viewer erişebilir
+4. `packages/shared/models/notification_preference.py`
+5. `.cursor/rules/27-mobile-react-native.mdc` — mobil token kayıt akışı
+
+**Uygulama planı:**
+1. `RegisterFCMTokenRequest` — `fcm_token` string (`Docs/03` §9); `device_type` MVP-0 opsiyonel metadata JSONB yok
+2. `POST /notifications/fcm-token` — `get_current_user`; upsert `notification_preferences.fcm_token`
+3. Aynı token tekrar → idempotent 200
+4. Pasif kullanıcı → 401 (`03-security-baseline`)
+5. Response: `{"message": "FCM token güncellendi."}` (`Docs/03` §9)
+6. Integration: login → register token → DB assert; unauthenticated 401
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `routers/notifications.py`, schemas, service iskelet, integration test |
+| Güncelle | `apps/api/main.py` |
+| Dokunma | preferences admin endpoints (iter 5), migration |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| POST fcm-token | `Docs/03` §9 | path tam |
+| Token response'ta yok | `Docs/03` §9 preferences | `has_fcm_token` iter 5 |
+| Auth required | `Docs/03` §12 | viewer OK |
+| Per user token | `Docs/02` §4.13 | 1:1 preferences |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_notification_endpoints.py -v -k fcm`
+- [ ] Deny: anonymous 401
+
+**Bu iterasyonda yok:**
+- `device_tokens` ayrı tablo, web push (Faz 6)
+
+**Risk / dikkat:**
+- `Docs/10` `notification.py` → **`notifications.py`** (plural, `Docs/03` path)
+- `Docs/10` device_type zorunlu → `Docs/03` yalnızca `fcm_token`
+
+**Stop:**
+- [ ] `pytest tests/integration/test_notification_endpoints.py -v -k fcm`
+- [ ] PR/onay → İterasyon 4
 
 ---
 
 ### İterasyon 4 — Bildirim Orchestration (5.4)
 
-**Hedef:** Digest complete → email+push fan-out, `notification_logs`.
+**Hedef:** Digest `ready` → email + push fan-out; `notification_logs` yazımı; idempotent gönderim; partial failure log; Faz 4 stub yerine gerçek tetikleme.
 
-**Minimum bağlam:** `Docs/10` §5.4.
+**Teslim çıktısı:**
+- `services/ai-engine/notification_orchestrator.py`
+- `apps/api/services/notification_service.py` (extend) — `send_digest_ready(digest)`
+- `packages/shared/models/notification_log.py`
+- `alembic/versions/00X_notification_logs.py`
+- `tests/unit/services/test_notification_orchestrator.py`
 
-**Stop:** [ ] Idempotent notification; [ ] partial failure log.
+**Önkoşullar:**
+- [ ] İterasyon 1–3 Stop
+- [ ] `DigestGenerator` Faz 4 — stub → orchestrator call wire
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §5.4
+2. `Docs/04_BACKEND_SPEC.md` §11 — bildirim akışı digest hazır
+3. `Docs/02_DATABASE_SCHEMA.md` §4.13 — alıcı filtre `email_enabled`/`push_enabled`
+4. `Docs/01_DOMAIN_MODEL.md` — digest lifecycle
+5. `services/ai-engine/digest_generator.py` — tetikleme noktası
+
+**Uygulama planı:**
+1. Migration `notification_logs` — `user_id`, `channel` (email/push), `notification_type`, `status` (sent/failed), `error_message`, `digest_id` FK optional (`Docs/10` §0.5 / §5.4; Faz 0'da yoktu)
+2. `NotificationOrchestrator.send_digest_ready(digest)`:
+   - Alıcılar: `users.is_active=true` JOIN `notification_preferences`
+   - `email_enabled` → SMTP; `push_enabled` + `fcm_token` → FCM
+3. Idempotency: `(digest_id, user_id, channel)` duplicate skip veya unique index
+4. Partial fail: email OK push fail → ayrı log satırları; digest status etkilenmez
+5. `DigestGenerator` success path → `await notification_service.send_digest_ready(digest)` (async task OK)
+6. Unit: mock mail+push; 3 user mixed preferences; idempotent second call
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | orchestrator, notification_log model, migration, unit test |
+| Güncelle | `digest_generator.py` (stub kaldır), `notification_service.py` |
+| Dokunma | EventBridge cron deploy, preferences admin API |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Digest ready trigger | `Docs/04` §11 akış 1 | DigestGenerator sonrası |
+| Alıcı tercihleri | `Docs/02` §4.13 | email/push flags |
+| notification_logs | `Docs/10` §5.4 | Faz 5 migration |
+| Idempotent | `55` Done | digest+user+channel |
+| Cron schedule | `Docs/10` §5.4 not | digest cron Faz 4; notify anında |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/services/test_notification_orchestrator.py -v`
+- [ ] Deny: inactive user alıcı değil
+- [ ] Partial failure her kanal ayrı log
+
+**Bu iterasyonda yok:**
+- Admin preferences REST (iter 5), error_alert mail (collector), SES
+
+**Risk / dikkat:**
+- Faz 0 `notification_logs` ertelendi → bu iterasyonda migration zorunlu
+- `Docs/02` henüz `notification_logs` yok — migration sonrası `Docs/02` güncellemesi ayrı PR (opsiyonel)
+- EventBridge "digest Lambda → notify" infra notu; MVP-0 in-process call yeterli
+
+**Stop:**
+- [ ] `pytest tests/unit/services/test_notification_orchestrator.py -v`
+- [ ] `alembic upgrade head` migration yeşil
+- [ ] PR/onay → İterasyon 5
 
 ---
 
 ### İterasyon 5 — Bildirim Preferences API (5.5)
 
-**Hedef:** Admin alıcı listesi + kullanıcı tercihleri.
+**Hedef:** Admin `GET/PUT /notifications/preferences`; viewer 403; `has_fcm_token` response; integration test.
 
-**Minimum bağlam:** `Docs/10` §5.5; `Docs/06` S-ADMIN-NOTIFICATIONS.
+**Teslim çıktısı:**
+- `apps/api/routers/notifications.py` (extend)
+- `apps/api/schemas/notification.py` (extend) — preferences DTO
+- `tests/integration/test_notification_preferences.py`
 
-**Stop:** [ ] Admin-only alıcı yönetimi.
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop
 
-## Required Context
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §5.5
+2. `Docs/03_API_CONTRACTS.md` §9 — GET/PUT preferences
+3. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-NOTIFICATIONS (UI Faz 6; API bu iterasyon)
+4. `Docs/04` §11 — viewer tercih değiştiremez
+5. `Docs/03` §11 settings — bildirim zamanlaması `system_settings` (Faz 1 settings API)
 
-- `Docs/10` Faz 5; `Docs/04` §11; `Docs/03` notification endpoint'leri
+**Uygulama planı:**
+1. `GET /api/v1/notifications/preferences` — tüm kullanıcılar list; `email_enabled`, `push_enabled`, `has_fcm_token` (`Docs/03` §9)
+2. `PUT /notifications/preferences/{user_id}` — admin; body `email_enabled`, `push_enabled`
+3. `fcm_token` response'ta asla dönmez
+4. Audit: `notification.preferences_updated` (metadata — token yok)
+5. Integration: admin GET/PUT, viewer 403
+6. **S-ADMIN-NOTIFICATIONS** Bölüm 1 → preferences API ile eşlenir; `/recipients` endpoint MVP-0 yok (`Docs/06` vs `Docs/03`)
 
-## Done Definition
+**Dosya kapsamı:**
 
-- [ ] Digest sonrası bildirim tetiklenir (dev Gmail SMTP veya mock)
-- [ ] `notification_logs` yazılır
-- [ ] Integration test mock external servislerle green
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | preferences integration test |
+| Güncelle | `notifications.py`, schemas, `notification_service.py` |
+| Dokunma | Web admin UI, JWT settings kartı (settings API) |
 
-## Explicit Don'ts
+**Spec → kod eşlemesi:**
 
-- E-postada bülten tam içeriği (yalnızca link)
-- Frontend push UI (Faz 6/7)
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| GET preferences | `Docs/03` §9 | admin only |
+| PUT per user | `Docs/03` §9 | viewer deny |
+| has_fcm_token | `Docs/03` §9 | bool, not token |
+| Schedule UI | `Docs/06` S-ADMIN-NOTIFICATIONS §2 | `GET/PUT /settings` Faz 1 |
+| Recipients API | `Docs/06` §899 | MVP-0 yok — preferences kullan |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_notification_preferences.py -v`
+- [ ] Deny: viewer PUT 403, viewer GET preferences 403
+
+**Bu iterasyonda yok:**
+- `/notifications/recipients` CRUD, frontend S-ADMIN-NOTIFICATIONS ekranı
+
+**Risk / dikkat:**
+- Admin alıcı yönetimi = `email_enabled`/`push_enabled` toggle per user
+- Bildirim zamanlaması bu router'da değil — `system_settings.notification_schedule`
+
+**Stop:**
+- [ ] `pytest tests/integration/test_notification_preferences.py -v`
+- [ ] `pytest tests/integration/test_notification_endpoints.py -v`
+- [ ] Faz 5 Done Definition; `Docs/10` Faz 5 işareti
 
 ---
 
-Phase done → `Docs/10` Faz 5 tamamlandı.
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 5 §5.1–5.5
+- `Docs/03_API_CONTRACTS.md` §9 — bildirim endpoint'leri
+- `Docs/04_BACKEND_SPEC.md` §11 — SMTP + FCM + akış
+- Faz 4 öncül: `@54-phase-04-ai-engine` (`DigestGenerator` stub kaldırılacak)
+- `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-NOTIFICATIONS (Faz 6 UI pointer)
+
+## Done Definition
+
+- [ ] Digest `ready` sonrası SMTP + FCM fan-out (dev mock veya Gmail SMTP)
+- [ ] `notification_logs` sent/failed kayıtları
+- [ ] `POST /notifications/fcm-token` + admin preferences API
+- [ ] Idempotent digest bildirimi; partial failure ayrı log
+- [ ] Integration testler mock external servislerle green
+
+## Explicit Don'ts
+
+- E-postada bülten tam içeriği (yalnızca teaser + link)
+- AWS SES (SMTP kullan — `Docs/04` §11)
+- Frontend push UI / S-ADMIN-NOTIFICATIONS ekranı (Faz 6)
+- `/notifications/recipients` endpoint (Docs/06 — MVP-0 API yok)
+- Processor/digest LLM değişikliği
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 5 tamamlandı.

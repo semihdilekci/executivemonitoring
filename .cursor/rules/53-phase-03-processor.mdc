@@ -1,16 +1,20 @@
 ---
-description: "[Faz 3] Processor pipeline — 6 iterasyon/chat (SQS consumer → dedup → normalize → enrich/score → chunk/embed → entegrasyon). Mesajda \"Faz 3 — İterasyon M\" belirt."
+description: "[Faz 3] Processor pipeline — 7 iterasyon/chat (SQS consumer → dedup → normalize → gate → enrich/score → chunk/embed → entegrasyon). Mesajda \"Faz 3 — İterasyon M\" belirt."
 ---
 
 # Faz 3: Processor Pipeline
 
 ## Goal
 
-SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enrich → rule-based score → chunk + embedding → `{schema}.processed_items` + `content_chunks` yazımı. Faz 4 (digest/RAG) öncülü.
+SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → **gate** → keyword enrich → rule-based score → chunk + embedding → `{schema}.processed_items` + `content_chunks` yazımı. Faz 4 (digest/RAG) öncülü.
 
-## MVP-0 Enrichment Kararı
+## MVP-0 Enrichment ve Gate Kararı (K1–K5)
 
-**Keyword/rules enrichment tek doğruluk kaynağıdır** (`Docs/04` §8.3 MVP-0). LLM enrichment MVP-1'de `LLMEnricherProcessor` swap ile gelir. Processor fazında sıfır LLM maliyeti; `relevance_score` 0.0–1.0 rule-based (`Docs/02` §4.4). `transport` schema MVP-0'da kullanılmaz.
+**Keyword/rules enrichment tek doğruluk kaynağıdır** (`Docs/04` §8.4). LLM enrichment MVP-1'de `LLMEnricherProcessor` swap ile gelir. Processor fazında sıfır LLM maliyeti.
+
+**Gate** (`GateProcessor`, `Docs/04` §8.3): `sources.config.ingest_mode` — `"all"` otomatik kabul; `"filtered"` master keyword havuzunda ≥1 eşleşme. DROP → `processed_items` / `content_chunks` yazılmaz.
+
+**Scoring:** `relevance_score = keyword_intensity * 0.6 + freshness * 0.4` (`Docs/04` §8.4). Source reliability weight yok. `transport` schema MVP-0'da kullanılmaz.
 
 ## Feature branch (zorunlu)
 
@@ -23,7 +27,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - Her chat: `@53-phase-03-processor` + **「Faz 3 — İterasyon M」**.
 - Katman: yalnızca `services/processor/` + `tests/` — API, frontend, digest yok.
 - Plan moduna geçme; iterasyon blueprint yeterli.
-- Enrichment implementasyonu: `Docs/04` §8.3 MVP-0 (`CATEGORY_RULES`, schema routing, scorer formülü).
+- Enrichment implementasyonu: `Docs/04` §8.3 (gate) + §8.4 (`CATEGORY_RULES`, schema routing, scorer formülü).
 
 ---
 
@@ -53,7 +57,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 2. `BaseProcessor` — abstract `process(ctx) → ProcessorOutput | None`; `None` = skip (duplicate/discard)
 3. `ProcessorChain` — sıralı adım çalıştır; adım exception → log + mesaj DLQ'ya (`Docs/04` §8.7)
 4. Lambda handler — SQS batchRecords; `batchItemFailures` partial failure (`Docs/10` §3.1)
-5. `raw_items.status = processing` başlangıç; başarı/hata path stub (tam mapping iter 6)
+5. `raw_items.status = processing` başlangıç; başarı/hata path stub (tam mapping iter 7)
 6. Unit: chain sırası, mid-chain exception → DLQ flag, duplicate skip no-op
 
 **Dosya kapsamı:**
@@ -62,14 +66,14 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 | ----- | ---- |
 | Oluştur | `services/processor/base_processor.py`, `models.py`, `handlers/processor_handler.py`, `tests/unit/processor/test_base_processor.py` |
 | Güncelle | `pyproject.toml` / `requirements.txt` (processor deps), `infra/` Lambda stub (opsiyonel not) |
-| Dokunma | dedup, normalizer, enricher, API router |
+| Dokunma | gate, enricher, scorer, API router |
 
 **Spec → kod eşlemesi:**
 
 | Gereksinim | Docs referansı | Uygulama notu |
 | ---------- | -------------- | ------------- |
 | SQS mesaj alanları | `Docs/04` §7 SQS format | `source_id` UUID string parse |
-| Chain pattern | `Docs/10` §3.1 | `BaseProcessor` subclass'lar iter 2–5 |
+| Chain pattern | `Docs/10` §3.1 | `BaseProcessor` subclass'lar iter 2–6 |
 | At-least-once | `Docs/04` §8.6 | Handler idempotent olmalı |
 | DLQ 3 retry | `Docs/04` §8.7 | Lambda SQS redrive policy |
 
@@ -183,7 +187,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 | ----- | ---- |
 | Oluştur | `normalizer.py`, `tests/unit/processor/test_normalizer.py` |
 | Güncelle | `requirements.txt` (beautifulsoup4, langdetect) |
-| Dokunma | enricher, scorer |
+| Dokunma | gate, enricher, scorer |
 
 **Spec → kod eşlemesi:**
 
@@ -199,7 +203,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - [ ] Deny: malformed HTML → boş değil strip; empty → skip
 
 **Bu iterasyonda yok:**
-- Enrich, score, chunk
+- Gate, enrich, score, chunk
 
 **Risk / dikkat:**
 - `langdetect` kısa metinde yanlış dil — min length filtresi önce
@@ -210,9 +214,63 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 
 ---
 
-### İterasyon 4 — Enricher ve Scorer (3.4)
+### İterasyon 4 — Gate Processor (3.4)
 
-**Hedef:** Keyword-based kategori + schema routing + tag extraction; rule-based `relevance_score` 0.0–1.0; unit testler deterministik.
+**Hedef:** `ingest_mode` + master keyword havuzu gate; eşleşmeyen makaleler işlenmiş veri katmanına yazılmaz.
+
+**Teslim çıktısı:**
+- `services/processor/gate_processor.py` — `GateProcessor(BaseProcessor)`
+- `services/processor/keyword_pool.py` — master havuz (`CATEGORY_RULES` birleşimi)
+- `tests/unit/processor/test_gate.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop
+- [ ] `packages/shared/models/source.py` — `config` JSONB
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.4
+2. `Docs/04_BACKEND_SPEC.md` §8.3 — gate akışı, `ingest_mode`, master havuz
+3. `Docs/02_DATABASE_SCHEMA.md` §4.2 — `sources.config` `ingest_mode`, `default_category`
+4. `Docs/01_DOMAIN_MODEL.md` — Source `config` yapısı
+
+**Uygulama planı:**
+1. `keyword_pool.py` — `CATEGORY_RULES` keyword birleşimi (enricher ile paylaşılır)
+2. `GateProcessor` — `ingest_mode: "all"` → pass; `"filtered"` → title+body'de ≥1 master keyword
+3. Eşleşme yok → `None` (DROP); metrik log
+4. Gate normalize **sonrası** çalışır (temiz metin üzerinde arama)
+5. Unit: all pass, filtered+match pass, filtered+no match DROP, Türkçe NFC
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `gate_processor.py`, `keyword_pool.py`, `test_gate.py` |
+| Dokunma | enricher, scorer, chunker |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| ingest_mode | `Docs/04` §8.3 | `sources.config` JSONB |
+| DROP | `Docs/04` §8.3 | processed_items yazılmaz |
+| Master havuz | `Docs/04` §8.3–8.4 | `keyword_pool` modülü |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor/test_gate.py -v`
+- [ ] Deny: `filtered` + boş keyword → DROP
+
+**Bu iterasyonda yok:**
+- Kategori çözümleme, relevance_score, chunk
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_gate.py -v`
+- [ ] PR/onay → İterasyon 5
+
+---
+
+### İterasyon 5 — Enricher ve Scorer (3.5)
+
+**Hedef:** Keyword-based kategori + schema routing + tag extraction; deterministik `relevance_score` 0.0–1.0.
 
 **Teslim çıktısı:**
 - `services/processor/enricher.py` — `EnricherProcessor(BaseProcessor)`
@@ -221,47 +279,45 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - `tests/unit/processor/test_scorer.py`
 
 **Önkoşullar:**
-- [ ] İterasyon 3 Stop
+- [ ] İterasyon 4 Stop
 - [ ] `packages/shared/enums.py` — `PROCESSED_ITEM_SCHEMAS`
 
 **Docs okuma sırası:**
-1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.4
-2. `Docs/04_BACKEND_SPEC.md` §8.3 MVP-0 — `CATEGORY_RULES`, schema routing, MVP-0 yok listesi
-3. `Docs/04_BACKEND_SPEC.md` §8.4 — relevance_score formülü
-4. `Docs/02_DATABASE_SCHEMA.md` §4.4 — `topics`, `entities`, `schema_category`, `relevance_score` CHECK
-5. `Docs/01_DOMAIN_MODEL.md` — relevance 0–1 aralığı
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.5
+2. `Docs/04_BACKEND_SPEC.md` §8.4 — `CATEGORY_RULES`, kategori sırası, scorer formülü
+3. `Docs/02_DATABASE_SCHEMA.md` §4.4 — `topics`, `entities`, `schema_category`, `relevance_score` CHECK
+4. `Docs/01_DOMAIN_MODEL.md` — relevance 0–1 aralığı
 
 **Uygulama planı:**
-1. `enricher.py` — `CATEGORY_RULES` dict (`Docs/04` §8.3); öncelik source_type → keyword → fallback `macro`
-2. Schema map: macro/strategy/regulatory→`news`, fmcg→`fmcg`, finance→`market`, geopolitical→`geo`; `transport` kullanma
-3. Eşleşen keyword'ler → `topics` list (dedupe)
-4. `scorer.py` — `0.4*reliability + 0.3*freshness + 0.3*keyword_match` (`Docs/04` §8.4); `sources.config.reliability_weight` default 0.5
+1. `enricher.py` — `CATEGORY_RULES` (`Docs/04` §8.4); en çok eşleşme → `default_category` tie-break → `ingest_mode: "all"` → `default_category`
+2. Schema map: macro/strategy/regulatory→`news`, fmcg→`fmcg`, finance→`market`, geopolitical→`geo`
+3. Eşleşen keyword'ler → `topics` (dedupe)
+4. `scorer.py` — `keyword_intensity * 0.6 + freshness * 0.4` (`Docs/04` §8.4); reliability weight yok
 5. Freshness: <24h=1.0, <72h=0.5, else 0.2
-6. Düşük skor discard değil — skor yazılır (digest Faz 4 filtreler)
-7. Unit: routing tablosu, TCMB→macro/news, FMCG keyword→fmcg schema, skor edge cases
+6. Unit: routing, ingest_mode all→default_category, skor edge cases
 
 **Dosya kapsamı:**
 
 | İşlem | Path |
 | ----- | ---- |
 | Oluştur | `enricher.py`, `scorer.py`, unit testler |
-| Güncelle | — |
+| Güncelle | `keyword_pool.py` — `CATEGORY_RULES` export |
 | Dokunma | LLM client, chunker, embedding |
 
 **Spec → kod eşlemesi:**
 
 | Gereksinim | Docs referansı | Uygulama notu |
 | ---------- | -------------- | ------------- |
-| Keyword enrich MVP-0 | `Docs/04` §8.3 MVP-0 | sıfır LLM çağrısı |
-| Schema routing | `Docs/04` §8.3 tablo | `schema_category` alanı |
-| relevance 0–1 | `Docs/02` §4.4 CHECK | float, discard yok |
-| Sentiment/entity yok | `Docs/04` §8.3 MVP-0 yok | `entities` boş `[]` |
-| MVP-1 swap | `Docs/04` §8.3 MVP-1 | `LLMEnricherProcessor` notu |
+| Keyword enrich MVP-0 | `Docs/04` §8.4 | sıfır LLM çağrısı |
+| Schema routing | `Docs/04` §8.4 tablo | `schema_category` alanı |
+| relevance 0–1 | `Docs/02` §4.4 CHECK | float |
+| Reliability yok | K3 kararı | scorer'da kullanma |
+| Sentiment/entity yok | `Docs/04` §8.4 | `entities` boş `[]` |
+| MVP-1 swap | `Docs/04` §8.4 MVP-1 | `LLMEnricherProcessor` notu |
 
 **Kalite kapıları:**
 - [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_scorer.py -v`
 - [ ] Processor modülü coverage ≥%80 hedef
-- [ ] Deny: bilinmeyen source_type → fallback macro
 
 **Bu iterasyonda yok:**
 - LLM enrichment, sentiment, entity extraction, digest filtreleme
@@ -272,11 +328,11 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 
 **Stop:**
 - [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_scorer.py -v`
-- [ ] PR/onay → İterasyon 5
+- [ ] PR/onay → İterasyon 6
 
 ---
 
-### İterasyon 5 — Chunker ve Embedding (3.5)
+### İterasyon 6 — Chunker ve Embedding (3.6)
 
 **Hedef:** 512 token chunk (64 overlap), embedding API batch, `content_chunks` pgvector INSERT; integration similarity test.
 
@@ -287,11 +343,11 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - `tests/integration/test_embedding_pgvector.py`
 
 **Önkoşullar:**
-- [ ] İterasyon 4 Stop
+- [ ] İterasyon 5 Stop
 - [ ] `system_settings` embedding model key (Faz 0 seed) veya env fallback
 
 **Docs okuma sırası:**
-1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.5
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.6
 2. `Docs/04_BACKEND_SPEC.md` §8.5 — chunk boyutu, batch embedding
 3. `Docs/02_DATABASE_SCHEMA.md` §4.5 — `content_chunks`, VECTOR(1536)
 4. `Docs/04_BACKEND_SPEC.md` §6 — pgvector similarity helper pattern
@@ -328,7 +384,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - [ ] Deny: boş content → 0 chunk skip
 
 **Bu iterasyonda yok:**
-- `processed_items` INSERT (iter 6), RAG chat
+- `processed_items` INSERT (iter 7), RAG chat
 
 **Risk / dikkat:**
 - `Docs/10` `embeddings` tablo adı → `content_chunks` (`Docs/02` esas)
@@ -336,11 +392,11 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 
 **Stop:**
 - [ ] `pytest tests/unit/processor/test_chunker.py tests/integration/test_embedding_pgvector.py -v`
-- [ ] PR/onay → İterasyon 6
+- [ ] PR/onay → İterasyon 7
 
 ---
 
-### İterasyon 6 — Pipeline Entegrasyonu (3.6)
+### İterasyon 7 — Pipeline Entegrasyonu (3.7)
 
 **Hedef:** Uçtan uca SQS mesaj → tam pipeline → `{schema}.processed_items` + `content_chunks` DB'de; `raw_items.status` güncelleme; E2E integration yeşil.
 
@@ -349,18 +405,18 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - `tests/integration/test_pipeline_e2e.py`
 
 **Önkoşullar:**
-- [ ] İterasyon 1–5 Stop
+- [ ] İterasyon 1–6 Stop
 - [ ] Fixture `raw_item` veya SQS JSON (`fixtures/`)
 
 **Docs okuma sırası:**
-1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.6
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.7
 2. `Docs/01_DOMAIN_MODEL.md` — raw_item → processed_item lifecycle
 3. `Docs/02_DATABASE_SCHEMA.md` §4.4–4.5 — schema-qualified INSERT
 4. `packages/shared/models/processed_item.py` — schema factory / model seçimi
 5. `Docs/08_TESTING_STRATEGY.md` — integration pipeline test
 
 **Uygulama planı:**
-1. `PipelineOrchestrator` — chain: Dedup → Normalizer → Enricher → Scorer → Chunker → EmbeddingService → DB persist
+1. `PipelineOrchestrator` — chain: Dedup → Normalizer → Gate → Enricher → Scorer → Chunker → EmbeddingService → DB persist
 2. `raw_items.status`: processing → processed | failed; `error_message` fail path
 3. Schema-qualified INSERT: `news.processed_items`, `fmcg.processed_items`, vb.
 4. `raw_item_id` FK, `topics`/`entities` JSONB, `relevance_score`
@@ -379,7 +435,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 
 | Gereksinim | Docs referansı | Uygulama notu |
 | ---------- | -------------- | ------------- |
-| E2E zincir | `Docs/10` §3.6 | tüm processor adımları |
+| E2E zincir | `Docs/10` §3.7 | tüm processor adımları |
 | status geçişi | `Docs/01` §497–499 | processed / failed |
 | Schema INSERT | `Docs/02` §4.4 | `schema_category` routing |
 | DLQ fail | `Docs/04` §8.7 | pipeline exception |
@@ -405,8 +461,8 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 
 ## Required Context
 
-- `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 3 §3.1–3.6
-- `Docs/04_BACKEND_SPEC.md` §8 — processor pipeline (MVP-0 enrich §8.3)
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 3 §3.1–3.7
+- `Docs/04_BACKEND_SPEC.md` §8 — processor pipeline (gate §8.3, enrich+score §8.4)
 - `Docs/02_DATABASE_SCHEMA.md` §4.4–4.5 — processed_items + content_chunks
 - `.cursor/rules/17-processor-pipeline.mdc` — glob rule processor katmanı
 
@@ -415,7 +471,8 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enri
 - [ ] Fixture RSS/SQS → `{schema}.processed_items` + `content_chunks` (dev E2E)
 - [ ] Processor coverage ≥%80
 - [ ] DLQ happy path boş; fail path log + redirect testi
-- [ ] MVP-0 keyword enrich; LLM enrich yok
+- [ ] MVP-0 keyword gate + enrich; LLM enrich yok
+- [ ] Gate DROP → processed_items yazılmaz
 
 ## Explicit Don'ts
 

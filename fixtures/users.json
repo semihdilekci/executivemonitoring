@@ -1,0 +1,26 @@
+[
+  {
+    "id": "a0000001-0000-4000-8000-000000000001",
+    "email": "admin@ygip.test",
+    "password_hash": "$2b$12$om6aLfJqQyYRuF33elsuHu6sttUfPoPd4LHSdKvskeV/ZnmF2nb4S",
+    "full_name": "Dev Admin",
+    "role": "admin",
+    "is_active": true
+  },
+  {
+    "id": "a0000002-0000-4000-8000-000000000002",
+    "email": "viewer1@ygip.test",
+    "password_hash": "$2b$12$om6aLfJqQyYRuF33elsuHu6sttUfPoPd4LHSdKvskeV/ZnmF2nb4S",
+    "full_name": "Dev Viewer Bir",
+    "role": "viewer",
+    "is_active": true
+  },
+  {
+    "id": "a0000003-0000-4000-8000-000000000003",
+    "email": "viewer2@ygip.test",
+    "password_hash": "$2b$12$om6aLfJqQyYRuF33elsuHu6sttUfPoPd4LHSdKvskeV/ZnmF2nb4S",
+    "full_name": "Dev Viewer İki",
+    "role": "viewer",
+    "is_active": true
+  }
+]

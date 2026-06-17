@@ -644,14 +644,15 @@ API mapping: `GET /api/v1/sources?type=&status=&search=&cursor=&limit=20`
 | Endpoint URL | url input | Zorunlu |
 | Parse formatı | select: HTML / XML / JSON | Zorunlu |
 | Tarama aralığı | select: 15dk / 30dk / 60dk | Varsayılan: 30dk |
-| Güvenilirlik ağırlığı | slider 0-10 | Varsayılan: 8 (resmi kaynaklar yüksek) |
+| Ingest modu | select: Tüm makaleler (`all`) / Keyword filtreli (`filtered`) | Domain-specific kaynaklar: `all`; geniş kaynaklar: `filtered` (`Docs/04` §8.3) |
+| Varsayılan kategori | select: macro / fmcg / finance / strategy / … | `default_category`; ingest_mode `all` kaynaklarda routing |
 | Kategori etiketleri | multi-select chip | En az 1 zorunlu |
 
 Footer: "İptal" + "Kaydet" (primary).
 
 Kaynak ekleme sonrası backend URL'ye test çekimi yapar. Başarısızsa uyarı Toast'ı: "Kaynak eklendi ancak ilk bağlantı denemesi başarısız oldu. Lütfen URL'yi kontrol edin." Kaynak yine de eklenir (admin daha sonra düzeltebilir).
 
-API mapping: `POST /api/v1/sources` `{ name, type, config: {...}, reliability_weight, categories }`
+API mapping: `POST /api/v1/sources` `{ name, type, config: { feed_url, ingest_mode, default_category, ... }, polling_interval_minutes, category, target_phase }`
 
 ---
 

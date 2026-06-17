@@ -1,16 +1,20 @@
 ---
-description: Processor pipeline — SQS consumer, dedup, normalize, enrich, score, idempotency
+description: Processor pipeline — SQS consumer, dedup, normalize, gate, enrich, score, idempotency
 globs:
   - "services/processor/**"
 ---
 
 # Processor Pipeline
 
-SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → enrich → score → chunk (embedding)**.
+SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → gate → enrich + score → chunk (embedding)**.
 
-## MVP-0 Enrichment
+## MVP-0 Enrichment ve Gate Kararı (K1–K5)
 
-**Keyword/rules enrichment tek doğruluk kaynağıdır** (`Docs/04` §8.3 MVP-0). LLM enrichment MVP-1'de `LLMEnricherProcessor` swap ile gelir. Processor'da sıfır LLM maliyeti.
+**Keyword/rules enrichment tek doğruluk kaynağıdır** (`Docs/04` §8.4). LLM enrichment MVP-1'de `LLMEnricherProcessor` swap ile gelir. Processor'da sıfır LLM maliyeti.
+
+**Keyword gate** (`GateProcessor`, `Docs/04` §8.3): `sources.config.ingest_mode` — `"all"` otomatik kabul; `"filtered"` master keyword havuzunda ≥1 eşleşme zorunlu. Eşleşme yoksa `processed_items` / `content_chunks` yazılmaz.
+
+**Scoring:** `relevance_score = keyword_intensity * 0.6 + freshness * 0.4`. Source reliability weight yok (K3).
 
 ## Aşamalar
 
@@ -18,13 +22,14 @@ SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → enrich → 
 |-------|------------|
 | Dedup | `content_hash` + `source_id`; Redis SETNX (TTL 7 gün); duplicate skip |
 | Normalize | HTML strip, Unicode NFC, tarih/dil, min 10 kelime |
-| Enrich | Keyword kategori + schema routing → `schema_category`, `topics` |
-| Score | Rule-based `relevance_score` 0.0–1.0 (`Docs/04` §8.4) |
+| Gate | `ingest_mode` + master keyword havuzu; DROP → işlenmiş veri yazılmaz |
+| Enrich | Kategori çözümleme + schema routing → `schema_category`, `topics` |
+| Score | Deterministik `relevance_score` 0.0–1.0 (`Docs/04` §8.4) |
 | Chunk | Metin parçalama + embedding → `content_chunks` (1536 dim) |
 
 ## Schema routing (MVP-0)
 
-`macro`/`strategy`/`regulatory` → `news`; `fmcg` → `fmcg`; `finance` → `market`; `geopolitical` → `geo`. `transport` MVP-0'da kullanılmaz.
+Kategori çözümleme: en çok keyword eşleşmesi → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`. Mapping: `macro`/`strategy`/`regulatory` → `news`; `fmcg` → `fmcg`; `finance` → `market`; `geopolitical` → `geo`. `transport` MVP-0'da kullanılmaz.
 
 ## İdempotency
 
@@ -43,6 +48,8 @@ Processor ≥%80 coverage. Her aşama için:
 ## Anti-pattern'ler
 
 - Processor'da LLM enrichment (MVP-0)
+- Keyword gate atlanması (`ingest_mode: "filtered"` kaynaklarda)
+- Source reliability weight scoring'de (K3 — kaldırıldı)
 - Dedup atlanması (digest kalitesi düşer)
 - Sync blocking embedding tüm batch'i kilitlemesi (batch size sınırla)
 - Processor'dan doğrudan kullanıcı bildirimi (notification servisi ayrı)

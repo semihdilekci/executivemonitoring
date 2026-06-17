@@ -1,6 +1,13 @@
-# Runtime dependencies — Faz 0 DB katmanı
+# Runtime dependencies — Faz 0 DB katmanı + Faz 1 API
 sqlalchemy[asyncio]>=2.0.36
 alembic>=1.14.0
 asyncpg>=0.30.0
 psycopg2-binary>=2.9.10
 pgvector>=0.3.6
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic-settings>=2.6.0
+email-validator>=2.2.0
+redis>=5.2.0
+PyJWT>=2.10.0
+bcrypt>=4.2.0

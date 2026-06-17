@@ -30,7 +30,7 @@ apps/api/          → FastAPI HTTP sunucusu
 apps/web/          → Next.js dashboard
 apps/mobile/       → React Native
 services/collectors/   → RSS, email, gov, API worker'lar
-services/processor/    → dedup → normalize → enrich → score
+services/processor/    → dedup → normalize → gate → enrich → score
 services/ai-engine/    → digest, RAG, chatbot
 packages/shared/   → SQLAlchemy modeller, enum, util
 infra/             → AWS IaC (CDK/Terraform)

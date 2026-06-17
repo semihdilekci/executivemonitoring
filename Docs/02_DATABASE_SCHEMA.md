@@ -117,6 +117,33 @@ CREATE INDEX idx_sources_source_type ON sources (source_type);
 CREATE INDEX idx_sources_category ON sources (category);
 ```
 
+**`config` JSONB — MVP-0 zorunlu alanlar (seed/migration verisi):**
+
+| Alan | Tip | Açıklama |
+| ---- | --- | -------- |
+| `ingest_mode` | `"all"` \| `"filtered"` | Keyword gate davranışı (`Docs/04` §8.3) |
+| `default_category` | string | Kategori routing fallback |
+
+Tip-spesifik alanlar (`feed_url`, `imap_host`, vb.) collector tipine göre eklenir. Örnek:
+
+```json
+{
+  "feed_url": "https://bloomberght.com/rss",
+  "ingest_mode": "filtered",
+  "default_category": "finance"
+}
+```
+
+```json
+{
+  "feed_url": "https://foodnavigator.com/rss",
+  "ingest_mode": "all",
+  "default_category": "fmcg"
+}
+```
+
+Mevcut `config` JSONB kolonu şema değişikliği gerektirmez; seed (`fixtures/sources.json`) ve admin API üzerinden `ingest_mode` + `default_category` doldurulur.
+
 ### 4.3 raw_items
 
 ```sql
@@ -360,7 +387,7 @@ CREATE INDEX idx_audit_logs_target ON audit_logs (target_type, target_id);
 
 **ON DELETE davranışı:** Kullanıcı silindiğinde `actor_user_id` SET NULL olur — audit kaydı korunur, aktör bilgisi kaybolur.
 
-**event_type değerleri:** `user.login`, `user.logout`, `user.created`, `user.deleted`, `user.role_changed`, `user.deactivated`, `source.created`, `source.deleted`, `source.status_changed`, `prompt_template.updated`, `api_key.created`, `api_key.deleted`, `digest.started`, `digest.completed`, `digest.failed`, `system.error`, `password.reset_initiated`.
+**event_type değerleri:** `user.login`, `user.logout`, `user.created`, `user.deleted`, `user.role_changed`, `user.deactivated`, `source.created`, `source.deleted`, `source.status_changed`, `prompt_template.updated`, `api_key.created`, `api_key.deleted`, `digest.started`, `digest.completed`, `digest.failed`, `system.error`, `password.reset_initiated`, `password.reset_completed`.
 
 ### 4.13 notification_preferences
 

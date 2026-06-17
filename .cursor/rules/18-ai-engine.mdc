@@ -39,7 +39,7 @@ Key tükenmesi/kota (429) → sıradaki aktif key. Kullanım `api_usage_logs`.
 ## RAG Chatbot
 
 1. Soru → embedding (`EmbeddingService` / Faz 3)
-2. `content_chunks` pgvector similarity top-k
+2. `content_chunks` pgvector similarity top-k; hybrid sıralama: `cosine_similarity × relevance_score`
 3. Context assembly (max 10 chunk, 8000 token)
 4. LLM → yanıt + `sources` JSON
 5. `chat_history` persist (HTTP katmanı — iter 8)

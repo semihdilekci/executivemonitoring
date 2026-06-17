@@ -63,6 +63,24 @@ alembic upgrade head
 Local DB: `postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev` (`.env.example` ile uyumlu)  
 CI test DB: `postgresql+asyncpg://test:test@localhost:5432/ygip_test`
 
+### Dev seed data
+
+```bash
+python scripts/seed.py
+```
+
+Script idempotent'tir — tekrar çalıştırıldığında mevcut kayıtları atlar.
+
+**Dev kullanıcıları** (`fixtures/users.json` — yalnızca local/test):
+
+| E-posta | Rol | Şifre (dev only) |
+|---------|-----|------------------|
+| `admin@ygip.test` | admin | `DevPass1` |
+| `viewer1@ygip.test` | viewer | `DevPass1` |
+| `viewer2@ygip.test` | viewer | `DevPass1` |
+
+Production verisi `fixtures/` dizinine taşınmaz.
+
 ## Geliştirme
 
 - Tüm MVP-0 geliştirmesi `feature/mvp-0` branch'inde yapılır.

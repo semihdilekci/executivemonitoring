@@ -312,12 +312,19 @@ Yeni veri kaynağı ekler.
 {
   "name": "Food Navigator RSS",
   "source_type": "rss",
-  "config": {"feed_url": "https://foodnavigator.com/rss", "language": "en"},
+  "config": {
+    "feed_url": "https://foodnavigator.com/rss",
+    "language": "en",
+    "ingest_mode": "all",
+    "default_category": "fmcg"
+  },
   "polling_interval_minutes": 15,
   "category": "fmcg",
   "target_phase": "mvp-0"
 }
 ```
+
+**Config zorunlu alanlar (MVP-0):** `ingest_mode` (`"all"` | `"filtered"`), `default_category`. Tip-spesifik alanlar (`feed_url`, `imap_host`, vb.) collector tipine göre eklenir (`Docs/02` §4.2, `Docs/04` §8.3).
 
 **Response (201):** Oluşturulan source objesi.
 
@@ -1153,6 +1160,7 @@ Redis sliding window counter ile uygulanır. Limit aşıldığında 429 döner.
 ```
 rate_limit:user:{user_id}:general        → 100/dk
 rate_limit:ip:{client_ip}:auth_login     → 10/dk
+rate_limit:ip:{client_ip}:auth_refresh   → 20/dk
 rate_limit:user:{user_id}:chat           → 20/dk
 rate_limit:ip:{client_ip}:password_reset → 3/saat
 ```

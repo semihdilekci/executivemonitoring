@@ -509,6 +509,7 @@ Admin panelinden eklenen LLM API key'leri (Groq, Gemini) veritabanında şifrele
 | `digest.failed` | Digest üretimi başarısız | Sistem |
 | `settings.updated` | Sistem ayarı değiştirildi | Admin |
 | `password.reset_initiated` | Şifre sıfırlama başlatıldı | Admin |
+| `password.reset_completed` | Şifre sıfırlama tamamlandı | Kullanıcı (token ile) |
 | `system.error` | Collector 3. retry fail, kritik hata | Sistem |
 
 ### 9.2 Tablo Şeması
