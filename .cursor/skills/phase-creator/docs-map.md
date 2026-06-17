@@ -1,8 +1,8 @@
 # Docs Güncelleme Haritası — Phase Creator
 
-Faz onayından sonra `docs/` güncellemelerinde **tek doğruluk kaynağı** bu haritadır. `docs/10_IMPLEMENTATION_ROADMAP.md` Bölüm 9 (Doküman Yaşam Döngüsü) ile uyumlu.
+Faz onayından sonra `Docs/` güncellemelerinde **tek doğruluk kaynağı** bu haritadır. `Docs/10_IMPLEMENTATION_ROADMAP.md` Bölüm 9 (Doküman Yaşam Döngüsü) ile uyumlu.
 
-**Altın kural:** Kod/spec çelişkisi → önce `docs/` güncelle, sonra `.mdc` yaz. `.mdc` içinde spec tekrarı yok — bölüm referansı.
+**Altın kural:** Kod/spec çelişkisi → önce `Docs/` güncelle, sonra `.mdc` yaz. Spec `Docs/` içinde kalır; `.mdc` iterasyonları **plan-modu kalitesinde uygulama adımları** + `Docs/<dosya>.md` §pointer taşır ([iteration-blueprint.md](iteration-blueprint.md)).
 
 ---
 
@@ -10,17 +10,17 @@ Faz onayından sonra `docs/` güncellemelerinde **tek doğruluk kaynağı** bu h
 
 | Dosya                                | Ne zaman güncelle                             | Tipik içerik                                    |
 | ------------------------------------ | --------------------------------------------- | ----------------------------------------------- |
-| `docs/00_PROJECT_OVERVIEW.md`        | MVP kapsamı / non-goal değişimi (nadir)       | In-scope / out-of-scope madde                   |
-| `docs/01_DOMAIN_MODEL.md`            | Yeni entity, state machine, domain terim      | Entity diyagramı, geçiş tablosu                 |
-| `docs/02_DATABASE_SCHEMA.md`         | Tablo/kolon/index/enum/migration              | Prisma karşılığı, constraint                    |
-| `docs/03_API_CONTRACTS.md`           | Yeni/değişen endpoint                         | Request/response, error code                    |
-| `docs/04_BACKEND_SPEC.md`            | Yeni servis pattern, middleware, modül yapısı | Nest modül konvansiyonu                         |
-| `docs/05_FRONTEND_SPEC.md`           | Route ağacı, global FE pattern, lib           | `app/` route, state stratejisi                  |
-| `docs/06_SCREEN_CATALOG.md`          | Yeni ekran veya kritik UX değişikliği         | `S-*` ID, permission, state'ler                 |
-| `docs/07_SECURITY_IMPLEMENTATION.md` | Auth, encryption, rate limit, yeni control    | Bölüm + threat model notu                       |
-| `docs/08_TESTING_STRATEGY.md`        | Yeni test türü, coverage hedefi, E2E journey  | Journey adı, risk seviyesi                      |
-| `docs/09_DEV_WORKFLOW.md`            | CI/CD, release, branch, agent kuralları       | Süreç değişikliği                               |
-| `docs/10_IMPLEMENTATION_ROADMAP.md`  | **Her yeni/güncellenen faz**                  | Faz başlığı, bağımlılık, iterasyon özeti, durum |
+| `Docs/00_PROJECT_OVERVIEW.md`        | MVP kapsamı / non-goal değişimi (nadir)       | In-scope / out-of-scope madde                   |
+| `Docs/01_DOMAIN_MODEL.md`            | Yeni entity, state machine, domain terim      | Entity diyagramı, geçiş tablosu                 |
+| `Docs/02_DATABASE_SCHEMA.md`         | Tablo/kolon/index/enum/migration              | SQLAlchemy/Alembic karşılığı, constraint        |
+| `Docs/03_API_CONTRACTS.md`           | Yeni/değişen endpoint                         | Request/response, error code                    |
+| `Docs/04_BACKEND_SPEC.md`            | Yeni servis pattern, middleware, modül yapısı | FastAPI modül konvansiyonu                      |
+| `Docs/05_FRONTEND_SPEC.md`           | Route ağacı, global FE pattern, lib           | `app/` route, state stratejisi                  |
+| `Docs/06_SCREEN_CATALOG.md`          | Yeni ekran veya kritik UX değişikliği         | `S-*` ID, permission, state'ler                 |
+| `Docs/07_SECURITY_IMPLEMENTATION.md` | Auth, encryption, rate limit, yeni control    | Bölüm + threat model notu                       |
+| `Docs/08_TESTING_STRATEGY.md`        | Yeni test türü, coverage hedefi, E2E journey  | Journey adı, risk seviyesi                      |
+| `Docs/09_DEV_WORKFLOW.md`            | CI/CD, release, branch, agent kuralları       | Süreç değişikliği                               |
+| `Docs/10_IMPLEMENTATION_ROADMAP.md`  | **Her yeni/güncellenen faz**                  | Faz başlığı, §N.M alt maddeleri, durum          |
 
 ---
 
@@ -64,20 +64,27 @@ ADR numarası: mevcut `docs/adr/*.md` listesinden sonraki sıra.
 1. **Önce oku:** İlgili dosyada mevcut bölümü `Grep` ile bul; aynı yapıda ekle (kopyala-yapıştır kalıbı).
 2. **Screen Catalog:** `S-<DOMAIN>-<ACTION>` ID'si mevcut dosyada var mı kontrol et; yoksa tam bölüm ekle (route, permission, form, state'ler, TR mesajlar).
 3. **API Contracts:** Endpoint başına request/response envelope + error code listesi.
-4. **Roadmap:** `## 3. Faz Detayları` altında yeni `### Faz N — …` veya mevcut fazı genişlet; bağımlılık grafiği notu gerekirse Bölüm 2'ye tek satır.
+4. **Roadmap:** `## 3. Faz Detayları` altında `### Faz N — …` + **§N.1…N.K** alt maddeleri; her alt madde bir `.mdc` iterasyonunun `Hedef` + `Docs/10` referansına karşılık gelir.
 5. **Tutarlılık:** Aynı terim tüm dosyalarda aynı (enum, permission, ekran ID, route path).
 6. **Özet çıktı:** Güncelleme bitince kullanıcıya tablo: dosya → değişen bölüm (1 satır).
 
 ---
 
-## .mdc'ye taşınmayan içerik
+## Docs vs .mdc — içerik ayrımı
 
-Bunlar **yalnızca** `docs/` içinde kalır; `.mdc` sadece referans verir:
+**Yalnızca `Docs/` içinde (kopyalanmaz):**
 
-- Tam API request/response örnekleri → `03_API_CONTRACTS`
-- Ekran alan listesi ve UX state → `06_SCREEN_CATALOG`
-- Tablo/kolon tanımı → `02_DATABASE_SCHEMA`
-- Entity lifecycle → `01_DOMAIN_MODEL`
-- Uzun dosya ağaçları (50+ satır) → ilgili spec veya roadmap; `.mdc`'de en fazla 10–15 satır özet ağaç
+- Tam API request/response örnekleri → `Docs/03_API_CONTRACTS`
+- Ekran alan listesi ve UX state → `Docs/06_SCREEN_CATALOG`
+- Tablo/kolon tanımı → `Docs/02_DATABASE_SCHEMA`
+- Entity lifecycle → `Docs/01_DOMAIN_MODEL`
 
-`.mdc`'de kalması gerekenler: Goal, iterasyon Hedef/Stop, **Minimum bağlam** (path + bölüm), **Bu iterasyonda yok**, Done Definition checklist, Explicit Don'ts.
+**`.mdc` iterasyonunda kalır** ([iteration-blueprint.md](iteration-blueprint.md)):
+
+- Uygulama planı (plan-modu adımları)
+- Docs okuma sırası (`Docs/X.md` §Y — neden)
+- Spec → kod eşlemesi (pointer + uygulama notu, spec metni değil)
+- Dosya kapsamı tablosu (≤12 satır)
+- Kalite kapıları, Risk, Stop komutları
+
+**Faz üst seviyesi `.mdc`:** Goal, Feature branch, çalışma modeli, Required Context, Done Definition, Explicit Don'ts.

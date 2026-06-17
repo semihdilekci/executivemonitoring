@@ -179,9 +179,10 @@ Oluşturulacak kaynaklar:
 - Upstash Redis (serverless free tier) veya ElastiCache t3.micro
 - S3 bucket: `ygip-dev-archive` (ham içerik + digest HTML)
 - SQS queue'lar: `ygip-dev-rss-queue`, `ygip-dev-email-queue`, `ygip-dev-gov-queue`, `ygip-dev-api-queue` + her biri için DLQ
-- SES: gönderim identity doğrulama (sandbox modda yeterli)
 - EventBridge: placeholder rule (collector cron'ları Faz 2'de tanımlanır)
-- IAM role'lar: Lambda execution role (SQS, S3, RDS, SES, Secrets Manager erişimli), environment-scoped ARN kısıtlaması (`ygip-dev-*`)
+- IAM role'lar: Lambda execution role (SQS, S3, RDS, Secrets Manager erişimli), environment-scoped ARN kısıtlaması (`ygip-dev-*`)
+
+> **Not:** E-posta bildirimleri AWS SES değil, kurumsal SMTP ile gönderilir (dev: Gmail SMTP, prod: kurumsal relay). SMTP kimlik bilgileri IaC dışında `.env` / Secrets Manager'da tutulur.
 
 **Cursor context:** `/infra` dizini, AWS servis listesi (bu iterasyon tanımı)
 
@@ -701,18 +702,19 @@ Testler:
 > Ardıl: Faz 6
 > Katman: Backend/Service
 
-### 5.1 — SES Mail Service
+### 5.1 — SMTP Mail Service
 
-**Çıktı:** AWS SES ile HTML mail gönderim servisi
+**Çıktı:** Kurumsal SMTP ile HTML mail gönderim servisi
 
 Oluşturulacaklar:
-- `services/ai-engine/mail_service.py` — `MailService` class: SES client, HTML template rendering (Jinja2), "yeni rapor hazır" mail template (teaser + platform link), error handling + retry
+- `services/ai-engine/mail_service.py` — `MailService` class: SMTP client (`aiosmtplib`), HTML template rendering (Jinja2), "yeni rapor hazır" mail template (teaser + platform link), error handling + retry
 - Mail template: `templates/digest_notification.html` — başlık, teaser özet, CTA butonu ("Raporu Görüntüle")
+- Dev: Gmail SMTP (`smtp.gmail.com:587`, uygulama şifresi); prod: kurumsal SMTP relay (Secrets Manager)
 
 Testler:
-- `tests/unit/services/test_mail_service.py` — template render doğru, SES mock çağrısı
+- `tests/unit/services/test_mail_service.py` — template render doğru, SMTP mock çağrısı
 
-**Cursor context:** AWS SES config, Jinja2 template
+**Cursor context:** SMTP env config (`SMTP_*`), Jinja2 template
 
 ---
 
@@ -751,7 +753,7 @@ Testler:
 **Çıktı:** Digest ready → alıcı listesi → mail + push gönderim zinciri
 
 Oluşturulacaklar:
-- `services/ai-engine/notification_orchestrator.py` — `NotificationOrchestrator` class: digest `ready` event → aktif kullanıcı listesi çek → her kullanıcıya mail (SES) + push (FCM) gönder → `notification_logs` INSERT
+- `services/ai-engine/notification_orchestrator.py` — `NotificationOrchestrator` class: digest `ready` event → aktif kullanıcı listesi çek → her kullanıcıya mail (SMTP) + push (FCM) gönder → `notification_logs` INSERT
 - EventBridge entegrasyonu: digest üretim Lambda tamamlandığında notification trigger
 - Digest cron zamanlaması: Strateji → Cuma 08:00, Türk Medyası + FMCG → Cumartesi 08:00
 
@@ -1001,7 +1003,7 @@ Oluşturulacaklar:
 - Prod RDS PostgreSQL: t3.micro (MVP-0), DeletionProtection: true, automated daily backup, 7 gün retention, PITR aktif
 - Prod S3: `ygip-prod-archive`
 - Prod SQS: tüm queue'lar + DLQ'lar (`ygip-prod-*`)
-- Prod SES: production sending identity, sandbox'tan çık
+- Kurumsal SMTP relay yapılandırması (Secrets Manager `ygip/prod/smtp`)
 - Domain + SSL: `ygip.yildizholding.com` + ACM sertifika + CloudFront dağıtımı
 - IAM role'lar: prod-scoped ARN kısıtlaması (`ygip-prod-*`)
 
@@ -1014,7 +1016,7 @@ Oluşturulacaklar:
 **Çıktı:** Tüm secret'lar AWS Secrets Manager'da
 
 Oluşturulacaklar:
-- Secrets Manager'da secret oluşturma: JWT_SECRET_KEY, DATABASE_URL, REDIS_URL, ENCRYPTION_KEY, SES config, FCM service account
+- Secrets Manager'da secret oluşturma: JWT_SECRET_KEY, DATABASE_URL, REDIS_URL, ENCRYPTION_KEY, SMTP config, FCM service account
 - Lambda/ECS IAM role'larına Secrets Manager read erişimi
 - Application config güncelleme: prod ortamda `.env` yerine Secrets Manager'dan okuma
 - KMS CMK oluşturma (LLM API key encryption için)

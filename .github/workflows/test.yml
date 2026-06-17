@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: ygip_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type check
+        run: mypy apps/ services/ packages/
+
+      - name: Unit tests
+        run: pytest tests/unit -v --cov=apps --cov=services --cov=packages --cov-report=xml
+
+      - name: Integration tests
+        run: pytest tests/integration -v --cov-append --cov-report=xml
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/ygip_test
+
+      - name: Coverage check
+        run: coverage report --fail-under=70

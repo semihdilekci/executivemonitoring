@@ -19,7 +19,7 @@ alwaysApply: true
 | Web | Next.js (SSR) |
 | Mobil | React Native (iOS + Android) |
 | LLM | Groq + Gemini (round-robin fallback) |
-| Infra | AWS (S3, SES, FCM, Secrets Manager prod) |
+| Infra | AWS (S3, FCM, Secrets Manager prod) |
 
 Yeni framework/library → `Docs/mimari-kararlar.md` veya ADR güncellemesi gerekir.
 
@@ -54,7 +54,7 @@ tests/             → pytest unit + integration
 ## MVP Kapsamı (MVP-0)
 
 - 3 haftalık bülten (Strateji, Türk Medyası, FMCG) + web + mobil + RAG chatbot
-- Auth (email+şifre, JWT), admin paneli (7 sayfa), bildirim (SES + FCM)
+- Auth (email+şifre, JWT), admin paneli (7 sayfa), bildirim (SMTP + FCM)
 
 ## MVP Kapsamı Dışı
 

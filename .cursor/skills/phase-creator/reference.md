@@ -1,44 +1,44 @@
-# Phase Document Reference — Lean Management
+# Phase Document Reference — YGIP
 
-Bu dosya mevcut `.cursor/rules/*-phase-*.mdc` dosyalarından çıkarılmış **zorunlu yapı** ve **iterasyon kalıbı**dır. `phase-creator` skill'i **docs güncellemesi tamamlandıktan sonra** `.mdc` yazarken bunu kullanır.
+`.cursor/rules/NN-phase-XX-*.mdc` dosyalarının **zorunlu yapısı** ve **iterasyon kalıbı**. `phase-creator` skill'i: önce `Docs/` günceller → sonra bu referans + [iteration-blueprint.md](iteration-blueprint.md) ile `.mdc` yazar.
 
 ## Docs ↔ .mdc ilişkisi
 
-| Katman                            | Rol                                                                    |
-| --------------------------------- | ---------------------------------------------------------------------- |
-| `docs/01`–`10`, `06`, `adr/`      | **Tek doğruluk kaynağı** — spec, contract, ekran, roadmap              |
-| `.cursor/rules/NN-phase-XX-*.mdc` | **Uygulama rehberi** — iterasyonlar, Stop, kısa scope; spec'e referans |
+| Katman | Rol |
+| ------ | --- |
+| `Docs/01`–`10`, `06`, `mimari-kararlar.md` | **Tek doğruluk kaynağı** — spec, contract, ekran, roadmap |
+| `.cursor/rules/NN-phase-XX-*.mdc` | **Uygulama rehberi** — plan-modu kalitesinde iterasyonlar; spec'e pointer |
 
-**Yazım sırası:** Önce [docs-map.md](docs-map.md) ile `docs/` güncelle → sonra `.mdc` (bu dosya).
+**Yazım sırası:** [docs-map.md](docs-map.md) ile `Docs/` güncelle → `.mdc` (bu dosya + iteration-blueprint).
 
-**`.mdc`'de tekrarlanmaz:** Tam API body, ekran alan tablosu, DB kolon listesi → ilgili doc path + bölüm.
-
-**`.mdc`'de kalır:** Goal özeti, iterasyon Hedef/Stop, Minimum bağlam (ör. `` `docs/03_API_CONTRACTS.md` Bölüm 9.7 ``), kısa dizin özeti, Done checklist, Explicit Don'ts.
-
-## Dosya konumu ve adlandırma
-
-| Parça  | Kural                               | Örnek                                  |
-| ------ | ----------------------------------- | -------------------------------------- |
-| Dizin  | `.cursor/rules/`                    | —                                      |
-| Dosya  | `NN-phase-XX-<kebab-slug>.mdc`      | `56-phase-06-task-management.mdc`      |
-| `NN`   | Sıra numarası (00, 50, 52, 56, 62…) | Roadmap ve mevcut dosyalarla çakışmama |
-| `XX`   | Roadmap Faz numarası                | Faz 6 → `06`                           |
-| Invoke | Chat'te `@NN-phase-XX-slug`         | `@56-phase-06-task-management`         |
-
-**description** (YAML frontmatter, tek satır):
-
-```yaml
-description: '[Faz N] <özet> — <K> iterasyon/chat (<iter1 özeti> → <iter2> → …). Mesajda "Faz N — İterasyon M" belirt.'
-```
-
-Örnekler:
-
-- `[Faz 2] DB + Auth foundation — 4 iterasyon/chat (Prisma → common+encryption → auth API → web+E2E).`
-- `[Faz 12] Untitled UI geçişi — 5 iterasyon/chat (altyapı → base → shell → ekran dalga 1 → dalga 2 + temizlik).`
+| `.mdc`'de **kalmaz** (yalnızca Docs'ta) | `.mdc`'de **kalır** (iterasyon başına) |
+| --------------------------------------- | -------------------------------------- |
+| Tam API body, response örneği | Docs § referansı + uygulama notu |
+| Ekran alan tablosu, UX state detayı | `S-*` ID listesi + hangi § okunacak |
+| DB kolon listesi | Tablo adı + migration dosya adı + `Docs/02` § |
+| 50+ satırlık dosya ağacı | İterasyon **Dosya kapsamı** tablosu (≤12 satır) |
 
 ---
 
-## Bölüm sırası (standart iskelet)
+## Dosya konumu ve adlandırma
+
+| Parça | Kural | Örnek |
+| ----- | ----- | ----- |
+| Dizin | `.cursor/rules/` | — |
+| Dosya | `NN-phase-XX-<kebab-slug>.mdc` | `51-phase-01-backend-core.mdc` |
+| `NN` | Sıra (50–58 MVP-0); çakışma yok | `Glob *-phase-*.mdc` |
+| `XX` | Roadmap faz no | Faz 1 → `01` |
+| Invoke | `@NN-phase-XX-slug` + `Faz N — İterasyon M` | `@51-phase-01-backend-core` |
+
+**description** (YAML frontmatter):
+
+```yaml
+description: '[Faz N] <özet> — <K> iterasyon/chat (<iter1> → <iter2> → …). Mesajda "Faz N — İterasyon M" belirt.'
+```
+
+---
+
+## Faz dosyası iskeleti (üst seviye)
 
 ````markdown
 ---
@@ -48,224 +48,135 @@ description: '...'
 # Faz N: <Başlık>
 
 ## Goal
-
-<1–3 paragraf: faz sonunda ne tamamlanmış olacak>
+<1–3 cümle; detay `Docs/10` Faz N>
 
 ## Feature branch (zorunlu)
+<`48-git-phase-branch.mdc`; branch adı; İterasyon 1 öncesi Stop>
 
-Faz koduna **main üzerinde başlanmaz**. İlk commit/dosya değişikliği öncesi `48-git-phase-branch.mdc` uygula.
-
-**Bu faz branch adı:** `feat/phase-<XX>-<slug>` — `<XX>` ve `<slug>` dosya adından (`NN-phase-XX-<slug>.mdc`).
-
-**Stop (İterasyon 1, kod öncesi):** [ ] `main` güncel; [ ] faz branch oluşturuldu; [ ] `git push -u origin HEAD`.
-
-## Bu fazın çalışma modeli (iterasyonlar)
-
-<"Tek sohbette tamamlanmaz" + @dosya + "Faz N — İterasyon M" kuralı>
+## Bu fazın çalışma modeli
+- Tek sohbet fazı bitirmez
+- Her chat: `@NN-phase-XX-slug` + **「Faz N — İterasyon M」**
+- Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil
+- Plan moduna geçme — iterasyon blueprint yeterli
 
 ---
 
-### İterasyon 1 — <Kısa ad>
-
-**Hedef:** <ölçülebilir tek cümle>
-
-**Yapılacaklar:** (veya madde listesi)
-
-1. …
-
-**Minimum bağlam:** `docs/...` path listesi
-
-**Bu iterasyonda yok:** <scope creep önleme>
-
-**Stop:** [ ] … [ ] … PR/onay.
-
----
+### İterasyon 1 — …
+<iteration-blueprint.md iskeletinin tamamı>
 
 ### İterasyon 2 — …
-
-(repeat)
+…
 
 ## Required Context
-
-- `docs/...` — **path + bölüm** (Adım 4'te güncellenen sürüm)
-- Auto-attached: ilgili rule numaraları (varsa)
-
-Örnek (referans stili — kopyala, içeriği docs'tan türet):
-
-```markdown
-## Required Context
-
-- `docs/01_DOMAIN_MODEL.md` Bölüm 5 (Task state machine, claim modes)
-- `docs/03_API_CONTRACTS.md` Bölüm 9.7 (Tasks)
-- `docs/06_SCREEN_CATALOG.md` — S-TASK-LIST, S-TASK-DETAIL, S-MY-TASKS
-```
-````
-
-## Scope
-
-### Backend — Files to create
-
-(tree veya liste)
-
-### Frontend — Files to create
-
-(tree veya liste)
-
-### Files NOT touched
-
-- … (sonraki fazlara bırakılanlar)
-
-## Constraints
-
-### Use
-
-- …
-
-### Avoid
-
-- …
+- `Docs/...` §… — faz geneli (iterasyon listesi için `Docs/10` Faz N)
 
 ## Done Definition
-
-### Backend
-
-- [ ] …
-
-### Frontend
-
-- [ ] …
-
-### Manual smoke test (opsiyonel)
-
-```bash
-# …
-```
+- [ ] Ölçülebilir maddeler; `S-*` / endpoint ID ile
 
 ## Explicit Don'ts
-
-- …
-
-## Kısıtlar & Riskler (opsiyonel tablo)
-
-| Risk | Önlem |
-
-## Related ADRs (varsa)
-
-- ADR-…
-
-## Sonraki fazlarla ilişki (opsiyonel)
-
-…
+- MVP dışı + `Docs/00` uyumu
 
 ---
 
-Phase done → `docs/10_IMPLEMENTATION_ROADMAP.md` Faz N check mark.
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz N işareti.
+````
 
-```
-
-Kısa fazlarda (2 iterasyon) **Scope** ağaçları kısaltılabilir; **Goal**, **iterasyonlar**, **Done Definition**, **Explicit Don'ts** zorunlu kalır.
+**İterasyon detayı:** [iteration-blueprint.md](iteration-blueprint.md) — her iterasyon için zorunlu 9 bölüm.
 
 ---
 
 ## İterasyon tasarım ilkeleri
 
 | İlke | Uygulama |
-|------|----------|
-| 1 chat ≈ 1 PR | Her iterasyon bağımsız merge edilebilir |
-| Hedef önce | `**Hedef:**` her zaman ilk satır |
-| Faz branch | Goal ile iterasyonlar arasında **Feature branch (zorunlu)** — `48-git-phase-branch.mdc` |
-| Scope sınırı | `**Bu iterasyonda yok:**` zorunlu |
-| Doğrulama | `**Stop:**` checklist + test komutu |
-| Bağlam | `**Minimum bağlam:**` gerçek doc path |
-| Boyut | Tipik 2–5 iterasyon; 6+ ancak net alt-dalga varsa (ör. UI migrasyon dalgaları) |
-| Sıra | Altyapı → domain API → UI → temizlik/E2E (genel pattern; dikey dilim istisna belirtilir) |
+| ---- | -------- |
+| Plan modu yerine geçer | Uygulama planı + Spec→kod + Stop; agent tekrar planlamaz |
+| Context window | 1 chat ≈ 1 PR; ≤12 dosya; Docs okuma ≤5 dosya/iterasyon |
+| Docs pointer | Her adım `Docs/X` §Y ile bağlı; belirsiz "spec'e bak" yok |
+| Hedef önce | `**Hedef:**` ölçülebilir tek cümle |
+| Scope duvarı | `**Bu iterasyonda yok:**` + Dosya kapsamı "Dokunma" |
+| Doğrulama | Stop'ta çalıştırılabilir `pytest`/`ruff`/smoke komutu |
+| Boyut | Tipik 4–8 iterasyon; 9+ ancak net alt-dalga (UI dalgaları) |
+| Sıra | Altyapı → domain/DB → API → UI → entegrasyon |
 
-### İterasyon isimlendirme
-
-- `### İterasyon N — <2–5 kelime>` (Türkçe veya TR+EN terim)
-- Örnek: `### İterasyon 3 — Shell Migrasyonu`
-
-### Stop satırı kalıbı
+### Stop kalıbı
 
 ```
-
-**Stop:** [ ] <doğrulama 1>; [ ] <doğrulama 2>; PR/onay → İterasyon N+1.
-
-````
-
-Son iterasyon: `**Stop:** Faz N Done Definition; roadmap işareti.`
-
----
-
-## İterasyon içeriği — iyi vs kötü
-
-**İyi (yutulabilir):**
-
-```markdown
-### İterasyon 2 — Auth API
-
-**Hedef:** 8 auth endpoint + 3 guard; integration test login→refresh→logout.
-
-**Minimum bağlam:** `docs/03_API_CONTRACTS.md` Bölüm 9.1; `docs/07_SECURITY_IMPLEMENTATION.md` Bölüm 2–3.
-
-**Scope:** `apps/api/src/auth/**` + `app.module` guard register. **Frontend yok.**
-
-**Doğrulama:** Service coverage ≥90%; integration test yeşil.
-
-**Stop:** [ ] curl smoke; [ ] integration yeşil. PR/onay.
-````
-
-**Kötü (çok büyük / belirsiz):**
-
-```markdown
-### İterasyon 1 — Her şey
-
-Backend, frontend, testler, refactor, performans.
+**Stop:**
+- [ ] <komut veya smoke>
+- [ ] <test>
+- [ ] PR/onay → İterasyon N+1
 ```
 
 ---
 
-## Katman ipuçları (araştırmadan sonra seç)
+## İyi vs kötü iterasyon
 
-| Faz tipi           | Tipik iterasyon dizisi                                      |
-| ------------------ | ----------------------------------------------------------- |
-| Altyapı / scaffold | omurga → uygulamalar+CI                                     |
-| Domain API         | schema/service → endpoint → integration                     |
-| Full-stack feature | API → UI → E2E                                              |
-| UI migrasyon       | altyapı → base components → shell → ekran dalga 1 → dalga 2 |
-| Admin              | settings API → UI → crons/dashboard                         |
+**İyi** — uygulama hazır, context sınırlı:
+
+```markdown
+### İterasyon 3 — Auth Endpoints (1.3)
+
+**Hedef:** Login/refresh/logout + integration test yeşil.
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.3
+2. `Docs/03_API_CONTRACTS.md` §2
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §2–3
+
+**Uygulama planı:**
+1. `schemas/auth.py` — `Docs/03` §2.1 alanları
+2. `routers/auth.py` — üç endpoint + rate limit
+3. `tests/integration/test_auth_flow.py`
+
+**Dosya kapsamı:** … (tablo)
+**Spec → kod eşlemesi:** … (≥3 satır)
+**Stop:** [ ] `pytest tests/integration/test_auth_flow.py -v`
+```
+
+**Kötü** — plan modu gerekir, context belirsiz:
+
+```markdown
+### İterasyon 1 — Backend
+
+**Hedef:** Auth ve user API.
+**Minimum bağlam:** Docs/03, Docs/04
+**Stop:** Testler yeşil.
+```
 
 ---
 
-## Mevcut faz dosyaları (referans indeks)
+## Katman ipuçları (iterasyon dizisi)
 
-| Dosya                                | Faz | İterasyon sayısı |
-| ------------------------------------ | --- | ---------------- |
-| `50-phase-00-monorepo-scaffold.mdc`  | 0   | 2                |
-| `51-phase-01-infrastructure.mdc`     | 1   | 4                |
-| `52-phase-02-auth-foundation.mdc`    | 2   | 4                |
-| `52.1-phase-02-GoogleSSOAuth.mdc`    | 2.1 | 4                |
-| `53-phase-03-users-roles.mdc`        | 3   | 3                |
-| `54-phase-04-permission-system.mdc`  | 4   | 3                |
-| `55-phase-05-process-engine.mdc`     | 5   | 4                |
-| `56-phase-06-task-management.mdc`    | 6   | 2                |
-| `57-phase-07-notifications.mdc`      | 7   | 3                |
-| `58-phase-08-admin-panel.mdc`        | 8   | 3                |
-| `59-phase-09-dashboard-polish.mdc`   | 9   | 2                |
-| `60-phase-10-performance.mdc`        | 10  | 4                |
-| `61-phase-11-security-hardening.mdc` | 11  | 4                |
-| `62-phase-12-UI-migration.mdc`       | 12  | 5                |
-
-Yeni faz yazarken **en yakın komşu** fazı `Read` ile aç; ton ve detay seviyesini kopyala.
+| Faz tipi | Tipik iterasyon dizisi |
+| -------- | ---------------------- |
+| Altyapı | scaffold → CI → migration dalgaları → IaC |
+| Backend API | app iskelet → security util → endpoint grubu → audit → seed |
+| Collector/worker | BaseCollector → tek kaynak tipi → orchestration |
+| Frontend | route+layout → data hook → ekran → admin sayfası |
+| Full-stack | API iterasyonu → UI iterasyonu (karıştırma) |
 
 ---
 
-## Roadmap ile hizalama
+## Mevcut MVP-0 faz dosyaları
 
-- Faz numarası `docs/10_IMPLEMENTATION_ROADMAP.md` ile tutarlı olmalı.
-- Alt-faz (2.1 gibi) için `52.1-phase-02-...` pattern'i kullanılabilir.
-- Roadmap faz detayı **Adım 4 (docs)** içinde güncellenir; `.mdc` sonunda yalnızca işaretleme notu.
+| Dosya | Faz | İterasyon |
+| ----- | --- | --------- |
+| `50-phase-00-infra-scaffold.mdc` | 0 | 6 |
+| `51-phase-01-backend-core.mdc` | 1 | 8 |
+| `52-phase-02-collectors.mdc` | 2 | 6 |
+| `53-phase-03-processor.mdc` | 3 | 6 |
+| `54-phase-04-ai-engine.mdc` | 4 | 8 |
+| `55-phase-05-notifications.mdc` | 5 | 5 |
+| `56-phase-06-web-frontend.mdc` | 6 | 9 |
+| `57-phase-07-mobile.mdc` | 7 | 4 |
+| `58-phase-08-production-launch.mdc` | 8 | 5 |
 
-## Ek kaynak
+Yeni faz yazarken komşu fazı `Read` ile aç; **iterasyon detay seviyesi** için [iteration-blueprint.md](iteration-blueprint.md) esas alınır (eski kısa iterasyonlar yeniden üretimde yükseltilir).
 
-- Hangi `docs/` dosyası ne zaman: [docs-map.md](docs-map.md)
+---
+
+## Roadmap hizalama
+
+- Faz no ↔ `Docs/10_IMPLEMENTATION_ROADMAP.md`
+- Roadmap faz detayı **Adım 4 (Docs)** içinde; `.mdc` iterasyonları `§N.M` ile roadmap alt maddelerine hizalanır
+- Ek kaynak: [docs-map.md](docs-map.md)

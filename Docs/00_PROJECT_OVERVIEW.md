@@ -83,7 +83,7 @@ MVP-0 bülten zamanlaması:
 | Secret Yönetimi | `.env` (dev), AWS Secrets Manager (prod) | Secret'lar repo'ya commit edilemez |
 | LLM API | Groq + Gemini | Round-robin fallback, admin panelinden key yönetimi |
 | Embedding | OpenAI text-embedding-3-small veya Cohere embed-v3 | Admin panelinden model seçimi |
-| E-posta | AWS SES + SMTP | Bildirim ve sistem hata mailleri |
+| E-posta | Kurumsal SMTP | Bildirim ve sistem hata mailleri (dev: Gmail SMTP, prod: kurumsal relay) |
 | Push Bildirim | Firebase Cloud Messaging (FCM) | iOS + Android tek entegrasyon |
 | CI/CD | GitHub Actions | Feature branch per faz, main'e doğrudan push yasak |
 
@@ -145,7 +145,7 @@ MVP-0 aşağıdaki koşullar sağlandığında tamamlanmış sayılır:
 | 4 | AI chatbot RSS + newsletter verisinden RAG ile yanıt üretiyor | Chatbot'a soru sorulduğunda pgvector similarity search çalışıyor, kaynak referanslı yanıt dönüyor |
 | 5 | Auth aktif — kimlik doğrulama olmadan hiçbir sayfaya erişilemiyor | Login olmadan dashboard route'larına istek atıldığında 401 dönüyor |
 | 6 | Admin paneli 7 sayfası çalışıyor | Kullanıcı yönetimi, kaynak yönetimi, prompt şablon, API yönetimi, bildirim, sohbet geçmişi, audit log sayfaları fonksiyonel |
-| 7 | "Yeni rapor hazır" bildirimi e-posta ve push ile gönderiliyor | Digest üretimi tamamlandığında SES mail ve FCM push bildirimi alıcılara ulaşıyor |
+| 7 | "Yeni rapor hazır" bildirimi e-posta ve push ile gönderiliyor | Digest üretimi tamamlandığında SMTP mail ve FCM push bildirimi alıcılara ulaşıyor |
 
 ---
 

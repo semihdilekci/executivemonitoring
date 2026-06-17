@@ -105,7 +105,7 @@ Lean Management `.cursor/rules/` paketinden türetilmiş **4 katmanlı** model. 
 | Frontmatter | `description: '[Faz N] … — K iterasyon/chat (…). Mesajda "Faz N — İterasyon M" belirt.'` |
 | Ne zaman yüklenir | Faz çalışması; `@NN-phase-XX-slug` invoke |
 | Üretim | **`phase-creator` skill** — bu katman `rules-architect` Faz H'de devredilir |
-| Satır hedefi | 150–320; iterasyon başına ~40–60 satır |
+| Satır hedefi | 200–500; iterasyon başına ~80–120 satır (blueprint) |
 
 ### Adlandırma
 
@@ -115,11 +115,11 @@ Lean Management `.cursor/rules/` paketinden türetilmiş **4 katmanlı** model. 
 - `XX`: roadmap faz no
 - Alt-faz: `52.1-phase-02-GoogleSSOAuth.mdc`
 
-### İçerik (özet — tam iskelet phase-creator reference.md)
+### İçerik (özet — tam iskelet `phase-creator/iteration-blueprint.md`)
 
 - Goal (1–3 cümle)
-- İterasyonlar: Hedef, Minimum bağlam (`docs/path` Bölüm Y), Bu iterasyonda yok, Stop
-- Required Context (path listesi)
+- İterasyonlar: Hedef, Docs okuma sırası, Uygulama planı, Dosya kapsamı, Spec→kod, Kalite kapıları, Bu iterasyonda yok, Stop
+- Required Context (`Docs/` path + §)
 - Done Definition, Explicit Don'ts
 - **Tekrarlanmaz:** API body, ekran alan tablosu, 50+ satır file tree
 

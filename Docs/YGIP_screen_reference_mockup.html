@@ -52,10 +52,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif
 .page{display:none;padding:28px 36px 60px;max-width:1100px}
 .page.active{display:block}
 
-/* ===== DEMO SWITCHER ===== */
-.demo-switcher{position:fixed;bottom:24px;right:24px;z-index:200;display:flex;gap:6px;background:var(--navy-900);padding:5px;border-radius:var(--radius-lg);box-shadow:var(--shadow-xl)}
-.demo-btn{padding:8px 16px;border:none;border-radius:var(--radius-md);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition);color:rgba(255,255,255,0.6);background:transparent}
-.demo-btn.active{background:var(--gold-500);color:var(--navy-900)}
+/* (demo switcher removed) */
 
 /* ===== EXECUTIVE BRIEF ===== */
 .exec-brief{background:linear-gradient(135deg,var(--navy-800) 0%,var(--navy-700) 100%);border-radius:var(--radius-xl);padding:24px 28px;margin-bottom:28px;position:relative;overflow:hidden}
@@ -218,7 +215,39 @@ body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif
   .toc-title{display:none}
   .toc-item{white-space:nowrap;border-left:none;border-bottom:2px solid transparent;border-radius:0;padding:6px 12px}
   .toc-item.active{border-left:none;border-bottom-color:var(--gold-500)}
-  .demo-switcher{bottom:16px;right:16px}
+}
+
+/* ===== PILL NAV ===== */
+.pill-nav-wrapper{position:sticky;top:0;z-index:90;padding:14px 36px 10px;display:flex;justify-content:center}
+.pill-nav-container{position:relative}
+.pill-nav{--nav-h:44px;--logo:38px;--pill-pad-x:20px;--pill-gap:3px;width:max-content;display:flex;align-items:center;gap:0;box-sizing:border-box}
+.pill-nav-items{position:relative;display:flex;align-items:center;height:var(--nav-h);background:var(--pn-base);border-radius:9999px}
+.pill-logo{width:var(--nav-h);height:var(--nav-h);border-radius:50%;background:var(--pn-base);padding:7px;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;text-decoration:none;cursor:pointer;flex-shrink:0}
+.pill-logo svg{width:100%;height:100%;display:block}
+.pill-list{list-style:none;display:flex;align-items:stretch;gap:var(--pill-gap);margin:0;padding:3px;height:100%}
+.pill-list>li{display:flex;height:100%}
+.pill{display:inline-flex;align-items:center;justify-content:center;height:100%;padding:0 var(--pill-pad-x);background:var(--pn-pill-bg);color:var(--pn-pill-text);text-decoration:none;border-radius:9999px;box-sizing:border-box;font-weight:600;font-size:14px;line-height:0;letter-spacing:0.3px;white-space:nowrap;cursor:pointer;position:relative;overflow:hidden;border:none;font-family:inherit}
+.pill .hover-circle{position:absolute;left:50%;bottom:0;border-radius:50%;background:var(--pn-base);z-index:1;display:block;pointer-events:none;will-change:transform}
+.pill .label-stack{position:relative;display:inline-block;line-height:1;z-index:2}
+.pill .pill-label{position:relative;z-index:2;display:inline-block;line-height:1;will-change:transform}
+.pill .pill-label-hover{position:absolute;left:0;top:0;color:var(--pn-hover-text);z-index:3;display:inline-block;will-change:transform,opacity}
+.pill.is-active::after{content:'';position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:10px;height:10px;background:var(--pn-base);border-radius:50px;z-index:4}
+
+/* PillNav mobile */
+.pn-desktop-only{display:block}
+.pn-mobile-only{display:none}
+.pn-mobile-menu-btn{width:var(--nav-h);height:var(--nav-h);border-radius:50%;background:var(--pn-base);border:none;display:none;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:0;position:relative}
+.pn-hamburger-line{width:16px;height:2px;background:var(--pn-pill-bg);border-radius:1px;transition:all 0.01s ease;transform-origin:center}
+.pn-mobile-menu{position:absolute;top:3.5em;left:0;right:0;background:var(--pn-base);border-radius:20px;box-shadow:var(--shadow-xl);z-index:998;opacity:0;visibility:hidden;min-width:200px}
+.pn-mobile-menu ul{list-style:none;margin:0;padding:3px;display:flex;flex-direction:column;gap:3px}
+.pn-mobile-menu a{display:block;padding:12px 16px;color:var(--pn-pill-text);background:var(--pn-pill-bg);text-decoration:none;font-size:14px;font-weight:600;border-radius:50px;transition:all 0.2s ease;cursor:pointer}
+.pn-mobile-menu a:hover{background:var(--pn-base);color:var(--pn-hover-text)}
+@media(max-width:900px){
+  .pn-desktop-only{display:none}
+  .pn-mobile-only{display:block}
+  .pn-mobile-menu-btn{display:flex}
+  .pill-nav-wrapper{padding:10px 16px}
+  .pill-nav{width:100%;justify-content:space-between}
 }
 </style>
 </head>
@@ -251,6 +280,38 @@ body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif
 </nav>
 
 <div class="main">
+
+<!-- ===== PILL NAV (Viewer üst navigasyon) ===== -->
+<div class="pill-nav-wrapper" id="pillNavWrapper">
+  <div class="pill-nav-container">
+    <nav class="pill-nav" aria-label="Viewer Navigation" style="--pn-base:#0F1A2E;--pn-pill-bg:#FFFFFF;--pn-hover-text:#D4A843;--pn-pill-text:#0F1A2E">
+      <a class="pill-logo" title="YGIP" id="pnLogo">
+        <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="20" fill="#D4A843"/>
+          <text x="20" y="26" text-anchor="middle" font-family="Plus Jakarta Sans, sans-serif" font-weight="800" font-size="18" fill="#0F1A2E">★</text>
+        </svg>
+      </a>
+      <div class="pill-nav-items pn-desktop-only" id="pnNavItems">
+        <ul class="pill-list" role="menubar" id="pnPillList">
+          <li role="none"><a role="menuitem" class="pill is-active" data-page="home" onclick="pillNavGo('home')"><span class="hover-circle" aria-hidden="true"></span><span class="label-stack"><span class="pill-label">Ana Sayfa</span><span class="pill-label-hover" aria-hidden="true">Ana Sayfa</span></span></a></li>
+          <li role="none"><a role="menuitem" class="pill" data-page="digests" onclick="pillNavGo('home')"><span class="hover-circle" aria-hidden="true"></span><span class="label-stack"><span class="pill-label">Bültenler</span><span class="pill-label-hover" aria-hidden="true">Bültenler</span></span></a></li>
+          <li role="none"><a role="menuitem" class="pill" data-page="chatbot" onclick="pillNavGo('home')"><span class="hover-circle" aria-hidden="true"></span><span class="label-stack"><span class="pill-label">AI Chatbot</span><span class="pill-label-hover" aria-hidden="true">AI Chatbot</span></span></a></li>
+        </ul>
+      </div>
+      <button class="pn-mobile-menu-btn pn-mobile-only" id="pnHamburger" aria-label="Menüyü aç/kapat">
+        <span class="pn-hamburger-line"></span>
+        <span class="pn-hamburger-line"></span>
+      </button>
+    </nav>
+    <div class="pn-mobile-menu pn-mobile-only" id="pnMobileMenu" style="--pn-base:#0F1A2E;--pn-pill-bg:#FFFFFF;--pn-hover-text:#D4A843;--pn-pill-text:#0F1A2E">
+      <ul>
+        <li><a onclick="pillNavGo('home')">Ana Sayfa</a></li>
+        <li><a onclick="pillNavGo('home')">Bültenler</a></li>
+        <li><a onclick="pillNavGo('home')">AI Chatbot</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
 
 <!-- ========================================================= -->
 <!-- ===== HOME PAGE ===== -->
@@ -654,40 +715,45 @@ body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif
 
 </div><!-- /main -->
 
-<!-- Demo Switcher -->
-<div class="demo-switcher">
-  <button class="demo-btn active" onclick="showPage('home')">Home Screen</button>
-  <button class="demo-btn" onclick="showPage('detail')">Digest Detail</button>
-</div>
+<!-- Demo switcher removed — navigation via PillNav -->
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script>
+/* ===== PAGE SWITCHING (updated — demo-switcher removed) ===== */
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (page === 'home') {
     document.getElementById('page-home').classList.add('active');
-    document.querySelector('.demo-btn:first-child').classList.add('active');
     document.getElementById('nav-home').classList.add('active');
     document.getElementById('chatFab').style.display = 'none';
     document.querySelector('.progress-bar').style.display = 'none';
   } else {
     document.getElementById('page-detail').classList.add('active');
-    document.querySelector('.demo-btn:last-child').classList.add('active');
     document.getElementById('chatFab').style.display = 'flex';
     document.querySelector('.progress-bar').style.display = 'block';
     window.scrollTo(0, 0);
   }
+  // Update PillNav active state
+  document.querySelectorAll('.pill-list .pill').forEach(p => p.classList.remove('is-active'));
+  const activeBtn = document.querySelector('.pill-list .pill[data-page="home"]');
+  if (activeBtn) activeBtn.classList.add('is-active');
 }
 
+function pillNavGo(page) {
+  showPage(page);
+  // Close mobile menu if open
+  const menu = document.getElementById('pnMobileMenu');
+  if (menu) gsap.set(menu, { visibility: 'hidden', opacity: 0 });
+  pnMobileOpen = false;
+}
+
+/* ===== EXISTING FUNCTIONS ===== */
 function toggleRead(btn, cardId) {
   btn.classList.toggle('read');
   const card = document.getElementById(cardId);
-  if (btn.classList.contains('read')) {
-    card.classList.remove('unread');
-  } else {
-    card.classList.add('unread');
-  }
+  if (btn.classList.contains('read')) { card.classList.remove('unread'); }
+  else { card.classList.add('unread'); }
 }
 
 function toggleNews(item) { item.classList.toggle('expanded'); }
@@ -719,16 +785,16 @@ function showYildizAnalysis(btn) {
   analysis.innerHTML = '<div class="ya-header"><span>★</span> <span>Yıldız Etki Analizi</span></div><p class="typing">Analiz ediliyor<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span></p>';
   btn.after(analysis);
   const responses = [
-    "Mondelez'in yeniden yapılanması Yıldız için fırsat: Türkiye tesisinin düşük maliyeti ve MENA yakınlığı, ihracat hub'ı konumlandırmasına imkân tanıyor. Q3 sonuçları açıklanmadan Mondelez ile proaktif görüşme başlatılması stratejik olabilir.",
-    "Private label büyümesi Yıldız'ın Avrupa perakende ortaklıklarını etkiliyor. Ülker markasının değer segmentinde konumlandırması gözden geçirilmeli. Retailer markalı üretim kapasitesi büyüme alanı olarak değerlendirilmeli.",
+    "Mondelez'in yeniden yapılanması Yıldız için fırsat: Türkiye tesisinin düşük maliyeti ve MENA yakınlığı, ihracat hub'ı konumlandırmasına imkân tanıyor.",
+    "Private label büyümesi Yıldız'ın Avrupa perakende ortaklıklarını etkiliyor. Ülker markasının değer segmentinde konumlandırması gözden geçirilmeli.",
     "Nestlé'nin marka satışı sektörde M&A penceresi açıyor. pladis'in ABD pozisyonunu güçlendirmek için bu markaları değerlendirmesi düşünülebilir.",
-    "Kakao düşüşü çikolata segmentinde kısa vadeli marj rahatlığı sağlar. Ancak fiyatların yıl sonunda yükseleceği öngörülüyor — düşük seviyelerden 6-9 aylık forward alım değerlendirmesi öneriliyor.",
-    "Şeker fiyat artışı bisküvi ve şekerleme maliyetlerini doğrudan artırıyor. Alternatif tatlandırıcı R&D yatırımları ve resept optimizasyonu gündem maddesi olmalı.",
-    "BİM'in büyümesi hem fırsat hem risk: artan raf alanı ve dağıtım kapasitesi, ancak private label ağırlığı ve fiyat baskısı. Yıldız'ın BİM'e özel SKU stratejisi gözden geçirilmeli.",
-    "Getir'in private label genişlemesi quick commerce'te A-marka görünürlüğünü azaltabilir. Getir ile stratejik ortaklık veya exclusive ürün geliştirme modeli değerlendirilmeli.",
-    "Sağlıklı atıştırmalık büyümesi inovasyon portföyü için net yön gösteriyor. Ülker'in düşük şekerli bisküvi ve protein bar serisinin genişletilmesi kritik.",
-    "AB ambalaj direktifi tüm AB ihracat ürünleri için compliance takvimi başlatıyor. Ambalaj tedarikçileriyle 2026 Q4'te müzakere ve dijital ürün pasaportu için IT planlaması gerekiyor.",
-    "Gümrük Birliği güncellemesi stratejik: ek vergilerin kaldırılması AB'ye işlenmiş gıda ihracatında %8-12 maliyet avantajı sağlayabilir."
+    "Kakao düşüşü çikolata segmentinde kısa vadeli marj rahatlığı sağlar. Düşük seviyelerden 6-9 aylık forward alım değerlendirmesi öneriliyor.",
+    "Şeker fiyat artışı bisküvi ve şekerleme maliyetlerini doğrudan artırıyor. Alternatif tatlandırıcı R&D yatırımları gündem maddesi olmalı.",
+    "BİM'in büyümesi hem fırsat hem risk: artan raf alanı, ancak private label ağırlığı ve fiyat baskısı.",
+    "Getir'in private label genişlemesi quick commerce'te A-marka görünürlüğünü azaltabilir. Stratejik ortaklık modeli değerlendirilmeli.",
+    "Sağlıklı atıştırmalık büyümesi inovasyon portföyü için net yön gösteriyor. Düşük şekerli bisküvi ve protein bar serisi genişletilmeli.",
+    "AB ambalaj direktifi tüm AB ihracat ürünleri için compliance takvimi başlatıyor. Ambalaj tedarikçileriyle 2026 Q4'te müzakere gerekiyor.",
+    "Gümrük Birliği güncellemesi stratejik: ek vergilerin kaldırılması AB'ye ihracatta %8-12 maliyet avantajı sağlayabilir."
   ];
   setTimeout(() => {
     const p = analysis.querySelector('p');
@@ -738,6 +804,107 @@ function showYildizAnalysis(btn) {
 }
 
 document.querySelector('.progress-bar').style.display = 'none';
+
+/* ===== PILL NAV — GSAP INITIALIZATION ===== */
+(function initPillNav() {
+  const ease = 'power3.out';
+  const pills = document.querySelectorAll('.pill-list .pill');
+  const circles = [];
+  const timelines = [];
+  const activeTweens = [];
+
+  function layoutPills() {
+    pills.forEach((pill, i) => {
+      const circle = pill.querySelector('.hover-circle');
+      if (!circle) return;
+      circles[i] = circle;
+
+      const rect = pill.getBoundingClientRect();
+      const w = rect.width, h = rect.height;
+      const R = ((w * w) / 4 + h * h) / (2 * h);
+      const D = Math.ceil(2 * R) + 2;
+      const delta = Math.ceil(R - Math.sqrt(Math.max(0, R * R - (w * w) / 4))) + 1;
+      const originY = D - delta;
+
+      circle.style.width = D + 'px';
+      circle.style.height = D + 'px';
+      circle.style.bottom = '-' + delta + 'px';
+
+      gsap.set(circle, { xPercent: -50, scale: 0, transformOrigin: '50% ' + originY + 'px' });
+
+      const label = pill.querySelector('.pill-label');
+      const hover = pill.querySelector('.pill-label-hover');
+      if (label) gsap.set(label, { y: 0 });
+      if (hover) gsap.set(hover, { y: h + 12, opacity: 0 });
+
+      if (timelines[i]) timelines[i].kill();
+      const tl = gsap.timeline({ paused: true });
+      tl.to(circle, { scale: 1.2, xPercent: -50, duration: 2, ease: ease, overwrite: 'auto' }, 0);
+      if (label) tl.to(label, { y: -(h + 8), duration: 2, ease: ease, overwrite: 'auto' }, 0);
+      if (hover) {
+        gsap.set(hover, { y: Math.ceil(h + 100), opacity: 0 });
+        tl.to(hover, { y: 0, opacity: 1, duration: 2, ease: ease, overwrite: 'auto' }, 0);
+      }
+      timelines[i] = tl;
+    });
+  }
+
+  layoutPills();
+  window.addEventListener('resize', layoutPills);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layoutPills).catch(function(){});
+
+  pills.forEach((pill, i) => {
+    pill.addEventListener('mouseenter', function() {
+      const tl = timelines[i]; if (!tl) return;
+      if (activeTweens[i]) activeTweens[i].kill();
+      activeTweens[i] = tl.tweenTo(tl.duration(), { duration: 0.3, ease: ease, overwrite: 'auto' });
+    });
+    pill.addEventListener('mouseleave', function() {
+      const tl = timelines[i]; if (!tl) return;
+      if (activeTweens[i]) activeTweens[i].kill();
+      activeTweens[i] = tl.tweenTo(0, { duration: 0.2, ease: ease, overwrite: 'auto' });
+    });
+  });
+
+  /* Logo spin on hover */
+  const logoEl = document.getElementById('pnLogo');
+  const logoSvg = logoEl ? logoEl.querySelector('svg') : null;
+  let logoTween = null;
+  if (logoEl && logoSvg) {
+    logoEl.addEventListener('mouseenter', function() {
+      if (logoTween) logoTween.kill();
+      gsap.set(logoSvg, { rotate: 0 });
+      logoTween = gsap.to(logoSvg, { rotate: 360, duration: 0.5, ease: ease, overwrite: 'auto' });
+    });
+  }
+
+  /* Initial load animation */
+  const navItems = document.getElementById('pnNavItems');
+  if (logoEl) { gsap.set(logoEl, { scale: 0 }); gsap.to(logoEl, { scale: 1, duration: 0.6, ease: ease }); }
+  if (navItems) { gsap.set(navItems, { width: 0, overflow: 'hidden' }); gsap.to(navItems, { width: 'auto', duration: 0.6, ease: ease, delay: 0.1 }); }
+
+  /* Mobile menu */
+  const mobileMenu = document.getElementById('pnMobileMenu');
+  if (mobileMenu) gsap.set(mobileMenu, { visibility: 'hidden', opacity: 0 });
+})();
+
+var pnMobileOpen = false;
+document.getElementById('pnHamburger').addEventListener('click', function() {
+  pnMobileOpen = !pnMobileOpen;
+  const ease = 'power3.out';
+  const lines = this.querySelectorAll('.pn-hamburger-line');
+  const menu = document.getElementById('pnMobileMenu');
+  if (pnMobileOpen) {
+    gsap.to(lines[0], { rotation: 45, y: 3, duration: 0.3, ease: ease });
+    gsap.to(lines[1], { rotation: -45, y: -3, duration: 0.3, ease: ease });
+    gsap.set(menu, { visibility: 'visible' });
+    gsap.fromTo(menu, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3, ease: ease });
+  } else {
+    gsap.to(lines[0], { rotation: 0, y: 0, duration: 0.3, ease: ease });
+    gsap.to(lines[1], { rotation: 0, y: 0, duration: 0.3, ease: ease });
+    gsap.to(menu, { opacity: 0, y: 10, duration: 0.2, ease: ease, onComplete: function() { gsap.set(menu, { visibility: 'hidden' }); }});
+  }
+});
 </script>
 </body>
 </html>

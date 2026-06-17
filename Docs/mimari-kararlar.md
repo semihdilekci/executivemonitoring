@@ -204,7 +204,7 @@
 
 ## 13. Bildirim Sistemi
 
-**Karar [N-001]:** Bildirim kanalları: e-posta (AWS SES, SMTP) ve mobil push (Firebase Cloud Messaging — FCM, iOS + Android). [X-TS-007]
+**Karar [N-001]:** Bildirim kanalları: e-posta (kurumsal SMTP) ve mobil push (Firebase Cloud Messaging — FCM, iOS + Android). Dev ortamında Gmail SMTP; production'da YıldızHolding kurumsal SMTP relay. [X-TS-007]
 
 **Karar [N-002]:** Haftalık digest bildirimleri "yeni rapor hazır" tetikleyicisiyle gönderilir. İçerik teaser'dır; asıl içerik platforma yönlendirir. Zamanlama: Strateji → Cuma, Türk Medyası + FMCG → Cumartesi. [X-P-004]
 
@@ -230,7 +230,7 @@
 
 **Karar [TS-005]:** LLM API yönetimi — Groq ve Gemini API key'leri admin paneli "API Yönetimi" sayfasından eklenir/çıkartılır. Token tükenmesi veya kota hatası (`429`, `503`) alındığında sistem round-robin ile sıradaki aktif key'e geçer. API kullanım metrikleri `api_usage_logs` tablosunda saklanır. [X-AP-004]
 
-**Karar [TS-006]:** Mail gönderim altyapısı AWS SES + SMTP'dir. [X-N-001]
+**Karar [TS-006]:** Mail gönderim altyapısı kurumsal SMTP'dir (AWS SES kullanılmaz). Dev: Gmail SMTP + uygulama şifresi; prod: kurumsal relay. Kimlik bilgileri dev `.env`, prod Secrets Manager. [X-N-001]
 
 **Karar [TS-007]:** Mobil push altyapısı Firebase Cloud Messaging (FCM)'dir. [X-N-006]
 
@@ -260,7 +260,7 @@
 - **AWS SQS:** Topic-per-type message queue.
 - **AWS EventBridge:** Cron scheduler.
 - **AWS S3:** Ham içerik arşivi + üretilen digest HTML dosyaları.
-- **AWS SES:** Mail gönderim. [X-TS-008]
+- **SMTP (harici):** E-posta bildirimleri kurumsal SMTP relay üzerinden (IaC dışı). [X-TS-006]
 
 **Karar [INF-003]:** Pipeline orkestrasyonu n8n kullanılmadan EventBridge → Lambda → SQS → Processor şeklinde kurulur. Her collector `BaseCollector` abstract class'ını implement eder; ana pipeline değişmeden yeni collector eklenebilir. [X-CODE-001]
 

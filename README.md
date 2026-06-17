@@ -44,9 +44,24 @@ npm install
 # Environment
 cp .env.example .env
 # .env dosyasını düzenleyin (değer yazmayın — local secret'lar commit edilmez)
+
+# Altyapı servisleri (PostgreSQL + Redis)
+docker compose up -d
 ```
 
-> **Not:** DB migration, seed ve uygulama başlatma adımları Faz 1+ iterasyonlarında eklenecektir.
+### Veritabanı migration
+
+```bash
+# docker compose sonrası
+alembic upgrade head
+
+# Geri alma doğrulaması (opsiyonel)
+alembic downgrade -1
+alembic upgrade head
+```
+
+Local DB: `postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev` (`.env.example` ile uyumlu)  
+CI test DB: `postgresql+asyncpg://test:test@localhost:5432/ygip_test`
 
 ## Geliştirme
 
@@ -60,7 +75,10 @@ ruff check .
 ruff format --check .
 mypy apps/ services/ packages/
 pytest tests/unit -v
+pytest tests/integration -v  # local'de PostgreSQL yoksa smoke test skip edilir
 ```
+
+CI pipeline (her PR): `.github/workflows/test.yml` — lint → mypy → unit → integration → coverage (%70).
 
 ## Dokümantasyon
 

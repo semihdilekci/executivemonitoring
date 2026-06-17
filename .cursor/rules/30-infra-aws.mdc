@@ -21,7 +21,7 @@ YH kurumsal AWS hesabı. Ortam izolasyonu: `dev-` / `prod-` resource prefix.
 | Lambda | Collectors, processor, ai-engine, API (veya ECS) |
 | EventBridge | Bülten cron, collector schedule |
 | S3 | Ham arşiv, digest HTML |
-| SES | E-posta bildirimi |
+| SMTP (harici) | E-posta bildirimi — dev Gmail, prod kurumsal relay |
 | Secrets Manager | Prod API key/DB (dev `.env`) |
 
 ## IaC Kuralları

@@ -672,7 +672,7 @@ flowchart LR
     LLM --> ENGINE
     ENGINE --> |"Digest + Section yaz"| DIG["digests +\ndigest_sections"]
     ENGINE --> |"HTML snapshot"| S3["S3 Arşiv"]
-    DIG --> NOTIFY["Bildirim\n(SES + FCM)"]
+    DIG --> NOTIFY["Bildirim\n(SMTP + FCM)"]
 ```
 
 ### 6.3 RAG Chatbot Akışı
@@ -723,7 +723,7 @@ Digest üretimi tek bir atomik işlemdir:
 4. LLM API'ye çağrı yapılır (Groq/Gemini, round-robin fallback). Token kullanımı `api_usage_logs`'a yazılır.
 5. Tüm section'lar başarılıysa tek transaction'da `digest_sections` tablosuna yazılır ve Digest `status = ready` olur.
 6. HTML snapshot S3'e arşiv amaçlı yazılır (`s3://prod-ygip-digests/{digest_type}/{YYYY}/{MM}/{digest_id}.html`).
-7. Bildirim tetiklenir — tüm aktif kullanıcılara (notification_preference'a göre) SES mail + FCM push gönderilir.
+7. Bildirim tetiklenir — tüm aktif kullanıcılara (notification_preference'a göre) SMTP mail + FCM push gönderilir.
 
 Frontend, digest içeriğini her zaman API üzerinden (`GET /api/v1/digests/{id}`) alır ve `digest_sections` JSON yapısından render eder. S3'teki HTML hiçbir zaman doğrudan serve edilmez.
 

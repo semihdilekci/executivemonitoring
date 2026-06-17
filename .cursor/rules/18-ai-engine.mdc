@@ -6,48 +6,61 @@ globs:
 
 # AI Engine
 
-Digest üretimi (scheduled) + RAG chatbot (on-demand). Multi-provider: Groq + Gemini round-robin fallback.
+Digest üretimi (scheduled/manual) + RAG chatbot (on-demand). Multi-provider: Groq + Gemini round-robin fallback. **LLM bütçesi bu katmanda** — processor keyword enrich (Faz 3) LLM kullanmaz.
 
 ## LLM Client
 
 ```python
-# ✓ Doğru — tüm provider fail → NO_ACTIVE_LLM_PROVIDER / ALL_LLM_PROVIDERS_FAILED
+# ✓ Doğru — tüm provider fail → ALL_LLM_PROVIDERS_FAILED
 response = await llm_client.complete(
-    messages=messages,
-    model_config=settings.get_active_model(),
+    prompt=prompt,
+    system_prompt=system_prompt,
+    max_tokens=4096,
 )
-await api_usage_service.log(tokens=response.usage, provider=response.provider)
+await api_usage_service.log_usage(
+    api_key_id=response.api_key_id,
+    model=response.model,
+    prompt_tokens=response.usage.prompt_tokens,
+    completion_tokens=response.usage.completion_tokens,
+    operation_type="chatbot",  # veya digest_generation
+)
 ```
 
-Key tükenmesi/kota → sıradaki aktif key. Kullanım `api_usage_logs`.
+Key tükenmesi/kota (429) → sıradaki aktif key. Kullanım `api_usage_logs`.
 
 ## Digest Generator
 
-1. Zaman penceresindeki `processed_items` seç (bülten tipine göre kategori)
-2. Prompt template render (`prompt_templates` tablosu)
+1. `{schema}.processed_items` seç (digest_type → schema/topic filtre + relevance_score)
+2. `prompt_templates` render (`PromptRenderer`)
 3. LLM çağrısı → structured parse → `digests` + `digest_sections`
-4. HTML snapshot S3'e
-5. Bildirim orchestration tetikle
+4. HTML snapshot S3 (`s3_archive_key`)
+5. Bildirim stub → Faz 5 `NotificationService`
 
 ## RAG Chatbot
 
-1. Soru → embedding
-2. `pgvector` similarity search top-k `content_chunks`
-3. Context + soru → LLM
-4. Yanıt + `sources` JSON → `chat_history`
+1. Soru → embedding (`EmbeddingService` / Faz 3)
+2. `content_chunks` pgvector similarity top-k
+3. Context assembly (max 10 chunk, 8000 token)
+4. LLM → yanıt + `sources` JSON
+5. `chat_history` persist (HTTP katmanı — iter 8)
 
-Kaynak referansları yanıtta zorunlu.
+Kaynak referansları yanıtta zorunlu. Boş context → TR fallback mesajı.
 
 ## Prompt Şablon
 
-Admin panelinden düzenlenir; production'a onaysız deploy yasak (`01`).
+Admin panelinden düzenlenir; production'a onaysız deploy yasak (`Docs/09` §6.1).
+
+## API path kaynağı
+
+`Docs/03` esas: `/api/v1/chat`, `/api/v1/digests/generate`, `/api/v1/api-keys/usage-stats`.
 
 ## Anti-pattern'ler
 
 - Tüm DB'yi LLM context'ine gömmek
 - LLM çıktısını validate etmeden DB'ye yazmak
-- API key plaintext DB/log
+- API key plaintext DB/log/response
+- Processor'da LLM enrichment (MVP-0 — Faz 3 keyword)
 
 ---
 
-Detay: `Docs/04_BACKEND_SPEC.md` §9
+Detay: `Docs/04_BACKEND_SPEC.md` §9; faz iterasyonları: `@54-phase-04-ai-engine`

@@ -1,1 +1,6 @@
-# Runtime dependencies — populated in Faz 1+
+# Runtime dependencies — Faz 0 DB katmanı
+sqlalchemy[asyncio]>=2.0.36
+alembic>=1.14.0
+asyncpg>=0.30.0
+psycopg2-binary>=2.9.10
+pgvector>=0.3.6

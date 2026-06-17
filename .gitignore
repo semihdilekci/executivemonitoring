@@ -21,6 +21,10 @@ out/
 .turbo/
 *.tsbuildinfo
 
+# CDK
+infra/cdk.out/
+infra/.cdk.staging/
+
 # Environment
 .env
 .env.local

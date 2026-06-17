@@ -105,9 +105,13 @@ AWS_SECRET_ACCESS_KEY=
 # LLM API key encryption (dev — local symmetric key)
 ENCRYPTION_KEY=                    # openssl rand -base64 32
 
-# Mail (dev — SES sandbox)
-SES_SENDER_EMAIL=
-SES_REGION=eu-west-1
+# Mail (SMTP — dev: Gmail uygulama şifresi; prod: kurumsal relay)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM_EMAIL=
+SMTP_USE_TLS=true
 
 # FCM
 FCM_SERVICE_ACCOUNT_PATH=
@@ -174,7 +178,7 @@ Conventional Commits standardı uygulanır. Her commit mesajı şu formatta olma
 | `refactor` | Kod iyileştirme (davranış değişmez) | `refactor: extract password validation to utility` |
 | `test` | Test ekleme/düzeltme | `test: add integration tests for user CRUD` |
 | `chore` | Araç, config, bağımlılık güncellemesi | `chore: add pytest-asyncio to dev dependencies` |
-| `docs` | Dokümantasyon | `docs: update .env.example with SES variables` |
+| `docs` | Dokümantasyon | `docs: update .env.example with SMTP variables` |
 
 ### 3.2 Kurallar
 

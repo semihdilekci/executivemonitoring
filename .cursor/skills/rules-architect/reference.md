@@ -140,7 +140,7 @@ Detay: `docs/03_API_CONTRACTS.md`; `docs/07_SECURITY_IMPLEMENTATION.md`
 
 ## Phase rule — rules-architect yazmaz
 
-Faz `.mdc` için `.cursor/skills/phase-creator/reference.md` iskeletini kullan. `rules-architect` yalnızca roadmap'ten **hangi fazların eksik olduğunu** listeler ve `phase-creator`'a devreder.
+Faz `.mdc` için `.cursor/skills/phase-creator/reference.md` + `iteration-blueprint.md` iskeletini kullan. `rules-architect` yalnızca roadmap'ten **hangi fazların eksik olduğunu** listeler ve `phase-creator`'a devreder.
 
 ---
 

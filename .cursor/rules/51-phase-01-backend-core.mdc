@@ -6,133 +6,592 @@ description: "[Faz 1] Backend core — 8 iterasyon/chat (FastAPI → JWT → aut
 
 ## Goal
 
-FastAPI uygulama iskeleti, JWT auth, kullanıcı CRUD, audit log, system settings, password reset ve dev seed scriptleri çalışır durumda. Faz 2 collector'ların API bağımlılığı hazır.
+FastAPI uygulama iskeleti, JWT auth, kullanıcı yönetimi, audit log, system settings, password reset ve dev seed scriptleri çalışır durumda. Faz 2 collector'ların API bağımlılığı (auth, audit, settings) hazır.
 
 ## Feature branch (zorunlu)
 
-`feature/mvp-0` (`Docs/09_DEV_WORKFLOW.md` §2). Faz 0 tamamlanmış olmalı (DB + CI).
+`feature/mvp-0` (`Docs/09_DEV_WORKFLOW.md` §2). **Önkoşul:** Faz 0 Done (Alembic 001–003, CI yeşil).
+
+**Stop (İterasyon 1, kod öncesi):** [ ] Faz 0 tamam; [ ] `feature/mvp-0` güncel; [ ] `alembic upgrade head` local OK.
 
 ## Bu fazın çalışma modeli
 
-`@51-phase-01-backend-core` + **「Faz 1 — İterasyon M」**. Yalnızca `apps/api/` + `packages/shared/` + `tests/` — frontend/mobil yok.
+- Her chat: `@51-phase-01-backend-core` + **「Faz 1 — İterasyon M」**.
+- Katman: yalnızca `apps/api/` + `packages/shared/` (okuma) + `tests/` + `scripts/` + `fixtures/`.
+- Agent yalnızca iterasyonun **Docs okuma sırasını** okur; Plan moduna geçme.
+- API contract çelişkisinde **`Docs/03_API_CONTRACTS.md` kazanır** (`Docs/10` path/isim sapmaları aşağıda işaretli).
 
 ---
 
 ### İterasyon 1 — FastAPI Boilerplate (1.1)
 
-**Hedef:** App factory, lifespan, middleware zinciri, health/ready, exception handler.
+**Hedef:** Çalışan boş API; middleware zinciri, global exception handler, `GET /health` + `GET /ready` (DB ping) integration test yeşil.
 
-**Minimum bağlam:** `Docs/10` §1.1; `Docs/04_BACKEND_SPEC.md` §1–3.
+**Teslim çıktısı:**
+- `apps/api/main.py` — app factory, lifespan, router mount
+- `apps/api/core/config.py` — Pydantic `BaseSettings`
+- `apps/api/core/exceptions.py` — `AppException` hiyerarşisi
+- `apps/api/middleware/request_id.py`, `request_logger.py`, `rate_limiter.py` (Redis stub/mock OK)
+- `apps/api/core/deps.py` — `get_db` async session
+- `apps/api/schemas/common.py` — `ErrorResponse`, `PaginatedResponse`
+- `apps/api/routers/health.py`
+- `tests/integration/test_health.py`, `tests/unit/middleware/test_rate_limiter.py`
 
-**Bu iterasyonda yok:** Auth, domain router'lar.
+**Önkoşullar:**
+- [ ] Faz 0 Stop; migration'lar uygulanmış
+- [ ] `DATABASE_URL`, `REDIS_URL` `.env` veya test env'de tanımlı
 
-**Stop:** [ ] `/health` 200; [ ] integration test; [ ] `ruff` + `mypy` green.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.1 — çıktı listesi
+2. `Docs/04_BACKEND_SPEC.md` §1 — genel mimari, app lifecycle
+3. `Docs/04_BACKEND_SPEC.md` §3 — middleware sırası ve rate limit tablosu
+4. `Docs/04_BACKEND_SPEC.md` §4.1 — `get_db` transaction pattern
+5. `Docs/03_API_CONTRACTS.md` §13 — error response envelope
+
+**Uygulama planı:**
+1. `core/config.py` — `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS`, `ENVIRONMENT` (`Docs/09` §1.4)
+2. `core/exceptions.py` — `UnauthorizedException`, `ForbiddenException`, `NotFoundException`, `ConflictException`, `RateLimitException` (`Docs/04` §3.5, §13)
+3. `main.py` — lifespan: engine/session factory; middleware sırası: RequestID → Logger → RateLimiter → CORS (`Docs/04` §3)
+4. `core/deps.py` — `get_db` yield/commit/rollback (`Docs/04` §4.1)
+5. `routers/health.py` — `GET /health` (200), `GET /ready` (DB `SELECT 1`)
+6. Global `@app.exception_handler(AppException)` — `error.code`, `error.message`, `X-Request-ID` (`Docs/03` §13)
+7. `tests/integration/test_health.py` — httpx `AsyncClient`
+8. Rate limiter unit test — auth kategorisi 10/dk mock (`Docs/04` §3.3)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/api/main.py`, `core/config.py`, `core/exceptions.py`, `core/deps.py`, `middleware/*.py`, `schemas/common.py`, `routers/health.py`, `tests/integration/test_health.py`, `tests/unit/middleware/test_rate_limiter.py` |
+| Güncelle | `requirements.txt` (fastapi, uvicorn, httpx, redis), `pyproject.toml` api package path |
+| Dokunma | Auth router, domain servisleri, frontend |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Middleware sırası | `Docs/04` §3 | RequestID en dış |
+| Rate limit 429 | `Docs/04` §3.3 | `RATE_LIMIT_EXCEEDED` + `Retry-After` |
+| Error envelope | `Docs/03` §13 | `error.code` SCREAMING_SNAKE |
+| CORS origins | `Docs/04` §3.4 | `CORS_ORIGINS` env; wildcard yok |
+| `/ready` DB check | `Docs/10` §1.1 | async session execute |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_health.py -v`
+- [ ] `ruff check apps/api` + `mypy apps/api`
+- [ ] `/health` body'de secret yok
+
+**Bu iterasyonda yok:**
+- JWT, auth router, `get_current_user`, domain CRUD
+
+**Risk / dikkat:**
+- `Docs/10` `apps/api/config.py` → **`apps/api/core/config.py`** (`Docs/04` §2)
+- Redis yoksa rate limiter testte mock; CI'da Redis service eklenebilir veya in-memory fallback (yalnızca test)
+
+**Stop:**
+- [ ] `uvicorn apps.api.main:app` + `curl /health` 200
+- [ ] `pytest tests/integration/test_health.py tests/unit/middleware/test_rate_limiter.py -v`
+- [ ] `ruff` + `mypy` yeşil
+- [ ] PR/onay → İterasyon 2
 
 ---
 
-### İterasyon 2 — JWT Üretim/Doğrulama (1.2)
+### İterasyon 2 — JWT ve Güvenlik Util (1.2)
 
-**Hedef:** `core/security.py` — access/refresh token create/decode, bcrypt password.
+**Hedef:** `core/security.py` access/refresh JWT + bcrypt; `get_current_user` / `require_admin` dependency; unit testler yeşil.
 
-**Minimum bağlam:** `Docs/10` §1.2; `Docs/07_SECURITY_IMPLEMENTATION.md` §3.
+**Teslim çıktısı:**
+- `apps/api/core/security.py`
+- `apps/api/core/deps.py` genişletme — `get_current_user`, `require_admin`
+- `apps/api/schemas/auth.py` — `LoginRequest`, `TokenResponse` (henüz router yok)
+- `tests/unit/core/test_security.py`, `tests/unit/core/test_password_validation.py`
 
-**Bu iterasyonda yok:** Login endpoint.
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] `packages/shared/models/user.py` mevcut (Faz 0)
 
-**Stop:** [ ] Unit test token round-trip; [ ] expired token 401.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.2
+2. `Docs/07_SECURITY_IMPLEMENTATION.md` §3 — JWT yapısı, süreler, decode
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §4.1–4.2 — şifre politikası, bcrypt cost ≥12
+4. `Docs/04_BACKEND_SPEC.md` §4.2–4.3 — `get_current_user`, `require_admin`
+5. `Docs/03_API_CONTRACTS.md` §2 — token response alanları (login için hazırlık)
+
+**Uygulama planı:**
+1. `create_access_token` / `create_refresh_token` — claim `sub`, `exp`, `type` (`Docs/07` §3.1)
+2. `decode_jwt` — expired/invalid → `UnauthorizedException` (`AUTH_INVALID_*` kodları)
+3. `hash_password` / `verify_password` — bcrypt rounds=12 (`Docs/07` §4.2)
+4. Pydantic validator — min 8, 1 upper, 1 digit (`Docs/07` §4.1)
+5. `get_current_user` — JWT → `user_repo.get_by_id`; `is_active=false` → 401 (`Docs/07` §2.4)
+6. `require_admin` — viewer → `ForbiddenException` (`Docs/04` §4.3)
+7. Unit: token round-trip, tampered token, expired, password policy deny
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `core/security.py`, `schemas/auth.py`, `tests/unit/core/test_*.py` |
+| Güncelle | `core/deps.py` |
+| Dokunma | `routers/auth.py`, HTTP endpoint'ler |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Access 60 dk default | `Docs/07` §3.2 | Env veya settings (Faz 1.6); şimdilik config default 60 |
+| Refresh 30 gün | `Docs/07` §3.2 | `type=refresh` claim |
+| password_hash response yok | `Docs/07` §4.2 | User schema'da exclude |
+| Pasif kullanıcı | `Docs/03` §2 refresh | `AUTH_ACCOUNT_INACTIVE` |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/core/ -v` yeşil
+- [ ] Deny: expired JWT, bad signature, weak password
+- [ ] Auth modülü coverage ≥%90 hedefi (`04-quality-gates`)
+
+**Bu iterasyonda yok:**
+- Login/refresh/logout HTTP endpoint'leri
+- Audit log yazımı
+
+**Risk / dikkat:**
+- `Docs/10` `deps/auth.py` ayrı dosya → **`core/deps.py`** içinde (`Docs/04` §4)
+- Token süreleri İterasyon 6'da `system_settings`'ten okunacak; şimdilik config sabiti + TODO notu
+
+**Stop:**
+- [ ] `pytest tests/unit/core/ -v`
+- [ ] `mypy apps/api/core`
+- [ ] PR/onay → İterasyon 3
 
 ---
 
 ### İterasyon 3 — Auth Endpoints (1.3)
 
-**Hedef:** login, refresh, logout — `Docs/03` §2.
+**Hedef:** `POST /api/v1/auth/login|refresh|logout` çalışır; integration test login→refresh→logout; başarılı login `user.login` audit + `last_login_at`.
 
-**Minimum bağlam:** `Docs/10` §1.3; `Docs/03_API_CONTRACTS.md` §2.
+**Teslim çıktısı:**
+- `apps/api/routers/auth.py`
+- `apps/api/services/auth_service.py`
+- `apps/api/repositories/user_repository.py` — `get_by_email`, `update_last_login`
+- `apps/api/repositories/audit_repository.py` — minimal `create()` (İterasyon 5'te `AuditService`'e taşınır)
+- `tests/integration/test_auth_endpoints.py`
 
-**Bu iterasyonda yok:** User CRUD.
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop
+- [ ] Test DB'de seed user veya test factory ile user insert
 
-**Stop:** [ ] Integration: login→refresh→logout; [ ] audit USER_LOGIN.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.3
+2. `Docs/03_API_CONTRACTS.md` §2 — login/refresh/logout contract + error code'lar
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §2.1–2.3 — akış diyagramları
+4. `Docs/07_SECURITY_IMPLEMENTATION.md` §6.4 — auth rate limit 10/dk/IP
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — `user.login`, `user.logout`, `user.login_failed`
+
+**Uygulama planı:**
+1. `schemas/auth.py` — request/response `Docs/03` §2 ile uyumlu (`expires_in`, `user` objesi login'de)
+2. `auth_service.login` — email lookup, bcrypt verify; fail → `AUTH_INVALID_CREDENTIALS` (bilgi sızıntısı yok)
+3. Pasif user → 403 `AUTH_ACCOUNT_INACTIVE` (`Docs/03` §2)
+4. Success → token pair, `last_login_at`, audit `user.login` aynı transaction (`audit_repository`)
+5. `refresh` — refresh token decode; inactive → 403; yeni access token (`Docs/03` §2 refresh)
+6. `logout` — audit `user.logout`; MVP-0 server-side revoke yok (`Docs/07` §2.3)
+7. Auth router'a rate limit dependency (`Docs/04` §3.3)
+8. Integration: happy path + wrong password + inactive + rate limit (mock/limit test)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `routers/auth.py`, `services/auth_service.py`, `repositories/user_repository.py`, `repositories/audit_repository.py`, `tests/integration/test_auth_endpoints.py` |
+| Güncelle | `main.py` (router include), `schemas/auth.py` |
+| Dokunma | User CRUD, `AuditService` (İterasyon 5) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Login response user objesi | `Docs/03` §2 login | `password_hash` yok |
+| Failed login audit | `Docs/07` §9.1 | `user.login_failed` + IP payload |
+| Logout 200 message | `Docs/03` §2 logout | TR mesaj |
+| Rate limit login | `Docs/03` §2 | 429 `RATE_LIMIT_EXCEEDED` |
+
+**Kalite kapıları:**
+- [ ] Integration: login→refresh→logout
+- [ ] Deny: bad password, inactive, invalid refresh
+- [ ] `pytest tests/integration/test_auth_endpoints.py -v`
+- [ ] Auth coverage ≥%90
+
+**Bu iterasyonda yok:**
+- User admin CRUD, password reset, settings API
+
+**Risk / dikkat:**
+- Audit henüz servis değil — `audit_repository` doğrudan; İterasyon 5 refactor planla
+- `Docs/07` §2.3 `USER_LOGOUT` → event `user.logout` (`Docs/07` §9.1)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_auth_endpoints.py -v`
+- [ ] OpenAPI `/docs` auth endpoint'leri görünür
+- [ ] PR/onay → İterasyon 4
 
 ---
 
-### İterasyon 4 — User CRUD (1.4)
+### İterasyon 4 — User CRUD API (1.4)
 
-**Hedef:** Admin user CRUD + `GET /users/me`.
+**Hedef:** Admin user list/create/get/update + `GET /users/me`; viewer admin route'larda 403; yeni user'da `notification_preferences` seed.
 
-**Minimum bağlam:** `Docs/10` §1.4; `Docs/03` §3.
+**Teslim çıktısı:**
+- `apps/api/routers/users.py`
+- `apps/api/services/user_service.py`
+- `apps/api/repositories/user_repository.py` — `list_paginated`, `create`, `update`
+- `apps/api/repositories/notification_preference_repository.py` — create default
+- `apps/api/schemas/user.py`
+- `tests/integration/test_user_endpoints.py`
 
-**Bu iterasyonda yok:** Password reset.
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop — admin test user ile login helper
 
-**Stop:** [ ] Viewer admin endpoint 403; [ ] `password_hash` response'ta yok.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.4
+2. `Docs/03_API_CONTRACTS.md` §3 — tüm user endpoint'leri
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §5 — RBAC
+4. `Docs/03_API_CONTRACTS.md` §14 — cursor pagination
+5. `Docs/02_DATABASE_SCHEMA.md` §4.13 — notification_preferences 1:1
+
+**Uygulama planı:**
+1. `GET /api/v1/users` — cursor pagination, `limit` max 50 (`Docs/03` §3)
+2. `POST /api/v1/users` — şifre policy; duplicate email → 409 `USER_EMAIL_EXISTS`
+3. Create sonrası `notification_preferences` default (`Docs/03` §3 POST notu)
+4. `GET /users/{user_id}`, `PUT /users/{user_id}` — kısmi güncelleme; `is_active=false` → audit `user.deactivated`
+5. `GET /users/me` — admin + viewer
+6. **`DELETE /users` yok** — pasifleştirme `PUT` ile (`Docs/03` §3; `Docs/10` DELETE ignore)
+7. Audit: `user.created`, `user.updated` (`Docs/07` §9.1)
+8. Integration: admin CRUD, viewer 403, duplicate 409
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `routers/users.py`, `services/user_service.py`, `schemas/user.py`, `repositories/notification_preference_repository.py`, `tests/integration/test_user_endpoints.py` |
+| Güncelle | `repositories/user_repository.py`, `main.py` |
+| Dokunma | Password reset, settings |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| UserResponse alanları | `Docs/03` §3 | `password_hash` asla yok |
+| Rol değişikliği audit | `Docs/03` §3 PUT | `user.updated` / role payload |
+| Pagination envelope | `Docs/03` §14 | `data` + `pagination.next_cursor` |
+| Viewer GET /users | `Docs/03` §12 | 403 Forbidden |
+
+**Kalite kapıları:**
+- [ ] Integration admin + viewer deny testleri
+- [ ] `password_hash` response grep ile yok
+- [ ] `pytest tests/integration/test_user_endpoints.py -v`
+
+**Bu iterasyonda yok:**
+- `PUT /users/me/password` (`Docs/03`'te yok — şifre değişimi password-reset flow)
+- Password reset endpoint'leri
+
+**Risk / dikkat:**
+- `Docs/10` `routers/user.py` → **`routers/users.py`** (`Docs/04` §2)
+- `Docs/10` soft DELETE → **`PUT is_active=false`** (`Docs/03`)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_user_endpoints.py -v`
+- [ ] `ruff` + `mypy` yeşil
+- [ ] PR/onay → İterasyon 5
 
 ---
 
 ### İterasyon 5 — Audit Log (1.5)
 
-**Hedef:** `AuditService` + admin list API.
+**Hedef:** `AuditService.log_event` + `GET /api/v1/audit-logs` (admin, filtreli, paginated); auth/user servisleri audit'i servis üzerinden yazar.
 
-**Minimum bağlam:** `Docs/10` §1.5; `Docs/07` §9.
+**Teslim çıktısı:**
+- `apps/api/services/audit_service.py`
+- `apps/api/repositories/audit_repository.py` — `list_paginated` filtreler
+- `apps/api/routers/audit_logs.py`
+- `apps/api/schemas/audit.py`
+- `tests/unit/services/test_audit_service.py`, `tests/integration/test_audit_endpoints.py`
+- Refactor: `auth_service`, `user_service` → `AuditService.log_event`
 
-**Bu iterasyonda yok:** Settings.
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop — DB'de audit kayıtları mevcut
 
-**Stop:** [ ] Mutating işlemde audit aynı transaction; [ ] viewer audit 403.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.5
+2. `Docs/03_API_CONTRACTS.md` §10 — list endpoint + query param
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §9 — olay tipleri, payload kuralları, erişim
+4. `Docs/04_BACKEND_SPEC.md` §5 — transaction boundary (audit aynı session)
+5. `Docs/08_TESTING_STRATEGY.md` §1 — auth/audit yüksek coverage
+
+**Uygulama planı:**
+1. `AuditService.log_event(event_type, actor_id, target_type, target_id, payload)` — flush only, commit `get_db` (`Docs/04` §5)
+2. Hassas veri payload'a kopyalanmaz — metadata only (`03-security-baseline`)
+3. `GET /audit-logs` — `require_admin`; filtre: `event_type`, `actor_user_id`, `target_type`, `start_date`, `end_date`; `limit` max 100 (`Docs/03` §10)
+4. Response `actor_name` join veya lookup (`Docs/03` §10 örnek)
+5. Refactor önceki iterasyonlardaki doğrudan repository çağrıları
+6. Unit: payload shape; Integration: viewer 403, admin filtre
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/audit_service.py`, `routers/audit_logs.py`, `schemas/audit.py`, test dosyaları |
+| Güncelle | `repositories/audit_repository.py`, `auth_service.py`, `user_service.py`, `main.py` |
+| Dokunma | Settings, password reset |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Admin-only list | `Docs/07` §9.4 | viewer 403 |
+| event_type string | `Docs/07` §9.1 | `user.login` formatı |
+| Pagination max 100 | `Docs/03` §10 | audit özel limit |
+| Aynı transaction | `03-security-baseline` | login + audit tek commit |
+
+**Kalite kapıları:**
+- [ ] Unit + integration yeşil
+- [ ] Refactor sonrası auth integration testleri regresyon yok
+- [ ] Audit service coverage ≥%70
+
+**Bu iterasyonda yok:**
+- S3 audit archive (MVP-1+), settings API
+
+**Risk / dikkat:**
+- `Docs/10` `routers/audit.py` → **`routers/audit_logs.py`** (`Docs/03` path `/audit-logs`)
+
+**Stop:**
+- [ ] `pytest tests/unit/services/test_audit_service.py tests/integration/test_audit_endpoints.py -v`
+- [ ] PR/onay → İterasyon 6
 
 ---
 
 ### İterasyon 6 — System Settings (1.6)
 
-**Hedef:** Settings read/update API (admin).
+**Hedef:** `GET /api/v1/settings`, `PUT /api/v1/settings/{key}` (admin); güncelleme `settings.updated` audit; JWT süreleri settings'ten okunabilir.
 
-**Minimum bağlam:** `Docs/10` §1.6; `Docs/03` settings endpoint'leri.
+**Teslim çıktısı:**
+- `apps/api/routers/settings.py`
+- `apps/api/services/settings_service.py`
+- `apps/api/repositories/settings_repository.py`
+- `apps/api/schemas/settings.py`
+- `tests/integration/test_settings_endpoints.py`
+- `core/security.py` veya config — token TTL için `settings_service.get` entegrasyonu (opsiyonel bu iterasyonda wire)
 
-**Bu iterasyonda yok:** Password reset.
+**Önkoşullar:**
+- [ ] İterasyon 5 Stop
+- [ ] `system_settings` tablosu (Faz 0)
 
-**Stop:** [ ] JWT süre ayarları okunabilir/güncellenebilir.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.6
+2. `Docs/03_API_CONTRACTS.md` §11 — GET/PUT contract
+3. `Docs/02_DATABASE_SCHEMA.md` §4.15 — öntanımlı key listesi ve JSONB `value`
+4. `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — `settings.updated` payload
+5. `Docs/04_BACKEND_SPEC.md` §5 — `SettingsService` pattern
+
+**Uygulama planı:**
+1. `settings_repository.get_by_key`, `upsert` — PK `key` (`Docs/02` §4.15)
+2. `GET /settings` — tüm kayıtlar array (`Docs/03` §11)
+3. `PUT /settings/{key}` — body `{ "value": ... }`; unknown key → 404
+4. Audit `settings.updated` — old/new value payload (`Docs/07` §9.2 örnek)
+5. `embedding_model` değişiminde `warning` alanı response'ta (`Docs/03` §11 PUT örneği) — reindex job stub (log only, Faz 4)
+6. Seed key'leri `Docs/02` §4.15 tablosu ile uyumlu (`Docs/10` chatbot_* key'leri `Docs/02`'de yoksa ekleme — önce `Docs/02` kontrol)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `routers/settings.py`, `services/settings_service.py`, `repositories/settings_repository.py`, `schemas/settings.py`, `tests/integration/test_settings_endpoints.py` |
+| Güncelle | `main.py`; isteğe bağlı `core/security.py` TTL settings |
+| Dokunma | Password reset, seed script |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| settings value JSONB | `Docs/02` §4.15 | int/string cron JSON |
+| jwt_access_token_minutes | `Docs/02` §4.15 seed | default 60 |
+| Viewer forbidden | `Docs/03` §12 | 403 |
+| updated_by kolonu | `Docs/02` §4.15 | admin user id on PUT |
+
+**Kalite kapıları:**
+- [ ] Integration get/update + viewer deny
+- [ ] Audit kaydı assert
+- [ ] `pytest tests/integration/test_settings_endpoints.py -v`
+
+**Bu iterasyonda yok:**
+- Password reset, prod settings migration
+
+**Risk / dikkat:**
+- `Docs/10` varsayılan `chatbot_similarity_threshold` → **`Docs/02` §4.15'te yok**; ekleme gerekiyorsa önce `Docs/02` güncelle (phase-creator kuralı) veya Faz 4 scope
+- `system_settings.value` JSONB — roadmap TEXT değil
+
+**Stop:**
+- [ ] `pytest tests/integration/test_settings_endpoints.py -v`
+- [ ] PR/onay → İterasyon 7
 
 ---
 
 ### İterasyon 7 — Password Reset (1.7)
 
-**Hedef:** Admin initiate + public complete flow.
+**Hedef:** `POST /api/v1/auth/password-reset/initiate` (admin) + `POST /api/v1/auth/password-reset/complete` (public); token tek kullanımlık; mail gönderim mock.
 
-**Minimum bağlam:** `Docs/10` §1.7; `Docs/03` §2 password-reset.
+**Teslim çıktısı:**
+- `apps/api/services/password_reset_service.py`
+- `apps/api/repositories/password_reset_repository.py`
+- `auth router` genişletme veya `routers/password_reset.py` — **`Docs/03` path'leri auth altında**
+- `apps/api/services/email_service.py` — stub/interface (SMTP Faz 5)
+- `tests/unit/services/test_password_reset.py`, `tests/integration/test_password_reset_endpoints.py`
 
-**Bu iterasyonda yok:** Seed.
+**Önkoşullar:**
+- [ ] İterasyon 6 Stop
+- [ ] `AuditService` hazır
 
-**Stop:** [ ] Token tek kullanımlık; [ ] expired token reddedilir.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.7 — özet (`Docs/03` path farkı)
+2. `Docs/03_API_CONTRACTS.md` §2 — `password-reset/initiate` + `complete`
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §4.3 — token üretim, 24h, generic hata
+4. `Docs/02_DATABASE_SCHEMA.md` §4.14 — token tablosu
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — `password.reset_initiated`
+
+**Uygulama planı:**
+1. **`Docs/03` path kullan** — `POST /auth/password-reset/initiate` body `{user_id}`; **`Docs/10` `/users/{id}/reset-password` ignore**
+2. `secrets.token_urlsafe(32)` → hash → `password_reset_tokens`; expires 24h
+3. `EmailService.send_reset_link` — mock; log token (yalnızca dev/test)
+4. `complete` — token verify + policy + `used_at` set; generic 401 invalid token (`Docs/07` §4.3)
+5. Audit: `password.reset_initiated`; complete için uygun event (`Docs/07` §9.1)
+6. Integration: admin initiate → complete → login yeni şifre ile
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/password_reset_service.py`, `repositories/password_reset_repository.py`, `services/email_service.py`, test dosyaları |
+| Güncelle | `routers/auth.py` (password-reset route'ları), `schemas/auth.py` |
+| Dokunma | `scripts/seed.py`, SMTP prod entegrasyonu |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Initiate admin only | `Docs/03` §2 | `require_admin` |
+| Complete public | `Docs/03` §2 | auth header yok |
+| PASSWORD_POLICY_VIOLATION | `Docs/03` §2 complete | 400 |
+| AUTH_INVALID_RESET_TOKEN | `Docs/03` §2 | used/expired |
+| Token hash storage | `Docs/02` §4.14 | plain token mail'de only |
+
+**Kalite kapıları:**
+- [ ] Unit: expired, used token deny
+- [ ] Integration tam akış
+- [ ] Plaintext token log'da production path'te yok
+
+**Bu iterasyonda yok:**
+- SMTP gerçek gönderim (Faz 5), self-servis kayıt
+
+**Risk / dikkat:**
+- `Docs/07` §4.3 `PASSWORD_RESET_*` event → `password.reset_initiated` (`Docs/03` §9.1 uyumu)
+- Raw token asla API response'ta dönmez
+
+**Stop:**
+- [ ] `pytest tests/unit/services/test_password_reset.py tests/integration/test_password_reset_endpoints.py -v`
+- [ ] PR/onay → İterasyon 8
 
 ---
 
 ### İterasyon 8 — Seed ve Fixtures (1.8)
 
-**Hedef:** `scripts/seed.py` idempotent; `fixtures/` admin user + settings.
+**Hedef:** Idempotent `scripts/seed.py`; `fixtures/*.json` yüklemesi; iki kez çalıştırma güvenli; auth integration test seed admin ile geçer.
 
-**Minimum bağlam:** `Docs/10` §1.8; `Docs/09_DEV_WORKFLOW.md` §8.4.
+**Teslim çıktısı:**
+- `scripts/seed.py`
+- `fixtures/users.json`, `fixtures/system_settings.json`, `fixtures/prompt_templates.json`, `fixtures/sources.json`
+- `tests/integration/test_seed.py` (opsiyonel)
+- README veya `Docs/09` §1.2 — seed adımı doğrulama
 
-**Bu iterasyonda yok:** Collector/source seed (Faz 2).
+**Önkoşullar:**
+- [ ] İterasyon 7 Stop — tüm API'ler hazır
+- [ ] `alembic upgrade head`
 
-**Stop:** [ ] `python scripts/seed.py` iki kez çalışır; [ ] auth integration test seed ile geçer.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §1.8
+2. `Docs/09_DEV_WORKFLOW.md` §8.4 — idempotent seed kuralı
+3. `Docs/02_DATABASE_SCHEMA.md` §4.15 — system_settings seed değerleri
+4. `Docs/03_API_CONTRACTS.md` §3 POST user — notification_preferences yan etkisi
+5. `Docs/00_PROJECT_OVERVIEW.md` §6 — örnek kaynak kategorileri (sources fixture için)
 
-## Required Context
+**Uygulama planı:**
+1. `fixtures/users.json` — 1 admin + 2 viewer; şifreler önceden bcrypt hash (`Docs/07` §4.2)
+2. `fixtures/system_settings.json` — `Docs/02` §4.15 tablosu
+3. `fixtures/prompt_templates.json` — 3 digest tipi iskelet (Faz 4 için)
+4. `fixtures/sources.json` — birkaç RSS/email/gov dev URL (`Docs/10` §1.8; collector Faz 2'de kullanır)
+5. `seed.py` — upsert/idempotent: email/key unique conflict → skip veya update
+6. User seed → `notification_preferences` oluştur (`Docs/03` §3)
+7. `python scripts/seed.py` iki kez — duplicate yok
+8. Auth integration: seed admin credentials ile login
 
-- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 1
-- `Docs/03_API_CONTRACTS.md` — §2–3
-- `Docs/04_BACKEND_SPEC.md` — §3–6, §13
-- `Docs/07_SECURITY_IMPLEMENTATION.md` — §2–5, §9
-- `Docs/09_DEV_WORKFLOW.md` — §4 PR checklist
+**Dosya kapsamı:**
 
-## Done Definition
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `scripts/seed.py`, `fixtures/*.json`, `tests/integration/test_seed.py` (opsiyonel) |
+| Güncelle | `README.md`, `.gitignore` (fixture'da secret yok) |
+| Dokunma | Collector kodu, prod `seed_prod.py` (Faz 8) |
 
-- [ ] Tüm Faz 1 endpoint'leri `Docs/03` ile uyumlu
-- [ ] Auth/RBAC integration test ≥%90 coverage hedefi
-- [ ] OpenAPI `/docs` eksiksiz
-- [ ] PR: `feat: [MVP-0 / Faz 1 / …]`
+**Spec → kod eşlemesi:**
 
-## Explicit Don'ts
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Idempotent seed | `Docs/09` §8.4 | ikinci run no-op |
+| Production veri yasak | `Docs/09` §8.4 | sentetik email |
+| Admin şifre | `Docs/07` §4.1 | policy uyumlu örnek |
+| sources fixture | `Docs/10` §1.8 | Faz 2 öncül veri |
 
-- Collector, processor, AI, notification kodu
-- Next.js / React Native
-- Production migration onaysız
+**Kalite kapıları:**
+- [ ] `python scripts/seed.py` ×2 başarılı
+- [ ] `pytest tests/integration/test_auth_endpoints.py -v` seed creds ile
+- [ ] Fixture'da plaintext production secret yok
+
+**Bu iterasyonda yok:**
+- `seed_prod.py`, gerçek RSS collect, digest örnek verisi
+
+**Risk / dikkat:**
+- Hash'lenmiş şifre fixture'da — plaintext şifre README'de "dev only" notu
+- `prompt_templates` / `sources` seed Faz 2–4'ün önülü; eksik kolon varsa `Docs/02` model ile hizala
+
+**Stop:**
+- [ ] `python scripts/seed.py` idempotent
+- [ ] `pytest tests/integration/ -v` (auth + user + audit smoke)
+- [ ] Faz 1 Done Definition; roadmap işareti
+- [ ] PR: `feat: [MVP-0 / Faz 1 / 1.8] seed and fixtures`
 
 ---
 
-Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 1 tamamlandı.
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 1 (§1.1–1.8)
+- `Docs/03_API_CONTRACTS.md` — §2–3, §10–11, §12–14
+- `Docs/04_BACKEND_SPEC.md` — §1–6, §13 (exceptions)
+- `Docs/07_SECURITY_IMPLEMENTATION.md` — §2–5, §6.4, §9
+- `Docs/02_DATABASE_SCHEMA.md` — §4.1, §4.13–4.15 (user, notification_preferences, settings)
+- `Docs/08_TESTING_STRATEGY.md` — §1 coverage hedefleri
+- `Docs/09_DEV_WORKFLOW.md` — §4 PR, §8.4 seed
+
+## Done Definition
+
+- [ ] Tüm Faz 1 endpoint'leri `Docs/03` path ve error code ile uyumlu
+- [ ] Auth + RBAC integration testleri yeşil; auth coverage ≥%90
+- [ ] OpenAPI `/docs` — auth, users, audit-logs, settings, password-reset
+- [ ] `scripts/seed.py` idempotent; fixtures yüklü
+- [ ] Audit mutating işlemlerde aynı transaction
+- [ ] `password_hash` / reset token plaintext API ve log'da yok
+
+## Explicit Don'ts
+
+- Collector, processor, AI engine, notification (SMTP/FCM) prod entegrasyonu
+- Next.js / React Native
+- `DELETE /users` (yok — `PUT is_active=false`)
+- Production migration onaysız
+- `Docs/10` endpoint path'lerine körü körüne uyma — `Docs/03` öncelikli
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 1 tamamlandı işareti.

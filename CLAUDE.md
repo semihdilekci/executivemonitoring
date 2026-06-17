@@ -114,6 +114,6 @@ Mesajda **「Faz N — İterasyon M」** belirt. Kod öncesi `48-git-phase-branc
 
 | Skill | Ne zaman |
 | --- | --- |
-| `phase-creator` | Faz `.mdc` üretimi (50–58) |
+| `phase-creator` | Faz `.mdc` + blueprint iterasyonlar (50–58); `Docs/` önce, plan-modu kalitesi |
 | `phase-controller` | Implementasyon sonrası gap audit |
 | `rules-architect` | Rules mimarisi güncelleme |

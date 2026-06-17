@@ -6,93 +6,424 @@ description: "[Faz 3] Processor pipeline — 6 iterasyon/chat (SQS consumer → 
 
 ## Goal
 
-SQS'ten ham veriyi tüketen processor zinciri: dedup → normalize → enrich → score → chunk+embedding → `processed_items` / `content_chunks` tablolarına yazım.
+SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → keyword enrich → rule-based score → chunk + embedding → `{schema}.processed_items` + `content_chunks` yazımı. Faz 4 (digest/RAG) öncülü.
+
+## MVP-0 Enrichment Kararı
+
+**Keyword/rules enrichment tek doğruluk kaynağıdır** (`Docs/04` §8.3 MVP-0). LLM enrichment MVP-1'de `LLMEnricherProcessor` swap ile gelir. Processor fazında sıfır LLM maliyeti; `relevance_score` 0.0–1.0 rule-based (`Docs/02` §4.4). `transport` schema MVP-0'da kullanılmaz.
 
 ## Feature branch (zorunlu)
 
-`feature/mvp-0`. Öncül: Faz 2 (SQS mesajları).
+`feature/mvp-0` (`Docs/09` §2). **Önkoşul:** Faz 2 Done (collector SQS mesajları, `raw_items` insert).
+
+**Stop (İterasyon 1):** [ ] Faz 2 collector unit testleri yeşil; [ ] `packages/shared/models/raw_item.py`, `processed_item.py`, `content_chunk.py` mevcut.
 
 ## Bu fazın çalışma modeli
 
-`@53-phase-03-processor` + **「Faz 3 — İterasyon M」**. Yalnızca `services/processor/`.
+- Her chat: `@53-phase-03-processor` + **「Faz 3 — İterasyon M」**.
+- Katman: yalnızca `services/processor/` + `tests/` — API, frontend, digest yok.
+- Plan moduna geçme; iterasyon blueprint yeterli.
+- Enrichment implementasyonu: `Docs/04` §8.3 MVP-0 (`CATEGORY_RULES`, schema routing, scorer formülü).
 
 ---
 
 ### İterasyon 1 — SQS Consumer Framework (3.1)
 
-**Hedef:** Lambda SQS trigger, batch handling, partial failure, DLQ.
+**Hedef:** `BaseProcessor` chain pattern, SQS Lambda handler, partial batch failure ve DLQ redirect; unit testler yeşil.
 
-**Minimum bağlam:** `Docs/10` §3.1; `Docs/04` §8.
+**Teslim çıktısı:**
+- `services/processor/base_processor.py` — `BaseProcessor.process(item) → ProcessedResult`, chain `run()`
+- `services/processor/models.py` — `ProcessorInput`, `ProcessorOutput` dataclass'ları
+- `services/processor/handlers/processor_handler.py` — Lambda SQS trigger entry
+- `tests/unit/processor/test_base_processor.py`
 
-**Stop:** [ ] Integration SQS mock; [ ] idempotent handler.
+**Önkoşullar:**
+- [ ] Faz 2 Stop — SQS mesaj formatı collector'dan geliyor
+- [ ] Redis + PostgreSQL bağlantı config (`packages/shared` veya processor `config.py`)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.1 — kapsam ve dosya listesi
+2. `Docs/04_BACKEND_SPEC.md` §8 — pipeline akışı; §8.6–8.7 idempotency + DLQ
+3. `Docs/04_BACKEND_SPEC.md` §7 — SQS mesaj JSON formatı (collector çıktısı)
+4. `Docs/01_DOMAIN_MODEL.md` — `raw_items.status` geçişleri (pending → processing)
+5. `.cursor/rules/17-processor-pipeline.mdc` — DLQ ve idempotency kuralları
+
+**Uygulama planı:**
+1. `ProcessorInput` — SQS body alanları: `source_id`, `source_type`, `title`, `content`, `content_hash`, `published_at`, `raw_metadata` (`Docs/04` §7 SQS format)
+2. `BaseProcessor` — abstract `process(ctx) → ProcessorOutput | None`; `None` = skip (duplicate/discard)
+3. `ProcessorChain` — sıralı adım çalıştır; adım exception → log + mesaj DLQ'ya (`Docs/04` §8.7)
+4. Lambda handler — SQS batchRecords; `batchItemFailures` partial failure (`Docs/10` §3.1)
+5. `raw_items.status = processing` başlangıç; başarı/hata path stub (tam mapping iter 6)
+6. Unit: chain sırası, mid-chain exception → DLQ flag, duplicate skip no-op
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/processor/base_processor.py`, `models.py`, `handlers/processor_handler.py`, `tests/unit/processor/test_base_processor.py` |
+| Güncelle | `pyproject.toml` / `requirements.txt` (processor deps), `infra/` Lambda stub (opsiyonel not) |
+| Dokunma | dedup, normalizer, enricher, API router |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| SQS mesaj alanları | `Docs/04` §7 SQS format | `source_id` UUID string parse |
+| Chain pattern | `Docs/10` §3.1 | `BaseProcessor` subclass'lar iter 2–5 |
+| At-least-once | `Docs/04` §8.6 | Handler idempotent olmalı |
+| DLQ 3 retry | `Docs/04` §8.7 | Lambda SQS redrive policy |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor/test_base_processor.py -v`
+- [ ] Deny: malformed JSON message → log + DLQ, crash yok
+- [ ] `ruff` + `mypy services/processor`
+
+**Bu iterasyonda yok:**
+- Dedup/normalize/enrich logic, DB write, embedding
+
+**Risk / dikkat:**
+- `Docs/04` dizin `consumer.py` → roadmap `handlers/processor_handler.py` (handler path roadmap'i esas al)
+- SQS `source_id` JSON number değil UUID string olmalı
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_base_processor.py -v`
+- [ ] `ruff check services/processor` + `mypy services/processor`
+- [ ] PR/onay → İterasyon 2
 
 ---
 
-### İterasyon 2 — Dedup (3.2)
+### İterasyon 2 — Dedup Processor (3.2)
 
-**Hedef:** `content_hash` + `source_id` unique skip.
+**Hedef:** `content_hash` + `source_id` duplicate tespiti; Redis SETNX (TTL 7 gün); duplicate → pipeline skip.
 
-**Minimum bağlam:** `Docs/10` §3.2; `Docs/01` RawItem.
+**Teslim çıktısı:**
+- `services/processor/dedup_processor.py`
+- `tests/unit/processor/test_dedup.py`
 
-**Stop:** [ ] Duplicate mesaj no-op; [ ] coverage ≥%80 hedef.
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] Redis client config (Upstash/dev Redis — Faz 0)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.2
+2. `Docs/04_BACKEND_SPEC.md` §8.1 — Redis dedup key pattern
+3. `Docs/02_DATABASE_SCHEMA.md` §4.3 — `raw_items` unique `(source_id, content_hash)`
+4. `Docs/01_DOMAIN_MODEL.md` — duplicate skip lifecycle
+5. `services/collectors/` — collector-side dedup farkı (processor ikinci katman)
+
+**Uygulama planı:**
+1. `DedupProcessor(BaseProcessor)` — SHA-256 `content_hash` doğrula (collector hash ile uyum)
+2. Redis `SETNX processor:dedup:{source_id}:{hash}` TTL 604800 (`Docs/04` §8.1)
+3. Key mevcut → `return None` (chain durur, no-op)
+4. Opsiyonel DB check: `raw_items` duplicate unique violation graceful
+5. Unit: yeni hash geçer, duplicate durur, TTL mock assert
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `dedup_processor.py`, `tests/unit/processor/test_dedup.py` |
+| Güncelle | `base_processor.py` (chain'e dedup ilk adım register helper) |
+| Dokunma | normalizer, fuzzy dedup |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Hash dedup | `Docs/04` §8.1 | Redis + DB çift koruma |
+| Duplicate skip | `Docs/04` §8.6 | Dedup ilk adım |
+| TTL 7 gün | `Docs/10` §3.2 | `EXPIRE` 604800 |
+| Fuzzy dedup yok | `Docs/04` §8.1 | MVP-0 scope dışı |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor/test_dedup.py -v`
+- [ ] Processor dedup coverage ≥%80 hedef (kümülatif)
+- [ ] Deny: boş content_hash → skip/error
+
+**Bu iterasyonda yok:**
+- Fuzzy/title similarity dedup, normalize
+
+**Risk / dikkat:**
+- Collector dedup ile processor dedup farklı key prefix — çakışma yok (`processor:dedup:` vs `dedup:hashes`)
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_dedup.py -v`
+- [ ] PR/onay → İterasyon 3
 
 ---
 
 ### İterasyon 3 — Normalizer (3.3)
 
-**Hedef:** Başlık, body, tarih, dil standart format.
+**Hedef:** HTML strip, Unicode NFC, whitespace, tarih/dil normalize; 10 kelimeden kısa içerik graceful skip.
 
-**Minimum bağlam:** `Docs/10` §3.3.
+**Teslim çıktısı:**
+- `services/processor/normalizer.py` — `NormalizerProcessor(BaseProcessor)`
+- `tests/unit/processor/test_normalizer.py`
 
-**Stop:** [ ] Malformed input graceful skip.
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.3
+2. `Docs/04_BACKEND_SPEC.md` §8.2 — normalize kuralları
+3. `Docs/02_DATABASE_SCHEMA.md` §4.4 — `clean_content`, `language` alanları
+4. `Docs/08_TESTING_STRATEGY.md` — processor unit test beklentisi
+
+**Uygulama planı:**
+1. HTML tag strip (`beautifulsoup4` veya `trafilatura`)
+2. Unicode NFC; Türkçe örnek fixture: "ışığın", "İstanbul"
+3. Whitespace collapse; `published_at` → `Europe/Istanbul` aware datetime
+4. `langdetect` → `tr`/`en`/diğer; `language` ISO 639-1
+5. Word count < 10 → `return None` (discard)
+6. Unit: HTML, Unicode, Türkçe, min length deny, malformed date fallback
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `normalizer.py`, `tests/unit/processor/test_normalizer.py` |
+| Güncelle | `requirements.txt` (beautifulsoup4, langdetect) |
+| Dokunma | enricher, scorer |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| clean_content | `Docs/02` §4.4 | normalize çıktısı |
+| language | `Docs/02` §4.4 | `String(5)` |
+| Min 10 kelime | `Docs/10` §3.3 | skip, exception değil |
+| Tarih ISO | `Docs/04` §8.2 | `published_at` nullable |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor/test_normalizer.py -v`
+- [ ] Deny: malformed HTML → boş değil strip; empty → skip
+
+**Bu iterasyonda yok:**
+- Enrich, score, chunk
+
+**Risk / dikkat:**
+- `langdetect` kısa metinde yanlış dil — min length filtresi önce
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_normalizer.py -v`
+- [ ] PR/onay → İterasyon 4
 
 ---
 
 ### İterasyon 4 — Enricher ve Scorer (3.4)
 
-**Hedef:** Kategori, tags, relevance_score 0–100.
+**Hedef:** Keyword-based kategori + schema routing + tag extraction; rule-based `relevance_score` 0.0–1.0; unit testler deterministik.
 
-**Minimum bağlam:** `Docs/10` §3.4.
+**Teslim çıktısı:**
+- `services/processor/enricher.py` — `EnricherProcessor(BaseProcessor)`
+- `services/processor/scorer.py` — `ScorerProcessor(BaseProcessor)`
+- `tests/unit/processor/test_enricher.py`
+- `tests/unit/processor/test_scorer.py`
 
-**Stop:** [ ] Threshold altı discard testi.
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop
+- [ ] `packages/shared/enums.py` — `PROCESSED_ITEM_SCHEMAS`
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.4
+2. `Docs/04_BACKEND_SPEC.md` §8.3 MVP-0 — `CATEGORY_RULES`, schema routing, MVP-0 yok listesi
+3. `Docs/04_BACKEND_SPEC.md` §8.4 — relevance_score formülü
+4. `Docs/02_DATABASE_SCHEMA.md` §4.4 — `topics`, `entities`, `schema_category`, `relevance_score` CHECK
+5. `Docs/01_DOMAIN_MODEL.md` — relevance 0–1 aralığı
+
+**Uygulama planı:**
+1. `enricher.py` — `CATEGORY_RULES` dict (`Docs/04` §8.3); öncelik source_type → keyword → fallback `macro`
+2. Schema map: macro/strategy/regulatory→`news`, fmcg→`fmcg`, finance→`market`, geopolitical→`geo`; `transport` kullanma
+3. Eşleşen keyword'ler → `topics` list (dedupe)
+4. `scorer.py` — `0.4*reliability + 0.3*freshness + 0.3*keyword_match` (`Docs/04` §8.4); `sources.config.reliability_weight` default 0.5
+5. Freshness: <24h=1.0, <72h=0.5, else 0.2
+6. Düşük skor discard değil — skor yazılır (digest Faz 4 filtreler)
+7. Unit: routing tablosu, TCMB→macro/news, FMCG keyword→fmcg schema, skor edge cases
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `enricher.py`, `scorer.py`, unit testler |
+| Güncelle | — |
+| Dokunma | LLM client, chunker, embedding |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Keyword enrich MVP-0 | `Docs/04` §8.3 MVP-0 | sıfır LLM çağrısı |
+| Schema routing | `Docs/04` §8.3 tablo | `schema_category` alanı |
+| relevance 0–1 | `Docs/02` §4.4 CHECK | float, discard yok |
+| Sentiment/entity yok | `Docs/04` §8.3 MVP-0 yok | `entities` boş `[]` |
+| MVP-1 swap | `Docs/04` §8.3 MVP-1 | `LLMEnricherProcessor` notu |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_scorer.py -v`
+- [ ] Processor modülü coverage ≥%80 hedef
+- [ ] Deny: bilinmeyen source_type → fallback macro
+
+**Bu iterasyonda yok:**
+- LLM enrichment, sentiment, entity extraction, digest filtreleme
+
+**Risk / dikkat:**
+- `Docs/10` `schema_name` → kod `schema_category` (`Docs/02` esas)
+- Keyword listesi case-insensitive; Türkçe karakter NFC sonrası eşleş
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_scorer.py -v`
+- [ ] PR/onay → İterasyon 5
 
 ---
 
 ### İterasyon 5 — Chunker ve Embedding (3.5)
 
-**Hedef:** Metin parçalama + embedding → pgvector.
+**Hedef:** 512 token chunk (64 overlap), embedding API batch, `content_chunks` pgvector INSERT; integration similarity test.
 
-**Minimum bağlam:** `Docs/10` §3.5; `Docs/04` §6 pgvector helper.
+**Teslim çıktısı:**
+- `services/processor/chunker.py` — `ChunkerProcessor(BaseProcessor)`
+- `services/processor/embedding_service.py`
+- `tests/unit/processor/test_chunker.py`
+- `tests/integration/test_embedding_pgvector.py`
 
-**Stop:** [ ] Embedding dimension 1536; [ ] chunk DB yazımı.
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop
+- [ ] `system_settings` embedding model key (Faz 0 seed) veya env fallback
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.5
+2. `Docs/04_BACKEND_SPEC.md` §8.5 — chunk boyutu, batch embedding
+3. `Docs/02_DATABASE_SCHEMA.md` §4.5 — `content_chunks`, VECTOR(1536)
+4. `Docs/04_BACKEND_SPEC.md` §6 — pgvector similarity helper pattern
+5. `packages/shared/models/content_chunk.py` — ORM alanları
+
+**Uygulama planı:**
+1. `ChunkerProcessor` — max 512 token, overlap 64 (`system_settings` veya default); `chunk_index`, `token_count`
+2. Kısa metin → tek chunk
+3. `EmbeddingService.embed_batch` — OpenAI text-embedding-3-small veya Cohere embed-v3 mock; dimension 1536
+4. `asyncio.to_thread` CPU-bound tokenize (`Docs/04` async notu)
+5. SQLAlchemy INSERT `content_chunks` — `processed_item_id` mantıksal FK
+6. Integration: testcontainers pgvector → INSERT → cosine distance sıralama
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `chunker.py`, `embedding_service.py`, unit + integration test |
+| Güncelle | `.env.example` (`OPENAI_API_KEY` veya embedding provider) |
+| Dokunma | pipeline orchestrator, digest |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| VECTOR(1536) | `Docs/02` §4.5 | `EMBEDDING_DIMENSION` |
+| Unique chunk_index | `Docs/02` §4.5 | per processed_item_id |
+| Batch embed | `Docs/04` §8.5 | 20–50 chunk/istek hedef |
+| Model seçimi | `Docs/02` §system_settings | `embedding_model` key |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor/test_chunker.py -v`
+- [ ] `pytest tests/integration/test_embedding_pgvector.py -v` (CI pgvector service)
+- [ ] Deny: boş content → 0 chunk skip
+
+**Bu iterasyonda yok:**
+- `processed_items` INSERT (iter 6), RAG chat
+
+**Risk / dikkat:**
+- `Docs/10` `embeddings` tablo adı → `content_chunks` (`Docs/02` esas)
+- Embedding API key log/response'a sızmaz (`03-security-baseline`)
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_chunker.py tests/integration/test_embedding_pgvector.py -v`
+- [ ] PR/onay → İterasyon 6
 
 ---
 
 ### İterasyon 6 — Pipeline Entegrasyonu (3.6)
 
-**Hedef:** Uçtan uca collector→SQS→processor→DB akışı dev'de.
+**Hedef:** Uçtan uca SQS mesaj → tam pipeline → `{schema}.processed_items` + `content_chunks` DB'de; `raw_items.status` güncelleme; E2E integration yeşil.
 
-**Minimum bağlam:** `Docs/10` §3.6.
+**Teslim çıktısı:**
+- `services/processor/pipeline_orchestrator.py`
+- `tests/integration/test_pipeline_e2e.py`
 
-**Bu iterasyonda yok:** Digest üretimi (Faz 4).
+**Önkoşullar:**
+- [ ] İterasyon 1–5 Stop
+- [ ] Fixture `raw_item` veya SQS JSON (`fixtures/`)
 
-**Stop:** [ ] Fixture RSS → processed_item + chunk; [ ] DLQ boş (happy path).
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.6
+2. `Docs/01_DOMAIN_MODEL.md` — raw_item → processed_item lifecycle
+3. `Docs/02_DATABASE_SCHEMA.md` §4.4–4.5 — schema-qualified INSERT
+4. `packages/shared/models/processed_item.py` — schema factory / model seçimi
+5. `Docs/08_TESTING_STRATEGY.md` — integration pipeline test
 
-## Required Context
+**Uygulama planı:**
+1. `PipelineOrchestrator` — chain: Dedup → Normalizer → Enricher → Scorer → Chunker → EmbeddingService → DB persist
+2. `raw_items.status`: processing → processed | failed; `error_message` fail path
+3. Schema-qualified INSERT: `news.processed_items`, `fmcg.processed_items`, vb.
+4. `raw_item_id` FK, `topics`/`entities` JSONB, `relevance_score`
+5. Fail adım → log + SQS DLQ; transaction rollback processed_item + chunks
+6. E2E: fixture RSS SQS body → assert processed_item + content_chunks count ≥1
 
-- `Docs/10` Faz 3; `Docs/04` §8; `Docs/17-processor-pipeline.mdc`
+**Dosya kapsamı:**
 
-## Done Definition
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `pipeline_orchestrator.py`, `tests/integration/test_pipeline_e2e.py` |
+| Güncelle | `handlers/processor_handler.py` — orchestrator wire |
+| Dokunma | digest, chatbot, notification |
 
-- [ ] Pipeline uçtan uca dev'de çalışır
-- [ ] Processor coverage ≥%80
-- [ ] DLQ alarm notu (opsiyonel log)
+**Spec → kod eşlemesi:**
 
-## Explicit Don'ts
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| E2E zincir | `Docs/10` §3.6 | tüm processor adımları |
+| status geçişi | `Docs/01` §497–499 | processed / failed |
+| Schema INSERT | `Docs/02` §4.4 | `schema_category` routing |
+| DLQ fail | `Docs/04` §8.7 | pipeline exception |
 
-- LLM/digest/chatbot
-- Frontend
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_pipeline_e2e.py -v`
+- [ ] Processor coverage ≥%80 (`04-quality-gates`)
+- [ ] Deny: duplicate message → no second processed_item
+
+**Bu iterasyonda yok:**
+- Digest üretimi, LLM, admin replay UI
+
+**Risk / dikkat:**
+- Cross-schema FK yok — `content_chunks.processed_item_id` integrity uygulama katmanında
+- Happy path DLQ boş; fail path ayrı unit test (iter 1)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_pipeline_e2e.py -v`
+- [ ] `pytest tests/unit/processor/ -v` + coverage ≥%80
+- [ ] Faz 3 Done Definition; `Docs/10` Faz 3 işareti
 
 ---
 
-Phase done → `Docs/10` Faz 3 tamamlandı.
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 3 §3.1–3.6
+- `Docs/04_BACKEND_SPEC.md` §8 — processor pipeline (MVP-0 enrich §8.3)
+- `Docs/02_DATABASE_SCHEMA.md` §4.4–4.5 — processed_items + content_chunks
+- `.cursor/rules/17-processor-pipeline.mdc` — glob rule processor katmanı
+
+## Done Definition
+
+- [ ] Fixture RSS/SQS → `{schema}.processed_items` + `content_chunks` (dev E2E)
+- [ ] Processor coverage ≥%80
+- [ ] DLQ happy path boş; fail path log + redirect testi
+- [ ] MVP-0 keyword enrich; LLM enrich yok
+
+## Explicit Don'ts
+
+- LLM enrichment processor'da (MVP-1)
+- Digest/chatbot/notification
+- Frontend, yeni collector
+- `transport` schema routing (MVP-2)
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 3 tamamlandı.

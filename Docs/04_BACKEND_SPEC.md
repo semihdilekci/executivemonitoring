@@ -114,7 +114,7 @@ Monorepo içinde backend ile ilgili üç ana dizin bulunur:
     consumer.py                     → SQS consumer (Lambda handler)
     dedup.py                        → İçerik dedup (hash + fuzzy)
     normalizer.py                   → Metin temizleme, dil algılama, metadata çıkarma
-    enricher.py                     → AI ile zenginleştirme (kategori, sentiment, entity)
+    enricher.py                     → Keyword/rules zenginleştirme (MVP-0); LLM swap MVP-1
     scorer.py                       → Haber önem skoru hesaplama
     chunker.py                      → pgvector embedding chunk üretimi
 
@@ -347,7 +347,7 @@ class DigestService:
         self.ai_engine = ai_engine
 ```
 
-**Harici servis çağrıları wrapper üzerinden yapılır.** LLM API, SES, FCM gibi dış servisler doğrudan çağrılmaz; `llm_client`, `ses_client`, `fcm_client` wrapper'ları kullanılır. Bu wrapper'lar retry, timeout, error mapping ve metrik loglama sağlar.
+**Harici servis çağrıları wrapper üzerinden yapılır.** LLM API, SMTP, FCM gibi dış servisler doğrudan çağrılmaz; `llm_client`, `smtp_client`, `fcm_client` wrapper'ları kullanılır. Bu wrapper'lar retry, timeout, error mapping ve metrik loglama sağlar.
 
 **Audit log yazmak servis katmanının sorumluluğundadır.** State değiştiren her servis operasyonunda (kullanıcı oluşturma, kaynak silme, prompt güncelleme, API key ekleme, digest tetikleme) audit log kaydı yazılır. Audit log yazma işlemi ana transaction'ın parçasıdır — ayrı transaction açılmaz.
 
@@ -625,36 +625,79 @@ flowchart LR
 
 ### 8.1 Dedup
 
-İçerik hash'i (SHA-256) `articles` tablosunda ve Redis SET'te kontrol edilir. Fuzzy dedup: title similarity (Levenshtein distance < 0.15) + aynı kaynak + 24 saat pencere içinde yayınlanmış → duplicate sayılır. Duplicate makaleler atlanır, sayaç metriği loglanır.
+İçerik hash'i (SHA-256) Redis `SETNX` ile kontrol edilir (TTL: 7 gün; key: `processor:dedup:{source_id}:{content_hash}`). Ayrıca `raw_items` üzerinde `(source_id, content_hash)` unique constraint vardır — DB seviyesinde ikinci koruma.
+
+Duplicate tespit edilirse pipeline durur (no-op); `raw_items.status` güncellenmez veya `processed` atlanır. Sayaç metriği loglanır.
+
+MVP-0'da fuzzy dedup (title similarity) yok — yalnızca hash bazlı dedup. Fuzzy dedup MVP-1 değerlendirmesindedir.
 
 ### 8.2 Normalize
 
-- HTML tag temizleme (`trafilatura` veya `beautifulsoup4`).
-- Unicode normalizasyon (NFC).
-- Whitespace düzenleme.
-- Dil algılama (`langdetect`): Türkçe veya İngilizce değilse `metadata.language` olarak işaretlenir.
+- HTML tag temizleme (`beautifulsoup4` veya `trafilatura`).
+- Unicode normalizasyon (NFC); Türkçe karakter koruması (ışığın, İstanbul).
+- Whitespace düzenleme (çoklu boşluk → tek).
+- Dil algılama (`langdetect`): `tr` veya `en` dışı diller `language` alanına işaretlenir.
 - Tarih parse: farklı formatları ISO 8601 `Europe/Istanbul` timezone'a normalize et.
+- Min length filtre: 10 kelimeden kısa içerik → pipeline skip (graceful).
 
 ### 8.3 Enrich
 
-AI ile zenginleştirme — LLM çağrısı yapılır:
-- **Kategori:** `macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`.
-- **Sentiment:** `positive`, `negative`, `neutral`.
-- **Entity extraction:** Şirket adları, kişiler, ülkeler.
-- **Yıldız Holding ilgi skoru:** 0-10 arası (FMCG sektörel haber → yüksek, alakasız → düşük).
+> **MVP-0 kararı:** Keyword/rules tabanlı enrichment tek doğruluk kaynağıdır. LLM enrichment MVP-1 upgrade path'tir (`EnricherProcessor` → `LLMEnricherProcessor` swap; `BaseProcessor` chain değişmez). Gerekçe: LLM bütçesi digest + chatbot'a ayrılır; pipeline LLM outage'da da çalışmalıdır.
 
-Enrichment LLM çağrısı batch yapılır — tek prompt'ta 5-10 makale birden işlenir. Token tüketimini azaltır.
+#### MVP-0 — Keyword/rules enricher
+
+**Kategori** (`topics` JSONB dizisine yazılır) — `source_type` + keyword mapping:
+
+```python
+CATEGORY_RULES = {
+    "macro":        {"source_types": ["gov"], "keywords": ["tcmb", "faiz", "enflasyon", "büyüme", "gsyih", "imf"]},
+    "fmcg":         {"source_types": [],      "keywords": ["fmcg", "gıda", "perakende", "tüketici", "snack", "dairy", "bakery", "confectionery", "grocery"]},
+    "finance":      {"source_types": [],      "keywords": ["borsa", "hisse", "kur", "tahvil", "bist", "dolar", "euro", "kap"]},
+    "geopolitical": {"source_types": [],      "keywords": ["savaş", "yaptırım", "nato", "güvenlik", "jeopolitik", "sanctions"]},
+    "strategy":     {"source_types": [],      "keywords": ["strateji", "inovasyon", "dijital", "ai", "leadership", "disruption", "transformation"]},
+    "regulatory":   {"source_types": ["gov"], "keywords": ["resmi gazete", "yönetmelik", "kanun", "mevzuat", "regülasyon"]},
+}
+```
+
+Öncelik: `source_type` match → keyword match (title + body birleşik, case-insensitive) → fallback `"macro"`.
+
+**Schema routing** — kategori → PostgreSQL schema (`schema_category`):
+
+| Kategori | Schema |
+| -------- | ------ |
+| `macro` | `news` |
+| `fmcg` | `fmcg` |
+| `finance` | `market` |
+| `geopolitical` | `geo` |
+| `strategy` | `news` |
+| `regulatory` | `news` |
+
+`transport` schema'sı MVP-0'da kullanılmaz (AIS/OpenSky MVP-2).
+
+**Tag extraction:** Eşleşen keyword'ler `topics` dizisine eklenir (duplicate yok).
+
+**MVP-0'da yok:** sentiment analizi, entity extraction, LLM tabanlı Yıldız ilgi skoru, enrichment için LLM çağrısı.
+
+#### MVP-1 — LLM enricher (upgrade path)
+
+`LLMEnricherProcessor` aynı çıktı alanlarını üretir: kategori, sentiment, entity listesi (`entities` JSONB), gelişmiş ilgi sinyali. Batch LLM çağrısı (5–10 makale/prompt) token maliyetini düşürür. Scorer ve chunk adımları değişmez.
 
 ### 8.4 Score
 
-Makalenin digest'e dahil edilme önceliğini belirler. Skor hesabı:
+Makalenin digest'e dahil edilme önceliğini belirler. MVP-0'da **rule-based** `relevance_score` (0.0–1.0; `Docs/02` check constraint):
 
-- Kaynak güvenilirlik ağırlığı (admin tanımlı, `sources.reliability_weight`).
-- Enrichment'tan gelen ilgi skoru.
-- Yayın zamanı (taze haberler ağırlıklı).
-- Kategori ağırlığı (digest tipine göre: FMCG digest'inde FMCG kategorisi yüksek).
+```python
+score = (
+    source_reliability_weight * 0.4    # sources.config, varsayılan 0.5
+    + freshness_score * 0.3            # son 24 saat: 1.0; 72 saat: 0.5; eski: 0.2
+    + keyword_match_score * 0.3        # kategori keyword yoğunluğu, normalize
+)
+```
 
-Sonuç: `articles.relevance_score` float alanına yazılır.
+- `source_reliability_weight`: admin tanımlı, `sources.config` içinde (varsayılan `0.5`).
+- Threshold altı skorlar **discard edilmez** — `relevance_score` yazılır; digest seçiminde düşük öncelik (Faz 4 digest generator filtreler).
+
+Sonuç: `{schema}.processed_items.relevance_score` float alanına yazılır.
 
 ### 8.5 Chunk
 
@@ -667,7 +710,7 @@ Embedding API çağrısı batch yapılır — tek istekte 20-50 chunk.
 
 ### 8.6 İdempotency
 
-Aynı SQS mesajı birden fazla kez işlenebilir (at-least-once delivery). İdempotency `content_hash` üzerinden sağlanır: hash zaten `articles` tablosunda varsa makale atlanır. İşlem sırası önemlidir — dedup ilk adımdır.
+Aynı SQS mesajı birden fazla kez işlenebilir (at-least-once delivery). İdempotency `content_hash` + `source_id` üzerinden sağlanır: hash Redis'te veya `raw_items` / `processed_items` üzerinde mevcutsa makale atlanır. İşlem sırası önemlidir — dedup ilk adımdır.
 
 ### 8.7 Dead-Letter Queue İşleme
 
@@ -833,20 +876,27 @@ Digest generator idempotent'tir: aynı digest tipi + aynı tarih aralığı içi
 
 ## 11. Bildirim Servisi
 
-### AWS SES Mail Gönderim
+### SMTP Mail Gönderim
+
+E-posta bildirimleri AWS SES yerine **kurumsal SMTP** üzerinden gönderilir. Dev ortamında Gmail SMTP (`smtp.gmail.com:587`, uygulama şifresi); production'da YıldızHolding kurumsal SMTP relay kullanılır. Kimlik bilgileri dev'de `.env`, prod'da Secrets Manager'da tutulur.
 
 ```python
-class SESMailService:
-    async def send(self, to: list[str], subject: str, html_body: str):
-        async with aiobotocore_session.create_client("ses", region_name="eu-west-1") as client:
-            await client.send_email(
-                Source=settings.SES_FROM_ADDRESS,
-                Destination={"ToAddresses": to},
-                Message={
-                    "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {"Html": {"Data": html_body, "Charset": "UTF-8"}},
-                },
-            )
+class SMTPMailService:
+    async def send(self, to: list[str], subject: str, html_body: str) -> None:
+        message = EmailMessage()
+        message["From"] = settings.SMTP_FROM_EMAIL
+        message["To"] = ", ".join(to)
+        message["Subject"] = subject
+        message.set_content(html_body, subtype="html", charset="utf-8")
+
+        await aiosmtplib.send(
+            message,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER,
+            password=settings.SMTP_PASSWORD,
+            start_tls=settings.SMTP_USE_TLS,
+        )
 ```
 
 Mail şablonları Jinja2 ile render edilir. Şablon tipleri:
@@ -875,9 +925,9 @@ Kullanıcıların FCM token'ları `notification_tokens` tablosunda saklanır. Mo
 
 ### Bildirim Akışı
 
-1. **Digest hazır:** DigestService → NotificationService → mail (SES, alıcı listesi) + push (FCM, tüm aktif token'lar).
-2. **Sistem hatası:** ErrorHandler → NotificationService → mail (SES, yalnızca admin'ler).
-3. **Şifre sıfırlama:** UserService → NotificationService → mail (SES, hedef kullanıcı).
+1. **Digest hazır:** DigestService → NotificationService → mail (SMTP, alıcı listesi) + push (FCM, tüm aktif token'lar).
+2. **Sistem hatası:** ErrorHandler → NotificationService → mail (SMTP, yalnızca admin'ler).
+3. **Şifre sıfırlama:** UserService → NotificationService → mail (SMTP, hedef kullanıcı).
 
 Bildirim tercihleri admin tarafından belirlenir. Viewer kullanıcılar bildirim tercihlerini değiştiremez.
 
@@ -912,11 +962,18 @@ class Settings(BaseSettings):
 
     # AWS
     AWS_REGION: str = "eu-west-1"
-    AWS_SES_FROM_ADDRESS: str
     S3_BUCKET_NAME: str
     SQS_RSS_QUEUE_URL: str
     SQS_EMAIL_QUEUE_URL: str
     SQS_GOV_QUEUE_URL: str
+
+    # SMTP (dev: Gmail; prod: kurumsal relay)
+    SMTP_HOST: str
+    SMTP_PORT: int = 587
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+    SMTP_FROM_EMAIL: str
+    SMTP_USE_TLS: bool = True
 
     # LLM (varsayılan — admin panelinden override edilebilir)
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -1121,7 +1178,7 @@ Herhangi bir bağımlılık erişilemezse (503):
 GET /ready
 ```
 
-Health check'in üzerine tüm bağımlılıkları kontrol eder: DB, Redis, SQS queue erişimi, SES gönderim kapasitesi. Deploy sonrası traffic almaya hazır olduğunu doğrular. Load balancer bu endpoint'i kullanır.
+Health check'in üzerine tüm bağımlılıkları kontrol eder: DB, Redis, SQS queue erişimi, SMTP bağlantısı (opsiyonel ping). Deploy sonrası traffic almaya hazır olduğunu doğrular. Load balancer bu endpoint'i kullanır.
 
 ### CloudWatch Entegrasyonu
 

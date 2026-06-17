@@ -461,7 +461,7 @@ Yeni frontend domain eklendiğinde (örneğin staging ortamı) `CORS_ORIGINS` en
 | REDIS_URL | `.env` dosyası | AWS Secrets Manager |
 | AWS erişim key'leri | `.env` dosyası | IAM Role (EC2/Lambda instance role) |
 | LLM API key'leri | DB (`api_keys.encrypted_key`) | DB (`api_keys.encrypted_key`) |
-| SES gönderim adresi | `.env` dosyası | AWS Secrets Manager |
+| SMTP kimlik bilgileri (host, user, password, from) | `.env` dosyası | AWS Secrets Manager (`ygip/prod/smtp`) |
 | FCM service account | `.env` dosyası | AWS Secrets Manager |
 
 ### 8.2 Kurallar

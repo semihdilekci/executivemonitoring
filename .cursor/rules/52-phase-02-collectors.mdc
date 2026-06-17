@@ -6,104 +6,432 @@ description: "[Faz 2] Collector'lar — 6 iterasyon/chat (BaseCollector → sour
 
 ## Goal
 
-`BaseCollector` framework, source CRUD API, RSS/email/gov collector implementasyonları ve EventBridge+Lambda orchestration ile SQS'ye ham veri akışı.
+`BaseCollector` framework, source CRUD API, RSS/email/gov collector implementasyonları ve EventBridge+Lambda orchestration ile SQS'ye ham veri akışı; Redis dedup + `raw_items` insert (Faz 3 processor öncülü).
 
 ## Feature branch (zorunlu)
 
-`feature/mvp-0`. Öncül: Faz 1 (auth + source tablosu).
+`feature/mvp-0` (`Docs/09` §2). **Önkoşul:** Faz 1 Done (auth, audit, seed sources fixture opsiyonel).
+
+**Stop (İterasyon 1):** [ ] Faz 1 endpoint'leri yeşil; [ ] `packages/shared/models/source.py` mevcut.
 
 ## Bu fazın çalışma modeli
 
-`@52-phase-02-collectors` + **「Faz 2 — İterasyon M」**. Katman: `services/collectors/` + ilgili API router — frontend yok.
+- Her chat: `@52-phase-02-collectors` + **「Faz 2 — İterasyon M」**.
+- Katman: `services/collectors/` + `apps/api/routers/sources.py` + `infra/collectors/` + `tests/` — frontend yok.
+- Plan moduna geçme; **`Docs/03` API**, **`Docs/04` §7 collector**, **`Docs/02` raw_items** öncelikli.
 
 ---
 
 ### İterasyon 1 — BaseCollector Framework (2.1)
 
-**Hedef:** Abstract base, Lambda handler wrapper, SQS publish, retry/backoff.
+**Hedef:** `BaseCollector` abstract class, `CollectorResult`/`RawArticle` modeli, SQS publisher, retry/backoff + error handler; unit testler yeşil.
 
-**Minimum bağlam:** `Docs/10` §2.1; `Docs/04` §7; `47-add-collector.mdc`.
+**Teslim çıktısı:**
+- `services/collectors/base_collector.py`
+- `services/collectors/models.py` — `RawArticle` veya `CollectorResult` (`Docs/04` §7)
+- `services/collectors/sqs_publisher.py`
+- `services/collectors/error_handler.py`
+- `services/collectors/handler.py` — Lambda entry stub (COLLECTOR_MAP iskelet)
+- `tests/unit/collectors/test_base_collector.py`
 
-**Bu iterasyonda yok:** Spesifik RSS/email parse.
+**Önkoşullar:**
+- [ ] Faz 0 `sources`, `raw_items` modelleri
+- [ ] Faz 1 `AuditService` (error path için)
 
-**Stop:** [ ] Unit test mock fetch; [ ] SQS mesaj formatı doğru.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §2.1
+2. `Docs/04_BACKEND_SPEC.md` §7 — BaseCollector, handler, retry, SQS format
+3. `Docs/01_DOMAIN_MODEL.md` — Source lifecycle, error_count, retry kuralları
+4. `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — `system.error` / collection hataları
+5. `.cursor/rules/47-add-collector.mdc` — yeni collector checklist
+
+**Uygulama planı:**
+1. `BaseCollector` — `async def collect(source) -> list[RawArticle]` abstract (`Docs/04` §7)
+2. `validate`, `transform`, `dedup_check` default impl — Redis `dedup:hashes` (`Docs/04` §7)
+3. `content_hash` — SHA-256 (`packages/shared/utils/hashing.py` veya collector util)
+4. `sqs_publisher.publish` — JSON mesaj `Docs/04` §579–595 alanları; queue adı `dev-ygip-sqs-{type}` (`30-infra-aws`)
+5. Retry exponential 3 deneme (`Docs/04` §564–577); fail → audit + email stub
+6. Unit: backoff süreleri mock, SQS boto3 mock, duplicate skip
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/collectors/*.py`, `tests/unit/collectors/test_base_collector.py` |
+| Güncelle | `requirements.txt` (boto3, feedparser hazırlık), `pyproject.toml` |
+| Dokunma | RSS/email/gov parse, API router |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| collect → list | `Docs/04` §7 | async |
+| SQS body alanları | `Docs/04` SQS format | `source_id` UUID string |
+| 3 retry sonra error | `Docs/01` §collector | `error_count` artışı handler'da |
+| DLQ queue pair | `30-infra-aws` | publisher queue name config |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/collectors/test_base_collector.py -v`
+- [ ] Collector modülü coverage ≥%70 (`04-quality-gates`)
+- [ ] Deny: validate fail skip item
+
+**Bu iterasyonda yok:**
+- Feed/IMAP parse, source REST API, EventBridge deploy
+
+**Risk / dikkat:**
+- `Docs/10` `CollectorResult` → `Docs/04` **`RawArticle`** / normalized fields
+- `Docs/04` audit `COLLECTION_ERROR` → `system.error` veya domain event (`Docs/07` §9.1)
+
+**Stop:**
+- [ ] `pytest tests/unit/collectors/test_base_collector.py -v`
+- [ ] `ruff` + `mypy services/collectors`
+- [ ] PR/onay → İterasyon 2
 
 ---
 
 ### İterasyon 2 — Source CRUD API (2.2)
 
-**Hedef:** Admin source CRUD + status patch — `Docs/03` §4.
+**Hedef:** `GET/POST/PUT/DELETE /api/v1/sources` + `PATCH .../status` admin-only; config JSONB validation; audit `source.*`.
 
-**Minimum bağlam:** `Docs/10` §2.2; `Docs/03` §4.
+**Teslim çıktısı:**
+- `apps/api/routers/sources.py`
+- `apps/api/services/source_service.py`
+- `apps/api/repositories/source_repository.py`
+- `apps/api/schemas/source.py`
+- `tests/integration/test_source_endpoints.py`
 
-**Bu iterasyonda yok:** Collector deploy.
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] Faz 1 auth/RBAC/audit hazır
 
-**Stop:** [ ] RBAC deny test; [ ] audit SOURCE_* events.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §2.2
+2. `Docs/03_API_CONTRACTS.md` §4 — tüm source endpoint'leri
+3. `Docs/02_DATABASE_SCHEMA.md` §4.2 — sources kolonları
+4. `Docs/01_DOMAIN_MODEL.md` — source_type enum, status geçişleri
+5. `Docs/07_SECURITY_IMPLEMENTATION.md` §5 — admin-only
+
+**Uygulama planı:**
+1. `CreateSourceRequest` — `source_type`, `config`, `polling_interval_minutes`, `category`, `target_phase` (`Docs/03` §4 POST)
+2. Config validation tip bazlı — rss: `feed_url` zorunlu (Pydantic model per type)
+3. `GET` filtreler: `source_type`, `status`, `category`; pagination max 100 (`Docs/03` §4)
+4. `DELETE` — CASCADE raw_items; response `deleted_raw_items_count` (`Docs/03` §4 DELETE)
+5. `PATCH /status` — `error→active` resets `error_count` (`Docs/03` §4 PATCH)
+6. Audit: `source.created`, `source.deleted`, `source.status_changed` (`Docs/01`, `Docs/07` §9.1)
+7. Integration: admin CRUD, viewer 403, invalid config 422
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `routers/sources.py`, `services/source_service.py`, `repositories/source_repository.py`, `schemas/source.py`, integration test |
+| Güncelle | `apps/api/main.py` |
+| Dokunma | Collector implementasyonları |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| source_type values | `Docs/03` §4 | `rest_api` not `api` |
+| status enum | `Docs/02` §3 | active/inactive/error |
+| DELETE cascade | `Docs/02` §4.3 | ON DELETE CASCADE |
+| Viewer deny | `Docs/03` §12 | 403 |
+
+**Kalite kapıları:**
+- [ ] Integration CRUD + RBAC deny
+- [ ] Audit assert on create/delete/status
+- [ ] `pytest tests/integration/test_source_endpoints.py -v`
+
+**Bu iterasyonda yok:**
+- Collector Lambda deploy, otomatik source seed (Faz 1.8 fixture yeterli)
+
+**Risk / dikkat:**
+- `Docs/10` `routers/source.py` → **`sources.py`** (`Docs/04` §2)
+- Agent yasak: onaysız production `sources` kaydı (`Docs/09` §6.1)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_source_endpoints.py -v`
+- [ ] PR/onay → İterasyon 3
 
 ---
 
 ### İterasyon 3 — RSS Collector (2.3)
 
-**Hedef:** RSS/Atom parse, `fixtures/` ile unit test.
+**Hedef:** `RSSCollector` feedparser + content extract + `content_hash`; fixture XML unit test; Lambda handler iskelet.
 
-**Minimum bağlam:** `Docs/10` §2.3.
+**Teslim çıktısı:**
+- `services/collectors/rss_collector.py`
+- `services/collectors/handlers/rss_handler.py` (veya `handler.py` rss branch)
+- `fixtures/rss/sample_feed.xml`, `fixtures/rss/malformed_feed.xml`
+- `tests/unit/collectors/test_rss_collector.py`
 
-**Bu iterasyonda yok:** Email, gov.
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop — en az bir `source_type=rss` test kaydı
 
-**Stop:** [ ] Fixture feed parse; [ ] content_hash üretimi.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §2.3
+2. `Docs/04_BACKEND_SPEC.md` §7 — RSSCollector pattern
+3. `Docs/08_TESTING_STRATEGY.md` §3.1 — collector unit test örneği
+4. `Docs/02_DATABASE_SCHEMA.md` §4.3 — `external_id`, `raw_content`, `content_hash`
+5. `Docs/00_PROJECT_OVERVIEW.md` §6 — RSS kategori örnekleri
+
+**Uygulama planı:**
+1. `RSSCollector.collect` — mock `_fetch` ile fixture XML; feedparser parse
+2. Full-text: trafilatura veya roadmap'teki extraction (`Docs/10` §2.3)
+3. `external_id` — feed entry id/link; `raw_content` normalize (`Docs/02` §4.3)
+4. `content_hash` SHA-256 `raw_content` üzerinden
+5. Unit: valid feed, malformed XML (graceful empty/error), UTF-8 + ISO-8859-9 encoding
+6. Handler: `source_type=rss` active sources loop → collect → SQS (`Docs/04` handler örneği)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `rss_collector.py`, `handlers/rss_handler.py`, `fixtures/rss/*`, unit test |
+| Güncelle | `handler.py` COLLECTOR_MAP, `requirements.txt` (feedparser, trafilatura) |
+| Dokunma | email, gov collectors |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Duplicate hash | `Docs/01` §raw_items | unique (source_id, content_hash) |
+| inactive skip | `Docs/01` §486 | status != active |
+| SQS message | `Docs/04` §579 | title, content, url, metadata |
+| Fixture no live fetch | `Docs/08` §3.1 | patch `_fetch` |
+
+**Kalite kapıları:**
+- [ ] Unit ≥%70 collector parse
+- [ ] Deny: malformed feed no crash
+- [ ] `pytest tests/unit/collectors/test_rss_collector.py -v`
+
+**Bu iterasyonda yok:**
+- Email, gov, infra EventBridge
+
+**Risk / dikkat:**
+- Canlı RSS URL unit testte yasak (`08` mock policy)
+- `url` alanı `Docs/02` raw_items'da yok — `raw_metadata` veya `external_id` ile URL taşı (`Docs/02` §4.3)
+
+**Stop:**
+- [ ] `pytest tests/unit/collectors/test_rss_collector.py -v`
+- [ ] PR/onay → İterasyon 4
 
 ---
 
 ### İterasyon 4 — Email Collector (2.4)
 
-**Hedef:** IMAP newsletter collector (mock integration test).
+**Hedef:** `EmailCollector` IMAP parse (fixture EML); sender filter; HTML/plain body; mock integration.
 
-**Minimum bağlam:** `Docs/10` §2.4.
+**Teslim çıktısı:**
+- `services/collectors/email_collector.py`
+- `services/collectors/handlers/email_handler.py`
+- `fixtures/email/sample_newsletter.eml`, `fixtures/email/plain_text_email.eml`
+- `tests/unit/collectors/test_email_collector.py`
 
-**Bu iterasyonda yok:** Gov, orchestration.
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop
+- [ ] IMAP creds env: `IMAP_*` `.env.example`'a (değersiz)
 
-**Stop:** [ ] Sender filter çalışır; [ ] secret env'den.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §2.4
+2. `Docs/00_PROJECT_OVERVIEW.md` §6 — 9 newsletter gönderici listesi
+3. `Docs/04_BACKEND_SPEC.md` §7 — EmailCollector
+4. `Docs/03_SECURITY` / `07` §8 — secret env, log'da credential yok
+5. `Docs/02_DATABASE_SCHEMA.md` §4.3 — raw item alan eşlemesi
+
+**Uygulama planı:**
+1. Config: `imap_host`, `mailbox`, `allowed_senders[]` JSONB (`source.config`)
+2. `collect` — unit'te IMAP mock; production path aioimaplib veya imaplib
+3. Sender filter — whitelist dışı skip
+4. Body extract HTML → text fallback (trafilatura/html2text)
+5. `content_hash` body üzerinden
+6. Unit: HTML newsletter, plain text, wrong sender filtered
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `email_collector.py`, `handlers/email_handler.py`, fixtures, tests |
+| Güncelle | `.env.example` (IMAP vars), `handler.py` map |
+| Dokunma | gov collector, infra |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Saatlik poll | `Docs/00` §6 | 60 dk EventBridge (iter 6) |
+| Secret handling | `03-security-baseline` | `.env` only dev |
+| Gmail IMAP | `Docs/00` §6 | app password env |
+
+**Kalite kapıları:**
+- [ ] Unit tests yeşil; IMAP mock
+- [ ] Deny: sender not in list → empty result
+
+**Bu iterasyonda yok:**
+- Gerçek Gmail bağlantısı CI'da, gov parser
+
+**Risk / dikkat:**
+- IMAP şifre log/audit'e yazılmaz
+- Integration test optional mock server
+
+**Stop:**
+- [ ] `pytest tests/unit/collectors/test_email_collector.py -v`
+- [ ] PR/onay → İterasyon 5
 
 ---
 
 ### İterasyon 5 — Gov Collector (2.5)
 
-**Hedef:** TCMB/KAP/Resmi Gazete parser varyantları.
+**Hedef:** `GovCollector` TCMB/KAP/Resmi Gazete feed varyantları; Türkçe charset; unit test per format.
 
-**Minimum bağlam:** `Docs/10` §2.5.
+**Teslim çıktısı:**
+- `services/collectors/gov_collector.py`
+- `services/collectors/handlers/gov_handler.py`
+- `fixtures/gov/` — örnek TCMB/KAP/RG XML veya HTML snippet
+- `tests/unit/collectors/test_gov_collector.py`
 
-**Bu iterasyonda yok:** EventBridge wiring.
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop
+- [ ] RSS collector pattern stabil
 
-**Stop:** [ ] Parser unit test per gov type.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §2.5
+2. `Docs/00_PROJECT_OVERVIEW.md` §6 — Resmi kaynaklar 30 dk
+3. `Docs/04_BACKEND_SPEC.md` §7 — GovCollector
+4. `Docs/01_DOMAIN_MODEL.md` — `source_type=gov`
+5. `services/collectors/rss_collector.py` — pattern referans (kod)
+
+**Uygulama planı:**
+1. `GovCollector` — çoğunlukla RSS/Atom; config `gov_subtype`: tcmb|kap|resmi_gazete
+2. Türkçe karakter normalizasyon — NFC; encoding fallback
+3. Metadata extraction — kurum, duyuru no (`raw_metadata` JSONB)
+4. Fixture-driven unit test her subtype
+5. Handler: 30 dk schedule notu (infra iter 6)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `gov_collector.py`, `handlers/gov_handler.py`, `fixtures/gov/*`, tests |
+| Güncelle | `handler.py` COLLECTOR_MAP |
+| Dokunma | EventBridge IaC |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| gov source_type | `Docs/02` §3 enum | `gov` |
+| 30 dk polling | `Docs/00` §6 | official category |
+| structured metadata | `Docs/10` §2.5 | `raw_metadata` |
+
+**Kalite kapıları:**
+- [ ] 3 subtype fixture test
+- [ ] Türkçe karakter assert (ı, ş, ğ)
+
+**Bu iterasyonda yok:**
+- EventBridge/Lambda deploy
+
+**Risk / dikkat:**
+- Harici gov site HTML değişimi — parser defensive, hata → retry path
+
+**Stop:**
+- [ ] `pytest tests/unit/collectors/test_gov_collector.py -v`
+- [ ] PR/onay → İterasyon 6
 
 ---
 
 ### İterasyon 6 — Collector Orchestration (2.6)
 
-**Hedef:** EventBridge cron + Lambda deploy dev; DLQ bağlı.
+**Hedef:** `infra/collectors/` EventBridge cron (RSS 15dk, email 60dk, gov 30dk); Lambda deploy config; SQS→DLQ doğrulama; collector→SQS→`raw_items` integration (moto).
 
-**Minimum bağlam:** `Docs/10` §2.6; `Docs/30-infra-aws.mdc`.
+**Teslim çıktısı:**
+- `infra/collectors/` — rules, Lambda zip/config veya CDK construct
+- `services/collectors/persistence.py` — SQS consumer stub: mesaj → Redis dedup → `raw_items` insert
+- `tests/integration/test_collector_sqs_flow.py` — moto SQS
+- CloudWatch log group tanımı (`/aws/lambda/dev-ygip-collector-*`)
 
-**Bu iterasyonda yok:** Processor consumer (Faz 3).
+**Önkoşullar:**
+- [ ] İterasyon 5 Stop
+- [ ] Faz 0 AWS dev SQS queues (`dev-ygip-sqs-*`)
 
-**Stop:** [ ] Manuel invoke SQS mesajı üretir; [ ] `sources` onaysız prod eklenmedi.
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §2.6
+2. `.cursor/rules/30-infra-aws.mdc` — Lambda, EventBridge, DLQ
+3. `Docs/04_BACKEND_SPEC.md` §7 — handler loop, SQS format
+4. `Docs/02_DATABASE_SCHEMA.md` §4.3 — raw_items insert alanları
+5. `Docs/09_DEV_WORKFLOW.md` §6.1 — agent yasakları (sources prod, AWS delete)
 
-## Required Context
+**Uygulama planı:**
+1. EventBridge rules — cron ifadeleri roadmap ile (`Docs/10` §2.6)
+2. Lambda per type veya tek handler `source_type` param — memory/timeout (rss 256MB/60s örnek)
+3. IAM role `dev-ygip-*` scope (`Docs/09` §7.3)
+4. `persistence.ingest_message` — dedup Redis → insert `raw_items` (`external_id`, `content_hash`, `raw_content`, `status=pending`)
+5. Integration: publish SQS → ingest → DB row count (testcontainers PG veya CI service)
+6. Manuel invoke test dokümante (`infra/README.md`)
 
-- `Docs/10` — Faz 2; `Docs/04` §7; `Docs/03` §4; `Docs/01` §2.2 Source
+**Dosya kapsamı:**
 
-## Done Definition
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `infra/collectors/**`, `persistence.py`, `tests/integration/test_collector_sqs_flow.py` |
+| Güncelle | `infra/README.md`, handler env (queue URLs) |
+| Dokunma | Processor pipeline (`services/processor/`), Faz 3 |
 
-- [ ] 3 collector tipi + source API çalışır
-- [ ] Dev EventBridge schedule tanımlı
-- [ ] Collector unit test ≥%70
+**Spec → kod eşlemesi:**
 
-## Explicit Don'ts
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Queue per type | `Docs/04` §597 | rss, email, gov |
+| DLQ zorunlu | `30-infra-aws` | her queue |
+| raw_items unique | `Docs/02` §4.3 | (source_id, content_hash) |
+| Processor yok | Faz 3 scope | yalnızca raw insert |
 
-- Processor pipeline kodu
-- Onaysız `sources` production kaydı
-- Frontend
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_collector_sqs_flow.py -v` (moto)
+- [ ] `cdk synth` / terraform validate collectors modülü
+- [ ] Collector unit suite regresyon yeşil
+
+**Bu iterasyonda yok:**
+- Processor dedup/normalize (Faz 3), digest, prod deploy
+
+**Risk / dikkat:**
+- `raw_items` insert burada vs processor'da — roadmap 2.6 explicit; Faz 3 consumer buna göre ayarlanır
+- Onaysız `sources` prod kaydı agent yasak
+- AWS `destroy` onaysız yasak
+
+**Stop:**
+- [ ] Integration SQS flow yeşil
+- [ ] IaC plan/synth OK
+- [ ] Faz 2 Done Definition; roadmap işareti
+- [ ] PR: `feat: [MVP-0 / Faz 2 / 2.6] collector orchestration`
 
 ---
 
-Phase done → `Docs/10` Faz 2 tamamlandı.
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 2 (§2.1–2.6)
+- `Docs/04_BACKEND_SPEC.md` §7 — collector framework
+- `Docs/03_API_CONTRACTS.md` §4 — source API
+- `Docs/02_DATABASE_SCHEMA.md` §4.2–4.3 — sources, raw_items
+- `Docs/01_DOMAIN_MODEL.md` — source/collector kuralları
+- `Docs/08_TESTING_STRATEGY.md` §3.1 — collector testleri
+- `.cursor/rules/30-infra-aws.mdc`, `47-add-collector.mdc`
+
+## Done Definition
+
+- [ ] BaseCollector + 3 collector tipi unit test ≥%70
+- [ ] Source CRUD API `Docs/03` §4 uyumlu
+- [ ] Dev EventBridge schedule + Lambda tanımlı (IaC)
+- [ ] SQS + DLQ bağlı; integration mesaj → raw_items
+- [ ] Onaysız production source eklenmedi
+
+## Explicit Don'ts
+
+- Processor pipeline (`services/processor/` iş mantığı)
+- Frontend / mobil
+- Canlı RSS/IMAP unit test içinde
+- Onaysız prod `sources` veya AWS kaynak silme
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 2 tamamlandı işareti.

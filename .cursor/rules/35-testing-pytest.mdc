@@ -32,7 +32,7 @@ fixtures/         → JSON sample RSS, email parse
 
 ## Mock Politikası
 
-- LLM, SES, FCM, external HTTP: mock/stub
+- LLM, SMTP, FCM, external HTTP: mock/stub
 - DB integration: test PostgreSQL (CI service) veya testcontainers
 - Gerçek RSS çekimi unit test'te yasak — `fixtures/` JSON
 

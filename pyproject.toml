@@ -35,11 +35,17 @@ packages = ["apps", "services", "packages"]
 module = "tests.*"
 disallow_untyped_defs = false
 
+[[tool.mypy.overrides]]
+module = "pgvector.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+
+# Alembic: kök `alembic.ini` + `alembic/env.py` (`Docs/09` §8.3)
 
 [tool.coverage.run]
 source = ["apps", "services", "packages"]

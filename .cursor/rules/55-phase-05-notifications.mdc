@@ -1,12 +1,12 @@
 ---
-description: "[Faz 5] Bildirim backend — 5 iterasyon/chat (SES → FCM → token API → orchestration → preferences). Mesajda \"Faz 5 — İterasyon M\" belirt."
+description: "[Faz 5] Bildirim backend — 5 iterasyon/chat (SMTP → FCM → token API → orchestration → preferences). Mesajda \"Faz 5 — İterasyon M\" belirt."
 ---
 
 # Faz 5: Bildirim Backend
 
 ## Goal
 
-Digest hazır bildirimi: SES e-posta ("yeni rapor hazır"), FCM push, token kayıt API, orchestration ve kullanıcı bildirim tercihleri.
+Digest hazır bildirimi: SMTP e-posta ("yeni rapor hazır"), FCM push, token kayıt API, orchestration ve kullanıcı bildirim tercihleri.
 
 ## Feature branch (zorunlu)
 
@@ -18,13 +18,13 @@ Digest hazır bildirimi: SES e-posta ("yeni rapor hazır"), FCM push, token kay�
 
 ---
 
-### İterasyon 1 — SES Mail Service (5.1)
+### İterasyon 1 — SMTP Mail Service (5.1)
 
-**Hedef:** AWS SES wrapper, şablon (içerik link only, hassas veri yok).
+**Hedef:** Kurumsal SMTP wrapper, şablon (içerik link only, hassas veri yok). Dev: Gmail SMTP; prod: kurumsal relay.
 
 **Minimum bağlam:** `Docs/10` §5.1; `Docs/04` §11.
 
-**Stop:** [ ] Mock SES unit test; [ ] Türkçe subject/body.
+**Stop:** [ ] Mock SMTP unit test; [ ] Türkçe subject/body.
 
 ---
 
@@ -72,7 +72,7 @@ Digest hazır bildirimi: SES e-posta ("yeni rapor hazır"), FCM push, token kay�
 
 ## Done Definition
 
-- [ ] Digest sonrası bildirim tetiklenir (dev SES sandbox)
+- [ ] Digest sonrası bildirim tetiklenir (dev Gmail SMTP veya mock)
 - [ ] `notification_logs` yazılır
 - [ ] Integration test mock external servislerle green
 

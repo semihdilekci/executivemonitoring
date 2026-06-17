@@ -199,7 +199,7 @@ def test_create_user_request_rejects_invalid_email():
 
 ## 4. Integration Test Stratejisi
 
-Integration testler gerçek bağımlılıklarla (DB, Redis, API) birlikte çalışır. Dış servisler (LLM API, SES, FCM, dış RSS kaynakları) mock'lanır.
+Integration testler gerçek bağımlılıklarla (DB, Redis, API) birlikte çalışır. Dış servisler (LLM API, SMTP, FCM, dış RSS kaynakları) mock'lanır.
 
 ### 4.1 Veritabanı Testleri
 
@@ -364,7 +364,7 @@ Factory fonksiyonları `tests/factories/` altında tutulur ve `conftest.py`'den 
 | PostgreSQL | Mock (in-memory) | Gerçek (testcontainers) | Integration testlerde gerçek SQL davranışı gerekli |
 | Redis | fakeredis | fakeredis | Gerçek Redis gereksiz — fakeredis tüm komutları destekler |
 | LLM API (Groq, Gemini) | Mock | Mock | Gerçek API çağrısı maliyetli ve nondeterministik |
-| AWS SES (mail) | Mock | Mock (moto) | Gerçek mail gönderimi test ortamında istenmeyen |
+| SMTP (mail) | Mock | Mock | Gerçek mail gönderimi test ortamında istenmeyen |
 | AWS SQS | Mock | Mock (moto) | Gerçek SQS gereksiz — moto tam emülasyon sağlar |
 | AWS S3 | Mock | Mock (moto) | Gerçek S3 gereksiz |
 | FCM (push) | Mock | Mock | Gerçek push gönderimi test ortamında istenmeyen |

@@ -8,19 +8,27 @@ globs:
 
 SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → enrich → score → chunk (embedding)**.
 
+## MVP-0 Enrichment
+
+**Keyword/rules enrichment tek doğruluk kaynağıdır** (`Docs/04` §8.3 MVP-0). LLM enrichment MVP-1'de `LLMEnricherProcessor` swap ile gelir. Processor'da sıfır LLM maliyeti.
+
 ## Aşamalar
 
 | Aşama | Sorumluluk |
 |-------|------------|
-| Dedup | `content_hash` + `source_id` unique; duplicate skip |
-| Normalize | Başlık, body, tarih, dil standart formata |
-| Enrich | Kategori, entity tag, kaynak metadata |
-| Score | Relevance 0–100; threshold altı discard |
-| Chunk | Metin parçalama + embedding → `content_chunks` |
+| Dedup | `content_hash` + `source_id`; Redis SETNX (TTL 7 gün); duplicate skip |
+| Normalize | HTML strip, Unicode NFC, tarih/dil, min 10 kelime |
+| Enrich | Keyword kategori + schema routing → `schema_category`, `topics` |
+| Score | Rule-based `relevance_score` 0.0–1.0 (`Docs/04` §8.4) |
+| Chunk | Metin parçalama + embedding → `content_chunks` (1536 dim) |
+
+## Schema routing (MVP-0)
+
+`macro`/`strategy`/`regulatory` → `news`; `fmcg` → `fmcg`; `finance` → `market`; `geopolitical` → `geo`. `transport` MVP-0'da kullanılmaz.
 
 ## İdempotency
 
-Aynı `external_id` tekrar işlenirse no-op veya upsert — çift kayıt yok.
+Aynı `content_hash` + `source_id` tekrar işlenirse no-op — çift kayıt yok (`Docs/04` §8.6).
 
 ## DLQ
 
@@ -30,14 +38,16 @@ Aynı `external_id` tekrar işlenirse no-op veya upsert — çift kayıt yok.
 
 Processor ≥%80 coverage. Her aşama için:
 - Pozitif: geçerli input → beklenen output
-- Negatif: malformed input → skip/error, pipeline devam
+- Negatif: malformed input → skip/error, pipeline kontrollü durur
 
 ## Anti-pattern'ler
 
+- Processor'da LLM enrichment (MVP-0)
 - Dedup atlanması (digest kalitesi düşer)
 - Sync blocking embedding tüm batch'i kilitlemesi (batch size sınırla)
 - Processor'dan doğrudan kullanıcı bildirimi (notification servisi ayrı)
+- `relevance_score` 0–100 kullanımı (DB CHECK 0–1)
 
 ---
 
-Detay: `Docs/04_BACKEND_SPEC.md` §8; `Docs/01_DOMAIN_MODEL.md` pipeline bölümü
+Detay: `Docs/04_BACKEND_SPEC.md` §8; `Docs/01_DOMAIN_MODEL.md` pipeline bölümü; faz iterasyonları: `@53-phase-03-processor`
