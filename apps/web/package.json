@@ -1,0 +1,6 @@
+{
+  "name": "@ygip/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "YGIP Next.js web dashboard (scaffold — Faz 6'da implement edilir)"
+}
