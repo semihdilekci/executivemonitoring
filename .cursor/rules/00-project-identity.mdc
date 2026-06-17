@@ -1,0 +1,69 @@
+---
+alwaysApply: true
+---
+
+# YGIP — Proje Kimliği
+
+**YıldızHolding Global Intelligence Platform (YGIP):** dış kaynaklardan veri toplama → işleme pipeline → AI digest üretimi → web/mobil sunum + RAG chatbot. Single-tenant dahili sistem; SaaS değil. Tüm UI, e-posta bildirimi ve AI çıktıları **Türkçe**.
+
+## Tech Stack (Pin'li)
+
+| Katman | Teknoloji |
+|--------|-----------|
+| Backend API | Python 3.12+ / FastAPI (async) |
+| ORM / migration | SQLAlchemy + Alembic — **raw SQL yasak** |
+| DB | PostgreSQL 16 + pgvector |
+| Workers | AWS Lambda: collectors, processor, ai-engine |
+| Queue / cache | AWS SQS (+ DLQ), Redis (Upstash) |
+| Scheduler | AWS EventBridge |
+| Web | Next.js (SSR) |
+| Mobil | React Native (iOS + Android) |
+| LLM | Groq + Gemini (round-robin fallback) |
+| Infra | AWS (S3, SES, FCM, Secrets Manager prod) |
+
+Yeni framework/library → `Docs/mimari-kararlar.md` veya ADR güncellemesi gerekir.
+
+## Monorepo Yapısı
+
+```
+apps/api/          → FastAPI HTTP sunucusu
+apps/web/          → Next.js dashboard
+apps/mobile/       → React Native
+services/collectors/   → RSS, email, gov, API worker'lar
+services/processor/    → dedup → normalize → enrich → score
+services/ai-engine/    → digest, RAG, chatbot
+packages/shared/   → SQLAlchemy modeller, enum, util
+infra/             → AWS IaC (CDK/Terraform)
+fixtures/          → dev test verisi (production verisi yasak)
+tests/             → pytest unit + integration
+```
+
+## Domain Terminolojisi
+
+| Terim (kod) | Anlam |
+|-------------|-------|
+| `digest` | AI üretimi haftalık/günlük bülten |
+| `source` | RSS, API, e-posta veya gov kaynağı |
+| `collector` | Dış kaynaktan veri çeken worker |
+| `processor` | Ham veriyi işleyen pipeline worker |
+| `raw_item` | Collector çıktısı ham kayıt |
+| `content_chunk` | RAG için embedding'lenmiş metin parçası |
+| `chat_history` | Chatbot soru/yanıt kaydı |
+| `admin` / `viewer` | RBAC rolleri |
+
+## MVP Kapsamı (MVP-0)
+
+- 3 haftalık bülten (Strateji, Türk Medyası, FMCG) + web + mobil + RAG chatbot
+- Auth (email+şifre, JWT), admin paneli (7 sayfa), bildirim (SES + FCM)
+
+## MVP Kapsamı Dışı
+
+- Workflow / görev yönetimi, kullanıcı dosya yükleme
+- Self-servis kayıt, SaaS multi-tenant
+- Saniye bazlı gerçek zamanlı akış (MVP-2 WebSocket collector'lar)
+- E2E test (MVP-1'de değerlendirilir)
+- Ücretli FMCG kaynakları + SAP (MVP-3)
+
+---
+
+Detay: `Docs/00_PROJECT_OVERVIEW.md`, `Docs/01_DOMAIN_MODEL.md`, `Docs/09_DEV_WORKFLOW.md` §1

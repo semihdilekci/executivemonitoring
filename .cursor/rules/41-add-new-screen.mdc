@@ -1,0 +1,44 @@
+---
+description: Step-by-step for adding a new screen or route. Use when implementing S-* screens from screen catalog.
+---
+
+# Yeni Ekran Prosedürü
+
+## Step 1: Screen Catalog
+
+`Docs/06_SCREEN_CATALOG.md` — `S-<DOMAIN>-<ACTION>` ID, layout tipi, state'ler, TR metinler.
+
+## Step 2: Route
+
+`apps/web/src/app/.../page.tsx` — path `Docs/05` §4 ile uyumlu.
+
+## Step 3: Auth / Rol
+
+- Viewer ekranı: dashboard layout + middleware
+- Admin ekranı: `app/admin/` + `RoleGate` (UX) + backend admin API
+
+## Step 4: Data Hook
+
+`hooks/useXxx.ts` — React Query; loading/error/empty state (`23-react-query`).
+
+## Step 5: Bileşenler
+
+`components/common/` — ekrana özel organism; tekrar kullanılabilir parça `ui/`.
+
+## Step 6: Form (varsa)
+
+`22-forms` — Zod validation, Türkçe mesajlar.
+
+## Step 7: Mobil (gerekirse)
+
+Viewer parity gerekiyorsa `apps/mobile/src/screens/` — MVP-0'da admin mobilde yok.
+
+## Step 8: Checklist
+
+- [ ] `Docs/06_SCREEN_CATALOG.md` bölümü tam
+- [ ] `Docs/05_FRONTEND_SPEC.md` route tablosu güncel
+- [ ] a11y: label, keyboard (`25-a11y`)
+
+---
+
+Detay: `Docs/06_SCREEN_CATALOG.md`; `Docs/05_FRONTEND_SPEC.md` §4

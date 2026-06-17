@@ -1,0 +1,57 @@
+---
+description: RBAC guards — admin/viewer rol kontrolü, FastAPI Depends pattern
+globs:
+  - "apps/api/**/core/deps.py"
+  - "apps/api/**/dependencies/**"
+  - "apps/api/**/guards/**"
+---
+
+# RBAC Guards
+
+İki rol: `admin` (tam erişim), `viewer` (okuma + chat). Rol JWT claim'den; her istekte guard kontrol eder.
+
+## Guard Pattern
+
+```python
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise ForbiddenException(
+            error_code="FORBIDDEN",
+            message="Bu işlem için yönetici yetkisi gereklidir.",
+        )
+    return current_user
+
+# Router kullanımı
+@router.post("/users", dependencies=[Depends(require_admin)])
+async def create_user(...): ...
+```
+
+`get_current_user`: token decode → DB'den user → `is_active` kontrol → 401.
+
+## Yetki Matrisi (özet)
+
+| Alan | admin | viewer |
+|------|-------|--------|
+| Digest okuma | ✓ | ✓ |
+| Chat | ✓ | ✓ |
+| User/Source/Prompt/API key CRUD | ✓ | ✗ |
+| Audit log | ✓ | ✗ |
+| Manuel digest tetikleme | ✓ | ✗ |
+
+Tam matris → `Docs/03` ve `Docs/07` §5.3.
+
+## Test Zorunluluğu
+
+Her yeni korumalı endpoint için:
+- Pozitif: doğru rol → 200
+- Negatif: viewer admin-only → 403
+
+## Anti-pattern'ler
+
+- Rol kontrolü yalnızca frontend'de
+- `if user.role == "admin"` string magic (enum kullan)
+- Admin endpoint'te `get_current_user` without role check
+
+---
+
+Detay: `Docs/07_SECURITY_IMPLEMENTATION.md` §5

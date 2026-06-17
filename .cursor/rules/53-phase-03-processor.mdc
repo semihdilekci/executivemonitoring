@@ -1,0 +1,98 @@
+---
+description: "[Faz 3] Processor pipeline — 6 iterasyon/chat (SQS consumer → dedup → normalize → enrich/score → chunk/embed → entegrasyon). Mesajda \"Faz 3 — İterasyon M\" belirt."
+---
+
+# Faz 3: Processor Pipeline
+
+## Goal
+
+SQS'ten ham veriyi tüketen processor zinciri: dedup → normalize → enrich → score → chunk+embedding → `processed_items` / `content_chunks` tablolarına yazım.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0`. Öncül: Faz 2 (SQS mesajları).
+
+## Bu fazın çalışma modeli
+
+`@53-phase-03-processor` + **「Faz 3 — İterasyon M」**. Yalnızca `services/processor/`.
+
+---
+
+### İterasyon 1 — SQS Consumer Framework (3.1)
+
+**Hedef:** Lambda SQS trigger, batch handling, partial failure, DLQ.
+
+**Minimum bağlam:** `Docs/10` §3.1; `Docs/04` §8.
+
+**Stop:** [ ] Integration SQS mock; [ ] idempotent handler.
+
+---
+
+### İterasyon 2 — Dedup (3.2)
+
+**Hedef:** `content_hash` + `source_id` unique skip.
+
+**Minimum bağlam:** `Docs/10` §3.2; `Docs/01` RawItem.
+
+**Stop:** [ ] Duplicate mesaj no-op; [ ] coverage ≥%80 hedef.
+
+---
+
+### İterasyon 3 — Normalizer (3.3)
+
+**Hedef:** Başlık, body, tarih, dil standart format.
+
+**Minimum bağlam:** `Docs/10` §3.3.
+
+**Stop:** [ ] Malformed input graceful skip.
+
+---
+
+### İterasyon 4 — Enricher ve Scorer (3.4)
+
+**Hedef:** Kategori, tags, relevance_score 0–100.
+
+**Minimum bağlam:** `Docs/10` §3.4.
+
+**Stop:** [ ] Threshold altı discard testi.
+
+---
+
+### İterasyon 5 — Chunker ve Embedding (3.5)
+
+**Hedef:** Metin parçalama + embedding → pgvector.
+
+**Minimum bağlam:** `Docs/10` §3.5; `Docs/04` §6 pgvector helper.
+
+**Stop:** [ ] Embedding dimension 1536; [ ] chunk DB yazımı.
+
+---
+
+### İterasyon 6 — Pipeline Entegrasyonu (3.6)
+
+**Hedef:** Uçtan uca collector→SQS→processor→DB akışı dev'de.
+
+**Minimum bağlam:** `Docs/10` §3.6.
+
+**Bu iterasyonda yok:** Digest üretimi (Faz 4).
+
+**Stop:** [ ] Fixture RSS → processed_item + chunk; [ ] DLQ boş (happy path).
+
+## Required Context
+
+- `Docs/10` Faz 3; `Docs/04` §8; `Docs/17-processor-pipeline.mdc`
+
+## Done Definition
+
+- [ ] Pipeline uçtan uca dev'de çalışır
+- [ ] Processor coverage ≥%80
+- [ ] DLQ alarm notu (opsiyonel log)
+
+## Explicit Don'ts
+
+- LLM/digest/chatbot
+- Frontend
+
+---
+
+Phase done → `Docs/10` Faz 3 tamamlandı.

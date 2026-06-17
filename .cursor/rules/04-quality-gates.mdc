@@ -1,0 +1,50 @@
+---
+alwaysApply: true
+---
+
+# Kalite Kapıları
+
+## Test Coverage (MVP-0)
+
+| Alan | Line hedef | Not |
+|------|------------|-----|
+| Auth + RBAC | ≥%90 | Bypass senaryoları zorunlu |
+| Processor pipeline | ≥%80 | dedup, normalize, score |
+| Collector parse | ≥%70 | Dış kaynak format hataları |
+| AI engine (parse, prompt) | ≥%70 | LLM mock ile |
+| API router | ≥%60 | Validation + guard |
+| Repository | ≥%50 | Karmaşık sorgular öncelikli |
+
+**CI gate:** PR'da coverage düşerse merge engellenir (fail-under=70 genel).
+
+## CI Pipeline (PR Zorunlu)
+
+`Docs/09_DEV_WORKFLOW.md` §5.1 — `.github/workflows/test.yml`: ruff → mypy → pytest unit → pytest integration (PostgreSQL service) → coverage report (fail-under=70).
+
+Security-sensitive değişiklik → ek reviewer.
+
+## Python / TypeScript
+
+- `mypy` strict; `any` ve `# type: ignore` review red
+- `ruff` format + lint green
+- Shared tipler `packages/shared/` — FE/BE duplicate schema yasak
+
+## Frontend Kalite
+
+- Lighthouse (MVP-1+): performance ≥80, a11y ≥90
+- Next.js bundle: initial route JS makul tutulur (<200 KB gzipped hedef)
+- `localStorage` token yasak
+- Web Vitals: LCP < 2.5s, CLS < 0.1
+
+## API Performans Hedefleri
+
+- Dashboard API p95 < 500 ms
+- Chatbot yanıt p95 < 10 s (LLM dahil)
+
+## E2E
+
+MVP-0'da kapsam dışı. MVP-1'de Playwright değerlendirilir.
+
+---
+
+Detay: `Docs/08_TESTING_STRATEGY.md`; `Docs/09_DEV_WORKFLOW.md` §4–5, §9.2

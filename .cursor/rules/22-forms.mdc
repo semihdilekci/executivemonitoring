@@ -1,0 +1,47 @@
+---
+description: Form bileşenleri — validation, admin CRUD formları, submit/error state
+globs:
+  - "apps/web/**/*Form*.tsx"
+  - "apps/web/**/new/**"
+  - "apps/web/**/edit/**"
+---
+
+# Formlar
+
+React Hook Form + Zod (veya proje seçimi `05` ile uyumlu). Tüm label/hata mesajları Türkçe.
+
+## Genel Pattern
+
+```tsx
+const schema = z.object({
+  email: z.string().email("Geçerli bir e-posta girin."),
+  role: z.enum(["admin", "viewer"]),
+});
+
+const form = useForm({ resolver: zodResolver(schema) });
+```
+
+Submit → mutation hook → toast başarı/hata → `error.code` map.
+
+## Admin Formları
+
+| Form | Kritik validasyon |
+|------|-------------------|
+| Kullanıcı oluştur | email unique, şifre politikası |
+| Kaynak ekle | `source_type` → `config` JSON şekli |
+| Prompt düzenle | template variable placeholder |
+| API key | maskeli gösterim, plaintext yalnızca create anı |
+
+## UX State'ler
+
+`idle` → `submitting` (disable) → `success` | `error`. Optimistic update yalnızca düşük riskli toggle'larda.
+
+## Anti-pattern'ler
+
+- Client-side only validation (backend Pydantic zorunlu)
+- API key edit formunda mevcut key plaintext
+- Form submit'te full page reload
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §9; `Docs/06_SCREEN_CATALOG.md` ilgili `S-ADMIN-*`

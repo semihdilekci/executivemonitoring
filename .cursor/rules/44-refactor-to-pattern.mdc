@@ -1,0 +1,36 @@
+---
+description: Step-by-step for refactoring legacy code to YGIP patterns. Use when aligning inconsistent implementations with backend/frontend spec.
+---
+
+# Refactor to Pattern Prosedürü
+
+## Step 1: Hedef Pattern
+
+`Docs/04_BACKEND_SPEC.md` veya `Docs/05_FRONTEND_SPEC.md` — mevcut kod hangi anti-pattern'e düşüyor?
+
+| Koku | Hedef |
+|------|-------|
+| Router'da DB | Service + Repository |
+| Raw SQL | SQLAlchemy select |
+| `fetch` in component | React Query hook |
+| `HTTPException` string | `AppException` + code |
+
+## Step 2: Küçük PR
+
+Tek modül veya katman; davranış değişikliği yok (refactor only).
+
+## Step 3: Test Önce / Sonra
+
+Mevcut test green; yoksa minimal characterization test ekle.
+
+## Step 4: Security Regression
+
+Refactor sonrası RBAC ve audit hâlâ yerinde mi kontrol et (`03` checklist).
+
+## Step 5: Docs
+
+Pattern değişikliği spec'ten sapıyorsa önce `Docs/` güncelle.
+
+---
+
+Detay: `Docs/04_BACKEND_SPEC.md`; `Docs/05_FRONTEND_SPEC.md`

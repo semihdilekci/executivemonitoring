@@ -1,0 +1,109 @@
+---
+description: "[Faz 2] Collector'lar — 6 iterasyon/chat (BaseCollector → source API → RSS → email → gov → orchestration). Mesajda \"Faz 2 — İterasyon M\" belirt."
+---
+
+# Faz 2: Collector'lar
+
+## Goal
+
+`BaseCollector` framework, source CRUD API, RSS/email/gov collector implementasyonları ve EventBridge+Lambda orchestration ile SQS'ye ham veri akışı.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0`. Öncül: Faz 1 (auth + source tablosu).
+
+## Bu fazın çalışma modeli
+
+`@52-phase-02-collectors` + **「Faz 2 — İterasyon M」**. Katman: `services/collectors/` + ilgili API router — frontend yok.
+
+---
+
+### İterasyon 1 — BaseCollector Framework (2.1)
+
+**Hedef:** Abstract base, Lambda handler wrapper, SQS publish, retry/backoff.
+
+**Minimum bağlam:** `Docs/10` §2.1; `Docs/04` §7; `47-add-collector.mdc`.
+
+**Bu iterasyonda yok:** Spesifik RSS/email parse.
+
+**Stop:** [ ] Unit test mock fetch; [ ] SQS mesaj formatı doğru.
+
+---
+
+### İterasyon 2 — Source CRUD API (2.2)
+
+**Hedef:** Admin source CRUD + status patch — `Docs/03` §4.
+
+**Minimum bağlam:** `Docs/10` §2.2; `Docs/03` §4.
+
+**Bu iterasyonda yok:** Collector deploy.
+
+**Stop:** [ ] RBAC deny test; [ ] audit SOURCE_* events.
+
+---
+
+### İterasyon 3 — RSS Collector (2.3)
+
+**Hedef:** RSS/Atom parse, `fixtures/` ile unit test.
+
+**Minimum bağlam:** `Docs/10` §2.3.
+
+**Bu iterasyonda yok:** Email, gov.
+
+**Stop:** [ ] Fixture feed parse; [ ] content_hash üretimi.
+
+---
+
+### İterasyon 4 — Email Collector (2.4)
+
+**Hedef:** IMAP newsletter collector (mock integration test).
+
+**Minimum bağlam:** `Docs/10` §2.4.
+
+**Bu iterasyonda yok:** Gov, orchestration.
+
+**Stop:** [ ] Sender filter çalışır; [ ] secret env'den.
+
+---
+
+### İterasyon 5 — Gov Collector (2.5)
+
+**Hedef:** TCMB/KAP/Resmi Gazete parser varyantları.
+
+**Minimum bağlam:** `Docs/10` §2.5.
+
+**Bu iterasyonda yok:** EventBridge wiring.
+
+**Stop:** [ ] Parser unit test per gov type.
+
+---
+
+### İterasyon 6 — Collector Orchestration (2.6)
+
+**Hedef:** EventBridge cron + Lambda deploy dev; DLQ bağlı.
+
+**Minimum bağlam:** `Docs/10` §2.6; `Docs/30-infra-aws.mdc`.
+
+**Bu iterasyonda yok:** Processor consumer (Faz 3).
+
+**Stop:** [ ] Manuel invoke SQS mesajı üretir; [ ] `sources` onaysız prod eklenmedi.
+
+## Required Context
+
+- `Docs/10` — Faz 2; `Docs/04` §7; `Docs/03` §4; `Docs/01` §2.2 Source
+
+## Done Definition
+
+- [ ] 3 collector tipi + source API çalışır
+- [ ] Dev EventBridge schedule tanımlı
+- [ ] Collector unit test ≥%70
+
+## Explicit Don'ts
+
+- Processor pipeline kodu
+- Onaysız `sources` production kaydı
+- Frontend
+
+---
+
+Phase done → `Docs/10` Faz 2 tamamlandı.

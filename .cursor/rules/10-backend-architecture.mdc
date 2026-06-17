@@ -1,0 +1,66 @@
+---
+description: Backend katmanlı mimari — FastAPI router/service/repository, async I/O, exception hierarchy
+globs:
+  - "apps/api/**/*.py"
+  - "services/**/*.py"
+---
+
+# Backend Mimarisi
+
+FastAPI async monolith + Lambda worker'lar. API istek akışı: **Middleware → Router → Service → Repository → PostgreSQL**.
+
+## Katman Sorumlulukları
+
+| Katman | Yapar | Yapmaz |
+|--------|-------|--------|
+| Router | HTTP, Pydantic validation, `Depends()` | İş mantığı, doğrudan DB |
+| Service | İş kuralları, transaction orchestration | Raw SQLAlchemy sorgusu |
+| Repository | ORM sorguları, CRUD | İş kuralı |
+
+```python
+# ✓ Doğru — router ince
+@router.get("/digests/{digest_id}")
+async def get_digest(
+    digest_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await digest_service.get_by_id(db, digest_id, user)
+
+# ✗ Yanlış — router'da iş mantığı + DB
+@router.get("/digests/{digest_id}")
+async def get_digest(digest_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Digest).where(Digest.id == digest_id))
+    ...
+```
+
+## Async Zorunluluğu
+
+Tüm I/O async: SQLAlchemy async session, `httpx`, `aiobotocore`. CPU-bound (embedding) → `asyncio.to_thread()`.
+
+## Exception Hierarchy
+
+Tüm domain hataları `AppException` alt sınıfları; global handler tutarlı envelope döner:
+
+```json
+{"error": {"code": "NOT_FOUND", "message": "...", "details": {}}}
+```
+
+Beklenmeyen hata → `INTERNAL_ERROR`; production'da stack trace gizli.
+
+## Dependency Factory
+
+Ortak `Depends` tanımları `apps/api/core/deps.py`: `get_db`, `get_current_user`, `require_admin`, `pagination_params`.
+
+Session: request başına tek session; commit/rollback otomatik — serviste explicit `commit()` yok.
+
+## Anti-pattern'ler
+
+- Router'da `db.execute()` doğrudan
+- Sync blocking call async handler içinde
+- `HTTPException` string detail (error code yok)
+- Servisler arası circular import
+
+---
+
+Detay: `Docs/04_BACKEND_SPEC.md` §1–6, §13

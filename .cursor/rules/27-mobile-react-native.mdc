@@ -1,0 +1,47 @@
+---
+description: React Native mobil — navigation, auth, FCM push, API client paylaşımı
+globs:
+  - "apps/mobile/**"
+---
+
+# Mobil (React Native)
+
+iOS + Android tek codebase. Enterprise dağıtım; store self-servis değil.
+
+## Klasör Yapısı (özet)
+
+```
+apps/mobile/src/
+  screens/       → Login, Home, DigestDetail, Chat
+  navigation/    → stack + tab
+  services/      → api, auth, notifications
+  components/
+```
+
+## Auth
+
+Web ile aynı JWT API. Token: secure storage (Keychain/Keystore) — AsyncStorage plaintext token yasak.
+
+## Navigasyon
+
+Auth stack ↔ Main stack. Deep link: digest detay `/digests/:id`.
+
+## Push (FCM)
+
+1. Login sonrası FCM token al
+2. `POST /api/v1/notifications/fcm-token` kaydet
+3. Foreground/background handler → digest hazır bildirimi → deep link
+
+## Parity
+
+Viewer akışı web ile özdeş: liste → detay → chat. Admin ekranları MVP-0'da mobilde yok (web only).
+
+## Anti-pattern'ler
+
+- Web-only cookie auth mobilde
+- Push token kaydı login öncesi
+- Ham HTML digest render (native bileşen veya WebView sanitize)
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §3, §10; `Docs/00_PROJECT_OVERVIEW.md` başarı kriteri #3

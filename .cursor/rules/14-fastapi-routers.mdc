@@ -1,0 +1,50 @@
+---
+description: FastAPI routers — decorator stack, Pydantic schemas, pagination, OpenAPI
+globs:
+  - "apps/api/**/routers/*.py"
+---
+
+# FastAPI Routers
+
+Router dosyaları yalnızca HTTP sınırı. Prefix: `/api/v1/{resource}`.
+
+## Standart Endpoint İskeleti
+
+```python
+@router.get("", response_model=DigestListResponse)
+async def list_digests(
+    pagination: PaginationParams = Depends(pagination_params),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> DigestListResponse:
+    return await digest_service.list(db, user, pagination)
+```
+
+## Response Envelope
+
+Liste: `{ "items": [...], "next_cursor": "..." }`
+Tekil: doğrudan resource DTO
+Hata: `{ "error": { "code", "message", "details" } }`
+
+## Pagination
+
+Cursor opaque (base64 `id`/`created_at`). Client decode etmez. `limit` default 20, max 100.
+
+## Validation
+
+Request body → Pydantic `BaseModel`; response → `response_model`. Extra field forbid.
+
+## OpenAPI
+
+FastAPI otomatik şema üretir. `summary`, `description` admin/debug endpoint'lerde doldur.
+
+## Anti-pattern'ler
+
+- İş mantığı router'da (>5 satır → service'e taşı)
+- `dict` return type (response_model yok)
+- Admin endpoint'te `Depends` eksik
+- 404 yerine 403 (iç sistemde tercih: explicit 403)
+
+---
+
+Detay: `Docs/03_API_CONTRACTS.md` §1; `Docs/04_BACKEND_SPEC.md` §3–4

@@ -1,0 +1,56 @@
+---
+description: Collector framework — BaseCollector, Lambda handler, SQS mesaj formatı, retry
+globs:
+  - "services/collectors/**"
+---
+
+# Collector Framework
+
+Dış kaynaktan veri çeken Lambda worker'lar. Her collector `BaseCollector` extend eder.
+
+## BaseCollector Sözleşmesi
+
+```python
+class BaseCollector(ABC):
+  async def fetch(self) -> list[RawItemPayload]: ...  # dış kaynak I/O
+  async def parse(self, raw: Any) -> RawItemPayload: ...  # normalize ham
+  def content_hash(self, item: RawItemPayload) -> str: ...  # dedup input
+```
+
+Lambda handler wrapper: config yükle → `fetch` → `parse` → SQS'ye batch publish → metrics/audit.
+
+## SQS Mesaj Formatı
+
+```json
+{
+  "source_id": "uuid",
+  "external_id": "url-or-message-id",
+  "content_hash": "sha256...",
+  "payload": { "title": "...", "body": "...", "published_at": "..." },
+  "collected_at": "ISO8601"
+}
+```
+
+Topic-per-type queue; DLQ zorunlu.
+
+## Retry ve Backoff
+
+Geçici hata (5xx, timeout): exponential backoff, max 3 deneme. Kalıcı hata: `source.error_count` artır, threshold'da `status=error`.
+
+## Yeni Collector Checklist
+
+- [ ] `BaseCollector` implement
+- [ ] `source_type` enum ile eşleşir
+- [ ] Unit test: fixture JSON ile parse
+- [ ] Integration: mock HTTP/IMAP
+- [ ] EventBridge cron veya manuel trigger kaydı
+
+## Anti-pattern'ler
+
+- Collector içinde digest/AI çağrısı (sorumluluk ayrımı)
+- Ham HTML/log SQS mesajına gereksiz yere tam kopya (boyut)
+- Production API key hardcode
+
+---
+
+Detay: `Docs/04_BACKEND_SPEC.md` §7; `Docs/01_DOMAIN_MODEL.md` §2.2–2.3

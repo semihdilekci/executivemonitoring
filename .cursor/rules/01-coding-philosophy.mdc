@@ -1,0 +1,61 @@
+---
+alwaysApply: true
+---
+
+# Kodlama Felsefesi — YGIP
+
+Bu proje **faz-bazlı iterasyon** ile geliştirilir. Agent kod yazar; developer yön verir, review eder, merge onaylar. Agent tek başına `main`'e merge edemez.
+
+## MVP Scope Disiplini
+
+- Yalnızca `Docs/00` ve `Docs/10` MVP-0 in-scope maddelerini implement et
+- Güvenlik baseline (`03`), audit, RBAC guard ilk günden zorunlu — "sonra" yasak
+- Over-abstraction yasak — mevcut iterasyon deliverable'ına odaklan
+- 500+ satır PR → böl
+
+## Iterasyon Disiplini
+
+- **1 Composer oturumu = 1 iterasyon** (~3–8 dosya) — `Docs/10` + `Docs/09` §6.2
+- Tek iterasyonda **tek katman**: infra VEYA backend VEYA frontend VEYA mobil
+- İterasyonlar numaralı sırayla; atlama yok
+- Test ayrı iterasyon değil — her iterasyona gömülü
+- Agent iterasyon bitince otomatik sonrakine geçmez — onay bekler (`Docs/09` §6.3)
+
+## Test-First
+
+Her feature için:
+1. Pozitif senaryo testi
+2. En az bir negatif deny testi (auth, RBAC, collector parse hatası)
+3. `ruff` + `mypy` + `pytest` green
+
+Kritik modüller (auth, RBAC, dedup, digest üretim): ≥%70 line coverage (`04` tablosu).
+
+## Self-Review Checklist (Her Değişiklik)
+
+- [ ] RBAC guard tüm yeni internal endpoint'lerde (`require_admin` / `require_authenticated`)
+- [ ] State-changing işlem → audit log **aynı transaction'da**
+- [ ] Hassas alan (API key) encrypt/Secrets Manager — plaintext log/response yok
+- [ ] Yeni env var → `.env.example` güncellendi
+- [ ] Yeni tablo → Alembic migration
+- [ ] Yeni endpoint → OpenAPI şeması otomatik (FastAPI) + `Docs/03` güncellendi
+- [ ] Yeni collector → `BaseCollector` implement
+- [ ] Frontend admin UI → yalnızca UX; backend enforcement zorunlu
+
+## Agent Yasak Listesi (onaysız)
+
+`Docs/09_DEV_WORKFLOW.md` §6.1 — özet:
+
+1. `main` branch'e push/merge
+2. `.env` veya secrets dosyasına API key yazma
+3. Production'da onaysız migration
+4. `sources` tablosuna onaysız kayıt ekleme/silme
+5. LLM prompt şablonunu onaysız production'a alma
+6. AWS kaynak silme komutu
+
+## Human Gate (Faz Sonu)
+
+Faz iterasyonları tamam · coverage threshold · pattern consistency (`04`) · staging smoke test.
+
+---
+
+Detay: `Docs/09_DEV_WORKFLOW.md` §6; `Docs/10_IMPLEMENTATION_ROADMAP.md` §Geliştirme Prensipleri

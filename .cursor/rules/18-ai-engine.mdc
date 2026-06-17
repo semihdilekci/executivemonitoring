@@ -1,0 +1,53 @@
+---
+description: AI engine — LLM client round-robin, digest generator, RAG chatbot, prompt templates
+globs:
+  - "services/ai-engine/**"
+---
+
+# AI Engine
+
+Digest üretimi (scheduled) + RAG chatbot (on-demand). Multi-provider: Groq + Gemini round-robin fallback.
+
+## LLM Client
+
+```python
+# ✓ Doğru — tüm provider fail → NO_ACTIVE_LLM_PROVIDER / ALL_LLM_PROVIDERS_FAILED
+response = await llm_client.complete(
+    messages=messages,
+    model_config=settings.get_active_model(),
+)
+await api_usage_service.log(tokens=response.usage, provider=response.provider)
+```
+
+Key tükenmesi/kota → sıradaki aktif key. Kullanım `api_usage_logs`.
+
+## Digest Generator
+
+1. Zaman penceresindeki `processed_items` seç (bülten tipine göre kategori)
+2. Prompt template render (`prompt_templates` tablosu)
+3. LLM çağrısı → structured parse → `digests` + `digest_sections`
+4. HTML snapshot S3'e
+5. Bildirim orchestration tetikle
+
+## RAG Chatbot
+
+1. Soru → embedding
+2. `pgvector` similarity search top-k `content_chunks`
+3. Context + soru → LLM
+4. Yanıt + `sources` JSON → `chat_history`
+
+Kaynak referansları yanıtta zorunlu.
+
+## Prompt Şablon
+
+Admin panelinden düzenlenir; production'a onaysız deploy yasak (`01`).
+
+## Anti-pattern'ler
+
+- Tüm DB'yi LLM context'ine gömmek
+- LLM çıktısını validate etmeden DB'ye yazmak
+- API key plaintext DB/log
+
+---
+
+Detay: `Docs/04_BACKEND_SPEC.md` §9

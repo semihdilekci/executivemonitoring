@@ -1,0 +1,56 @@
+---
+description: SQLAlchemy models ve Alembic migrations — naming, schema bölümleme, raw SQL yasağı
+globs:
+  - "packages/shared/models/**"
+  - "packages/shared/**/models/**"
+  - "alembic/**"
+---
+
+# Database — SQLAlchemy + Alembic
+
+PostgreSQL 16 + pgvector. Tüm erişim ORM parametrik sorgu — **raw SQL yasak**.
+
+## Naming
+
+| Öğe | Kural |
+|-----|-------|
+| Tablo | `snake_case` çoğul — `raw_items` |
+| PK | `id UUID DEFAULT gen_random_uuid()` |
+| FK | `{singular}_id` |
+| Index | `idx_{table}_{cols}` |
+| Enum type | `{table_singular}_{col}_enum` |
+
+## Schema Bölümleme
+
+- `public`: sistem tabloları (`users`, `sources`, `digests`, `audit_logs`, …)
+- `news`, `market`, `geo`, …: `processed_items` domain schema'ları
+
+## Model Kuralları
+
+- `created_at TIMESTAMPTZ DEFAULT now()`; `updated_at` SQLAlchemy `onupdate`
+- Boolean: `NOT NULL` + explicit `DEFAULT`
+- JSONB: boş için `'{}'::jsonb` veya `'[]'::jsonb`
+
+## Migration Disiplini
+
+1. Model değişikliği → `alembic revision --autogenerate` → manuel review
+2. Migration dosyası: tek concern, geri alınabilir `downgrade`
+3. Production migration → kullanıcı onayı (`01` yasak listesi)
+
+```python
+# ✓ Doğru
+result = await session.execute(
+    select(RawItem).where(RawItem.source_id == source_id)
+)
+
+# ✗ Yanlış
+await session.execute(text(f"SELECT * FROM raw_items WHERE source_id = '{source_id}'"))
+```
+
+## pgvector
+
+`content_chunks.embedding` — similarity search repository helper'da; index `ivfflat` veya `hnsw` migration'da.
+
+---
+
+Detay: `Docs/02_DATABASE_SCHEMA.md`; `Docs/04_BACKEND_SPEC.md` §6

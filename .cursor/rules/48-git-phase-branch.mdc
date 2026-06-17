@@ -1,0 +1,43 @@
+---
+description: Step-by-step for roadmap phase implementation branch. Use when starting MVP-0 Faz N work from IMPLEMENTATION_ROADMAP.
+---
+
+# Faz Branch Prosedürü
+
+## Step 1: Branch
+
+```bash
+git checkout main && git pull
+git checkout -b feature/mvp-0   # MVP-0 tüm fazlar bu branch'te
+```
+
+Tüm MVP-0 `feature/mvp-0` üzerinde; faz bitene kadar `main`'e merge yok (`Docs/09` §2).
+
+## Step 2: Faz Kuralı Oku
+
+`@50-phase-00-...` … `@58-phase-08-...` (phase-creator ile üretilir). Mesajda **「Faz N — İterasyon M」** belirt.
+
+## Step 3: Iterasyon Disiplini
+
+- Tek oturum = tek iterasyon (`Docs/10`)
+- Tek katman: infra | backend | frontend | mobile
+- Sıra atlanmaz
+
+## Step 4: Iterasyon Çıktısı
+
+- Kod + test aynı iterasyonda
+- `ruff` + `mypy` + `pytest` green
+
+## Step 5: PR
+
+PR başlığı: `feat: [MVP-0 / Faz N / N.M] …` (`Docs/09` §4.1). Checklist: `Docs/09` §4.2.
+
+`main`'e PR: CI pass + 1 approval. Agent merge etmez (`Docs/09` §6.1).
+
+## Step 6: Faz Tamamlanınca
+
+Roadmap'te faz done; sonraki faz branch'te devam veya merge sonrası yeni faz branch.
+
+---
+
+Detay: `Docs/09_DEV_WORKFLOW.md` §2–4; `Docs/10_IMPLEMENTATION_ROADMAP.md` §Geliştirme Prensipleri

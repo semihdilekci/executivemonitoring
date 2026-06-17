@@ -1,0 +1,57 @@
+---
+description: TanStack React Query — hooks, cache invalidation, loading/error/empty states
+globs:
+  - "apps/web/**/hooks/**"
+  - "apps/web/**/*Query*.ts"
+  - "apps/web/**/*Query*.tsx"
+---
+
+# React Query
+
+Server state tek kaynağı. Her API resource için `useXxx` hook.
+
+## Hook İskeleti
+
+```typescript
+export function useDigests(params?: DigestListParams) {
+  return useQuery({
+    queryKey: ["digests", params],
+    queryFn: () => apiClient.get<DigestListResponse>("/digests", { params }),
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateUserRequest) => apiClient.post("/users", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+```
+
+## Query Key Disiplini
+
+`[resource]`, `[resource, id]`, `[resource, filters]` — invalidation granular.
+
+## UI State Handling
+
+| Durum | UI |
+|-------|-----|
+| `isLoading` | Skeleton (`S-LOADING-SKELETONS`) |
+| `isError` | Türkçe hata + retry |
+| `data.items.length === 0` | Empty state (`S-EMPTY-STATES`) |
+
+## Cursor Pagination
+
+`next_cursor` server'dan; `useInfiniteQuery` veya "Daha fazla" butonu.
+
+## Anti-pattern'ler
+
+- `useEffect` + `fetch` data loading
+- Global mutation sonrası tüm cache invalidate
+- 401'de sonsuz retry (refresh interceptor sınırı)
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §5–8

@@ -1,0 +1,43 @@
+---
+description: Processor pipeline — SQS consumer, dedup, normalize, enrich, score, idempotency
+globs:
+  - "services/processor/**"
+---
+
+# Processor Pipeline
+
+SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → enrich → score → chunk (embedding)**.
+
+## Aşamalar
+
+| Aşama | Sorumluluk |
+|-------|------------|
+| Dedup | `content_hash` + `source_id` unique; duplicate skip |
+| Normalize | Başlık, body, tarih, dil standart formata |
+| Enrich | Kategori, entity tag, kaynak metadata |
+| Score | Relevance 0–100; threshold altı discard |
+| Chunk | Metin parçalama + embedding → `content_chunks` |
+
+## İdempotency
+
+Aynı `external_id` tekrar işlenirse no-op veya upsert — çift kayıt yok.
+
+## DLQ
+
+3 başarısız deneme → DLQ. DLQ handler alert + manual replay prosedürü.
+
+## Test Önceliği
+
+Processor ≥%80 coverage. Her aşama için:
+- Pozitif: geçerli input → beklenen output
+- Negatif: malformed input → skip/error, pipeline devam
+
+## Anti-pattern'ler
+
+- Dedup atlanması (digest kalitesi düşer)
+- Sync blocking embedding tüm batch'i kilitlemesi (batch size sınırla)
+- Processor'dan doğrudan kullanıcı bildirimi (notification servisi ayrı)
+
+---
+
+Detay: `Docs/04_BACKEND_SPEC.md` §8; `Docs/01_DOMAIN_MODEL.md` pipeline bölümü

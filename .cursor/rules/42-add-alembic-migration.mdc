@@ -1,0 +1,42 @@
+---
+description: Step-by-step for Alembic database migration. Use when changing SQLAlchemy models or Docs/02 schema.
+---
+
+# Alembic Migration Prosedürü
+
+## Step 1: Spec
+
+`Docs/02_DATABASE_SCHEMA.md` — tablo/kolon/index/enum tanımı önce docs'ta.
+
+## Step 2: Model
+
+`packages/shared/models/{entity}.py` — SQLAlchemy model, relationship, enum.
+
+## Step 3: Revision
+
+```bash
+alembic revision --autogenerate -m "add_{table}_table"
+```
+
+Manuel review: drop table/data loss yok; `upgrade`/`downgrade` simetrik.
+
+## Step 4: pgvector / Schema
+
+Domain schema (`news`, `market`) için `op.execute('CREATE SCHEMA IF NOT EXISTS news')` migration'da.
+
+## Step 5: Seed (opsiyonel)
+
+`fixtures/` veya seed script — production verisi kullanma.
+
+## Step 6: Test
+
+`tests/integration/db/` — migration apply + model CRUD.
+
+## Step 7: Docs
+
+- [ ] `Docs/02_DATABASE_SCHEMA.md` güncellendi
+- [ ] Production migration → kullanıcı onayı (`Docs/09` §6.1, §8.2)
+
+---
+
+Detay: `Docs/02_DATABASE_SCHEMA.md`; `Docs/09_DEV_WORKFLOW.md` §8; `.cursor/rules/15-database-alembic.mdc`

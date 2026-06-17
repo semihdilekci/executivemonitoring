@@ -1,0 +1,40 @@
+---
+description: UI bileşenleri — atom/organism ayrımı, responsive, Türkçe metin
+globs:
+  - "apps/web/src/components/**"
+---
+
+# Bileşen Mimarisi
+
+## Katmanlar
+
+| Klasör | İçerik | Örnek |
+|--------|--------|-------|
+| `components/ui/` | Atom, stil varyantı | `Button`, `Input`, `Badge` |
+| `components/common/` | Domain organism | `DigestCard`, `ChatMessage`, `AdminTable` |
+
+## Kurallar
+
+- Props interface export; `children` explicit tip
+- Stil: Tailwind veya proje CSS modülü (`05` ile tutarlı)
+- Icon + metin birlikte → `aria-label` veya görünür text
+
+## Digest / Chat Özel
+
+- `DigestCard`: bülten tipi badge, tarih, başlık truncate
+- `ChatMessage`: kullanıcı/assistant ayrımı, kaynak linkleri listesi
+- `ConfirmDialog` (`S-CONFIRM-DIALOG`): destructive action zorunlu
+
+## Responsive
+
+Mobile-first; admin tablolar horizontal scroll veya card fallback <768px.
+
+## Anti-pattern'ler
+
+- 500+ satır god component (parçala)
+- API çağrısı ui/ atom içinde
+- İngilizce kullanıcıya görünen string
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §11; `Docs/06_SCREEN_CATALOG.md` Ortak Bileşenler

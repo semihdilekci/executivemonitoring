@@ -1,0 +1,37 @@
+---
+description: Step-by-step for recording architecture decisions. Use when making stack changes or resolving open decisions in mimari-kararlar.md.
+---
+
+# Mimari Karar (ADR) Prosedürü
+
+## Step 1: Karar Gerekli mi?
+
+Stack pin değişikliği, güvenlik modeli, entegrasyon seçimi → kayıt zorunlu. Küçük impl detayı → yalnızca spec yeterli.
+
+## Step 2: `Docs/mimari-kararlar.md`
+
+Yeni karar bloğu:
+
+```markdown
+**Karar [XX-NNN]:** <tek cümle karar>
+
+<Gerekçe 2-3 cümle. Alternatifler ve neden elendi.>
+```
+
+Açık karar kapanıyorsa §18 tablosundan kaldır.
+
+## Step 3: İlgili Spec
+
+`Docs/00`–`10` etkilenen bölümler güncellenir (docs kazanır).
+
+## Step 4: Rules (gerekirse)
+
+Pin değişikliği → `00-project-identity.mdc` ve ilgili glob rule footer referansı.
+
+## Step 5: Versiyon
+
+`mimari-kararlar.md` versiyon geçmişi tablosuna satır ekle.
+
+---
+
+Detay: `Docs/mimari-kararlar.md` §Nasıl Kullanılır

@@ -1,0 +1,55 @@
+---
+alwaysApply: true
+---
+
+# Güvenlik Baseline — Her Değişiklikte Zorunlu
+
+Hedef: OWASP ASVS L1. Skip yasak.
+
+## 1. Kimlik Doğrulama
+
+- [ ] Email + şifre; self-servis kayıt yok — kullanıcı yalnızca admin oluşturur
+- [ ] JWT access + refresh token; httpOnly cookie (web), secure storage (mobil)
+- [ ] Access token varsayılan 60 dk, refresh 30 gün (admin ayarlanabilir)
+- [ ] Pasif kullanıcı (`is_active=false`) → 401
+- [ ] Şifre: min 8 karakter, 1 büyük + 1 rakam; bcrypt cost ≥12
+- [ ] Auth endpoint'lerinde rate limit (10 req/dk/IP)
+
+## 2. Yetkilendirme (RBAC)
+
+- [ ] Her korumalı endpoint: `Depends(get_current_user)` veya `Depends(require_admin)`
+- [ ] `admin`: tüm endpoint'ler; `viewer`: salt okuma (digest, chat, profil)
+- [ ] Yetkisiz erişim → 403 `FORBIDDEN` (bilgi sızıntısı için 404 kullanma — iç sistem)
+- [ ] JWT claim'den rol; MVP-0'da ek permission cache gerekmez
+- [ ] Admin UI gizleme yalnızca UX — backend guard zorunlu
+
+## 3. Veri ve Secret
+
+- [ ] Tüm DB erişimi SQLAlchemy parametrik sorgu — **raw SQL yasak**
+- [ ] LLM API key'leri prod'da AWS Secrets Manager; dev `.env` (repo'ya commit yok)
+- [ ] Plaintext şifre, token, API key log/audit/error response'a sızmıyor
+- [ ] HTTPS zorunlu; HTTP → HTTPS redirect
+
+## 4. Input ve API
+
+- [ ] Request body Pydantic schema ile validate; tanımsız alan reddedilir
+- [ ] Pagination `limit` max 100 (DoS koruması)
+- [ ] `X-Request-ID` her response'ta
+- [ ] CORS: yalnızca bilinen origin'ler
+
+## 5. HTTP Başlıkları (Web)
+
+- [ ] HSTS, `X-Content-Type-Options`, `X-Frame-Options`, CSP (Next.js middleware)
+- [ ] React default escape; `dangerouslySetInnerHTML` yasak
+- [ ] Token localStorage'a yazma — httpOnly cookie veya secure native storage
+
+## 6. Audit ve KVKK
+
+- [ ] State-changing işlem → `audit_logs` aynı DB transaction'ında
+- [ ] Audit payload hassas içerik kopyalamaz — metadata + event_type
+- [ ] Kişisel veri minimum (email, full_name); production verisi dev'e taşınmaz
+- [ ] Non-prod: `fixtures/` sentetik veri
+
+---
+
+Detay: `Docs/07_SECURITY_IMPLEMENTATION.md`; PR review: `Docs/09_DEV_WORKFLOW.md` §9.1

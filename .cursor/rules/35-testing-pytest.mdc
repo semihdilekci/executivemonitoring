@@ -1,0 +1,56 @@
+---
+description: pytest — unit/integration, fixtures, mock politikası, coverage
+globs:
+  - "tests/**"
+  - "**/test_*.py"
+  - "**/*_test.py"
+---
+
+# Testing (pytest)
+
+Piramit: unit (~70%) → integration (~25%) → E2E (MVP-0 yok).
+
+## Dosya Organizasyonu
+
+```
+tests/
+  unit/           → collectors, processor, ai, auth
+  integration/    → api, db, sqs
+  factories/      → test data factory
+  conftest.py     → db session, client fixtures
+fixtures/         → JSON sample RSS, email parse
+```
+
+## Zorunlu Senaryolar
+
+| Modül | Min test |
+|-------|----------|
+| Auth | login ok, wrong password, inactive user |
+| RBAC | viewer → admin endpoint 403 |
+| Dedup | duplicate hash skip |
+| Digest | prompt parse, empty input |
+
+## Mock Politikası
+
+- LLM, SES, FCM, external HTTP: mock/stub
+- DB integration: test PostgreSQL (CI service) veya testcontainers
+- Gerçek RSS çekimi unit test'te yasak — `fixtures/` JSON
+
+## Çalıştırma
+
+```bash
+ruff check .
+mypy apps packages services
+pytest tests/unit -q
+pytest tests/integration -q --cov --cov-fail-under=70
+```
+
+## Anti-pattern'ler
+
+- Test olmadan auth/RBAC değişikliği
+- Production DB connection test'te
+- Sleep ile async bekleme (`pytest-asyncio` + await)
+
+---
+
+Detay: `Docs/08_TESTING_STRATEGY.md`; komutlar: `Docs/09_DEV_WORKFLOW.md` §11

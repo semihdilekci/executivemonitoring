@@ -1,0 +1,32 @@
+---
+description: Web erişilebilirlik — WCAG hedefleri, keyboard nav, aria
+globs:
+  - "apps/web/**/*.tsx"
+---
+
+# Erişilebilirlik (a11y)
+
+Hedef: Lighthouse a11y ≥90 (MVP-1+ ölçüm; MVP-0'da temel kurallar zorunlu).
+
+## Zorunlu Kontroller
+
+- [ ] Tüm form input'larda `<label>` veya `aria-label`
+- [ ] Focus ring görünür (keyboard nav)
+- [ ] Renk kontrastı WCAG AA (metin/arka plan)
+- [ ] Modal: focus trap + Escape kapatma
+- [ ] Tablo: `<th scope="col">` admin listelerde
+- [ ] Loading: `aria-busy` veya skeleton `aria-hidden`
+
+## Chatbot
+
+Mesaj listesi `role="log"` `aria-live="polite"`. Yeni assistant mesajı screen reader'a duyurulur.
+
+## Anti-pattern'ler
+
+- `div` onClick without keyboard handler
+- Icon-only button without `aria-label`
+- Otomatik oynayan animasyon (prefers-reduced-motion ignore)
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §12

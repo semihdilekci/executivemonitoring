@@ -1,0 +1,138 @@
+---
+description: "[Faz 1] Backend core — 8 iterasyon/chat (FastAPI → JWT → auth API → users → audit → settings → password reset → seed). Mesajda \"Faz 1 — İterasyon M\" belirt."
+---
+
+# Faz 1: Backend Core
+
+## Goal
+
+FastAPI uygulama iskeleti, JWT auth, kullanıcı CRUD, audit log, system settings, password reset ve dev seed scriptleri çalışır durumda. Faz 2 collector'ların API bağımlılığı hazır.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0` (`Docs/09_DEV_WORKFLOW.md` §2). Faz 0 tamamlanmış olmalı (DB + CI).
+
+## Bu fazın çalışma modeli
+
+`@51-phase-01-backend-core` + **「Faz 1 — İterasyon M」**. Yalnızca `apps/api/` + `packages/shared/` + `tests/` — frontend/mobil yok.
+
+---
+
+### İterasyon 1 — FastAPI Boilerplate (1.1)
+
+**Hedef:** App factory, lifespan, middleware zinciri, health/ready, exception handler.
+
+**Minimum bağlam:** `Docs/10` §1.1; `Docs/04_BACKEND_SPEC.md` §1–3.
+
+**Bu iterasyonda yok:** Auth, domain router'lar.
+
+**Stop:** [ ] `/health` 200; [ ] integration test; [ ] `ruff` + `mypy` green.
+
+---
+
+### İterasyon 2 — JWT Üretim/Doğrulama (1.2)
+
+**Hedef:** `core/security.py` — access/refresh token create/decode, bcrypt password.
+
+**Minimum bağlam:** `Docs/10` §1.2; `Docs/07_SECURITY_IMPLEMENTATION.md` §3.
+
+**Bu iterasyonda yok:** Login endpoint.
+
+**Stop:** [ ] Unit test token round-trip; [ ] expired token 401.
+
+---
+
+### İterasyon 3 — Auth Endpoints (1.3)
+
+**Hedef:** login, refresh, logout — `Docs/03` §2.
+
+**Minimum bağlam:** `Docs/10` §1.3; `Docs/03_API_CONTRACTS.md` §2.
+
+**Bu iterasyonda yok:** User CRUD.
+
+**Stop:** [ ] Integration: login→refresh→logout; [ ] audit USER_LOGIN.
+
+---
+
+### İterasyon 4 — User CRUD (1.4)
+
+**Hedef:** Admin user CRUD + `GET /users/me`.
+
+**Minimum bağlam:** `Docs/10` §1.4; `Docs/03` §3.
+
+**Bu iterasyonda yok:** Password reset.
+
+**Stop:** [ ] Viewer admin endpoint 403; [ ] `password_hash` response'ta yok.
+
+---
+
+### İterasyon 5 — Audit Log (1.5)
+
+**Hedef:** `AuditService` + admin list API.
+
+**Minimum bağlam:** `Docs/10` §1.5; `Docs/07` §9.
+
+**Bu iterasyonda yok:** Settings.
+
+**Stop:** [ ] Mutating işlemde audit aynı transaction; [ ] viewer audit 403.
+
+---
+
+### İterasyon 6 — System Settings (1.6)
+
+**Hedef:** Settings read/update API (admin).
+
+**Minimum bağlam:** `Docs/10` §1.6; `Docs/03` settings endpoint'leri.
+
+**Bu iterasyonda yok:** Password reset.
+
+**Stop:** [ ] JWT süre ayarları okunabilir/güncellenebilir.
+
+---
+
+### İterasyon 7 — Password Reset (1.7)
+
+**Hedef:** Admin initiate + public complete flow.
+
+**Minimum bağlam:** `Docs/10` §1.7; `Docs/03` §2 password-reset.
+
+**Bu iterasyonda yok:** Seed.
+
+**Stop:** [ ] Token tek kullanımlık; [ ] expired token reddedilir.
+
+---
+
+### İterasyon 8 — Seed ve Fixtures (1.8)
+
+**Hedef:** `scripts/seed.py` idempotent; `fixtures/` admin user + settings.
+
+**Minimum bağlam:** `Docs/10` §1.8; `Docs/09_DEV_WORKFLOW.md` §8.4.
+
+**Bu iterasyonda yok:** Collector/source seed (Faz 2).
+
+**Stop:** [ ] `python scripts/seed.py` iki kez çalışır; [ ] auth integration test seed ile geçer.
+
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 1
+- `Docs/03_API_CONTRACTS.md` — §2–3
+- `Docs/04_BACKEND_SPEC.md` — §3–6, §13
+- `Docs/07_SECURITY_IMPLEMENTATION.md` — §2–5, §9
+- `Docs/09_DEV_WORKFLOW.md` — §4 PR checklist
+
+## Done Definition
+
+- [ ] Tüm Faz 1 endpoint'leri `Docs/03` ile uyumlu
+- [ ] Auth/RBAC integration test ≥%90 coverage hedefi
+- [ ] OpenAPI `/docs` eksiksiz
+- [ ] PR: `feat: [MVP-0 / Faz 1 / …]`
+
+## Explicit Don'ts
+
+- Collector, processor, AI, notification kodu
+- Next.js / React Native
+- Production migration onaysız
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 1 tamamlandı.

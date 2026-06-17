@@ -1,0 +1,55 @@
+---
+description: JWT auth — login, refresh, logout, password reset, token cookie stratejisi
+globs:
+  - "apps/api/**/routers/auth.py"
+  - "apps/api/**/services/auth*.py"
+  - "apps/api/**/core/security*.py"
+  - "apps/api/**/core/deps.py"
+---
+
+# Auth — JWT
+
+Email + şifre. Token çifti: **access** (kısa) + **refresh** (uzun). Web: httpOnly `Secure` `SameSite=Strict` cookie.
+
+## Login Akışı
+
+1. Pydantic `LoginRequest` validate
+2. `UserService.authenticate` — bcrypt verify, `is_active` kontrol
+3. Access + refresh JWT üret; cookie set
+4. `audit_logs`: `USER_LOGIN` aynı transaction'da
+5. `last_login_at` güncelle
+
+## Token Yapısı
+
+Access payload: `sub` (user UUID), `role`, `exp`, `iat`, `type: "access"`.
+Refresh payload: `sub`, `exp`, `type: "refresh"`, `jti` (revoke için).
+
+```python
+# ✓ Doğru — decode hatası → UnauthorizedException
+payload = decode_jwt(token, expected_type="access")
+if payload["sub"] != str(user.id):
+    raise UnauthorizedException(error_code="UNAUTHORIZED", message="Geçersiz token.")
+```
+
+## Refresh / Logout
+
+- Refresh: geçerli refresh token → yeni access (+ opsiyonel refresh rotation)
+- Logout: refresh token invalidate (blacklist/redis veya DB); cookie clear
+- Password reset: admin initiate → token hash DB'de; complete endpoint auth gerektirmez
+
+## Güvenlik
+
+- Başarısız login mesajı genel: "E-posta veya şifre hatalı." (enumeration önleme)
+- Rate limit auth endpoint'lerinde zorunlu
+- Token/şifre loglanmaz
+
+## Anti-pattern'ler
+
+- JWT secret hardcode
+- Access token localStorage (web)
+- Refresh token süresiz
+- Login'de rol client'tan alınması
+
+---
+
+Detay: `Docs/07_SECURITY_IMPLEMENTATION.md` §2–3; `Docs/03_API_CONTRACTS.md` §2

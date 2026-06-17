@@ -1,0 +1,115 @@
+---
+description: "[Faz 0] Altyapı ve iskelet — 6 iterasyon/chat (scaffold → CI → core DB → data DB → content DB → AWS dev). Mesajda \"Faz 0 — İterasyon M\" belirt."
+---
+
+# Faz 0: Altyapı ve İskelet
+
+## Goal
+
+Monorepo iskeleti, CI/CD pipeline, üç aşamalı PostgreSQL şeması (Alembic) ve AWS dev ortamı hazır. **Uygulama iş mantığı kodu yok** — yalnızca tooling, DB modelleri ve infra.
+
+## Feature branch (zorunlu)
+
+MVP-0 tüm fazlar `feature/mvp-0` branch'inde (`Docs/09_DEV_WORKFLOW.md` §2). İlk commit öncesi `48-git-phase-branch.mdc` uygula.
+
+**Stop (İterasyon 1, kod öncesi):** [ ] `main` güncel; [ ] `feature/mvp-0` oluşturuldu; [ ] `git push -u origin HEAD`.
+
+## Bu fazın çalışma modeli
+
+Tek sohbette tamamlanmaz. Her chat: `@50-phase-00-infra-scaffold` + **「Faz 0 — İterasyon M」**. Katman: Tooling / DB / Infra — karıştırma.
+
+---
+
+### İterasyon 1 — Monorepo Scaffold (0.1)
+
+**Hedef:** Boş ama çalışan monorepo + linter/formatter + `.env.example` + README.
+
+**Minimum bağlam:** `Docs/10_IMPLEMENTATION_ROADMAP.md` §0.1; `Docs/09_DEV_WORKFLOW.md` §1.2–1.4.
+
+**Bu iterasyonda yok:** DB migration, AWS, uygulama kodu.
+
+**Stop:** [ ] `ruff check .` çalışır; [ ] klasör yapısı `Docs/04` ile uyumlu; commit `Docs/09` §3.
+
+---
+
+### İterasyon 2 — CI/CD Pipeline (0.2)
+
+**Hedef:** `.github/workflows/test.yml` + branch protection notları + `feature/mvp-0` aktif.
+
+**Minimum bağlam:** `Docs/10` §0.2; `Docs/09_DEV_WORKFLOW.md` §5.1.
+
+**Bu iterasyonda yok:** Deploy workflow (Faz 8); uygulama testleri (henüz kod yok — pipeline iskeleti).
+
+**Stop:** [ ] Workflow YAML geçerli; [ ] CI aşama sırası doğru; PR checklist referansı.
+
+---
+
+### İterasyon 3 — Core Tablolar (0.3)
+
+**Hedef:** `users`, `system_settings`, `password_reset_tokens`, `audit_logs` — modeller + `001_core_tables.py`.
+
+**Minimum bağlam:** `Docs/10` §0.3; `Docs/02_DATABASE_SCHEMA.md` core bölümü.
+
+**Bu iterasyonda yok:** Veri/içerik tabloları; FastAPI.
+
+**Stop:** [ ] `alembic upgrade head` local; [ ] modeller import edilebilir.
+
+---
+
+### İterasyon 4 — Veri Tabloları (0.4)
+
+**Hedef:** `sources`, `raw_items`, `processed_items`, `embeddings`, `api_keys`, `api_usage_logs` + pgvector + `002_data_tables.py`.
+
+**Minimum bağlam:** `Docs/10` §0.4; `Docs/02` veri tabloları.
+
+**Bu iterasyonda yok:** Digest/chat tabloları; collector kodu.
+
+**Stop:** [ ] pgvector extension migration'da; [ ] FK/index isimlendirme `02` ile uyumlu.
+
+---
+
+### İterasyon 5 — İçerik Tabloları (0.5)
+
+**Hedef:** `prompt_templates`, `digests`, `digest_sections`, `chat_history`, `notification_logs` + `003_content_tables.py`.
+
+**Minimum bağlam:** `Docs/10` §0.5; `Docs/02` içerik tabloları.
+
+**Bu iterasyonda yok:** AWS; API.
+
+**Stop:** [ ] Üç migration sıralı upgrade; [ ] enum tipleri `packages/shared/enums.py` ile uyumlu.
+
+---
+
+### İterasyon 6 — AWS Dev Ortamı (0.6)
+
+**Hedef:** `infra/` ile dev RDS, SQS+DLQ, S3, SES identity, EventBridge placeholder, IAM scope `ygip-dev-*`.
+
+**Minimum bağlam:** `Docs/10` §0.6; `Docs/09_DEV_WORKFLOW.md` §7; `Docs/00` §7.
+
+**Bu iterasyonda yok:** Prod kaynakları; collector cron kuralları (Faz 2).
+
+**Stop:** [ ] IaC plan/apply dev; [ ] ortam izolasyonu checklist `Docs/09` §7.3.
+
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 0 (§0.1–0.6)
+- `Docs/02_DATABASE_SCHEMA.md` — tablo tanımları
+- `Docs/09_DEV_WORKFLOW.md` — §1, §5, §8 (migration)
+- `Docs/04_BACKEND_SPEC.md` §2 — klasör yapısı
+
+## Done Definition
+
+- [ ] Monorepo + CI yeşil (boş/minimal test OK)
+- [ ] Alembic 001–003 upgrade head
+- [ ] AWS dev kaynakları IaC ile tanımlı
+- [ ] `.env.example` güncel
+
+## Explicit Don'ts
+
+- FastAPI endpoint, collector, processor, frontend kodu
+- Production deploy veya prod secret
+- `main`'e doğrudan push
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 0 tamamlandı işareti.

@@ -1,0 +1,45 @@
+---
+description: AWS infra — dev/prod prefix, Lambda, SQS, EventBridge, secret yönetimi
+globs:
+  - "infra/**"
+---
+
+# Infra (AWS)
+
+YH kurumsal AWS hesabı. Ortam izolasyonu: `dev-` / `prod-` resource prefix.
+
+## Kaynak Adlandırma
+
+`{env}-ygip-{service}` — örn. `dev-ygip-rds`, `prod-ygip-sqs-rss`.
+
+## MVP-0 Kaynakları
+
+| Kaynak | Amaç |
+|--------|------|
+| RDS PostgreSQL | Ana DB + pgvector |
+| SQS (+ DLQ) | Collector → processor |
+| Lambda | Collectors, processor, ai-engine, API (veya ECS) |
+| EventBridge | Bülten cron, collector schedule |
+| S3 | Ham arşiv, digest HTML |
+| SES | E-posta bildirimi |
+| Secrets Manager | Prod API key/DB (dev `.env`) |
+
+## IaC Kuralları
+
+- Tüm kaynak IaC ile (`infra/`); console-only değişiklik yasak
+- IAM least privilege per Lambda role
+- DLQ her SQS queue için zorunlu
+
+## Agent Kısıtı
+
+AWS kaynak **silme** komutu kullanıcı onayı olmadan çalıştırılamaz (`01`).
+
+## Anti-pattern'ler
+
+- Prod secret `.env` commit
+- Tek SQS queue tüm mesaj tipleri (topic-per-type)
+- RDS public accessibility
+
+---
+
+Detay: `Docs/00_PROJECT_OVERVIEW.md` §7; `Docs/09_DEV_WORKFLOW.md` §7

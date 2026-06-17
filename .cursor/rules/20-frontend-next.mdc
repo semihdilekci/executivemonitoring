@@ -1,0 +1,51 @@
+---
+description: Next.js web frontend — SSR/CSR kararları, klasör yapısı, API client, auth akışı
+globs:
+  - "apps/web/**"
+---
+
+# Web Frontend (Next.js)
+
+Dashboard: viewer (digest okuma, chat) + admin (7 yönetim sayfası). SSR auth guard + client hydration.
+
+## Klasör Yapısı (özet)
+
+```
+apps/web/src/
+  app/           → App Router sayfaları
+  components/    → ui/ (atom) + common/ (organism)
+  hooks/         → React Query hooks
+  lib/           → api-client, auth, utils
+  types/         → TS tipleri (shared ile uyumlu)
+```
+
+## SSR vs CSR
+
+- Auth gerektiren layout: middleware token kontrolü → redirect `/login`
+- Digest listesi/detay: SSR veya RSC + client cache (React Query)
+- Admin formlar: CSR + mutation
+
+## API Client
+
+Axios instance: base URL env'den, `withCredentials: true` (cookie). 401 → refresh cycle → retry; refresh fail → `/login`.
+
+## State
+
+- Server state: **TanStack Query** (cache, invalidation)
+- Client state: React Context (auth user, theme minimal)
+
+## Güvenlik
+
+- Token httpOnly cookie — `localStorage` yasak
+- Admin route'ları middleware + `RoleGate` component (UX only)
+- CSP ve security headers middleware'de
+
+## Anti-pattern'ler
+
+- Fetch doğrudan component içinde (hook/service kullan)
+- Viewer'da admin API çağrısı (backend zaten 403 döner ama UX kötü)
+- `dangerouslySetInnerHTML` (digest HTML sanitize pipeline gerekir)
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §1–8, §13

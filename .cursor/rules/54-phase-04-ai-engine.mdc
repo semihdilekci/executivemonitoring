@@ -1,0 +1,116 @@
+---
+description: "[Faz 4] AI engine — 8 iterasyon/chat (LLM client → API keys → usage → prompts → digest → digest API → RAG → chat API). Mesajda \"Faz 4 — İterasyon M\" belirt."
+---
+
+# Faz 4: AI Engine
+
+## Goal
+
+Multi-provider LLM client, API key yönetimi, prompt şablonları, otomatik digest üretimi, digest API, RAG chatbot ve chat history API.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0`. Öncül: Faz 3 (`content_chunks` + embeddings).
+
+## Bu fazın çalışma modeli
+
+`@54-phase-04-ai-engine` + **「Faz 4 — İterasyon M」**. `services/ai-engine/` + ilgili `apps/api` router'lar.
+
+---
+
+### İterasyon 1 — LLM Client (4.1)
+
+**Hedef:** Groq+Gemini round-robin, fallback, mock unit test.
+
+**Minimum bağlam:** `Docs/10` §4.1; `Docs/04` §9.1.
+
+**Stop:** [ ] ALL_LLM_PROVIDERS_FAILED senaryosu testli.
+
+---
+
+### İterasyon 2 — API Key Management (4.2)
+
+**Hedef:** Encrypted key storage, admin CRUD.
+
+**Minimum bağlam:** `Docs/10` §4.2; `Docs/07` §8.3.
+
+**Stop:** [ ] Plaintext key response yok.
+
+---
+
+### İterasyon 3 — API Usage Tracking (4.3)
+
+**Hedef:** `api_usage_logs` yazımı + stats endpoint.
+
+**Minimum bağlam:** `Docs/10` §4.3; `Docs/03` api-keys usage.
+
+**Stop:** [ ] Token sayımı her LLM çağrısında.
+
+---
+
+### İterasyon 4 — Prompt Templates (4.4)
+
+**Hedef:** CRUD + render helper.
+
+**Minimum bağlam:** `Docs/10` §4.4; `Docs/03` §5.
+
+**Stop:** [ ] Template variable validation.
+
+---
+
+### İterasyon 5 — Digest Generator (4.5)
+
+**Hedef:** Cron/manual digest üretimi, sections, S3 HTML snapshot.
+
+**Minimum bağlam:** `Docs/10` §4.5; `Docs/04` §9.2.
+
+**Stop:** [ ] 3 digest_type için parse test; [ ] audit DIGEST_GENERATED.
+
+---
+
+### İterasyon 6 — Digest API (4.6)
+
+**Hedef:** List/detail + admin manual trigger.
+
+**Minimum bağlam:** `Docs/10` §4.6; `Docs/03` §7.
+
+**Stop:** [ ] Viewer okur; [ ] manual trigger admin-only.
+
+---
+
+### İterasyon 7 — RAG Chatbot (4.7)
+
+**Hedef:** pgvector search + LLM yanıt + sources JSON.
+
+**Minimum bağlam:** `Docs/10` §4.7; `Docs/04` §9.3–9.4.
+
+**Stop:** [ ] Kaynak referansları yanıtta; [ ] boş context handling.
+
+---
+
+### İterasyon 8 — Chatbot API ve History (4.8)
+
+**Hedef:** `POST /chat`, admin `GET /chat/history`.
+
+**Minimum bağlam:** `Docs/10` §4.8; `Docs/03` §8.
+
+**Stop:** [ ] `chat_history` persist; [ ] viewer history admin endpoint 403.
+
+## Required Context
+
+- `Docs/10` Faz 4; `Docs/03` §5–8; `Docs/04` §9; `Docs/18-ai-engine.mdc`
+
+## Done Definition
+
+- [ ] Digest üretimi + chat API çalışır
+- [ ] LLM mock integration testleri green
+- [ ] Prompt prod onaysız deploy edilmedi
+
+## Explicit Don'ts
+
+- SES/FCM bildirim (Faz 5)
+- Web/mobil UI
+
+---
+
+Phase done → `Docs/10` Faz 4 tamamlandı.

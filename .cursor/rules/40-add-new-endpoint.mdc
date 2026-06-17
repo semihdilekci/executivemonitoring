@@ -1,0 +1,56 @@
+---
+description: Step-by-step for adding a REST endpoint. Use when creating or modifying apps/api routers and API contracts.
+---
+
+# Yeni REST Endpoint Prosedürü
+
+## Step 1: Contract
+
+`Docs/03_API_CONTRACTS.md` — method, path, auth rolü, request/response şema, error kodları.
+
+## Step 2: Pydantic Schemas
+
+`apps/api/schemas/{resource}.py` — request + response modelleri. Extra field forbid.
+
+## Step 3: Repository (gerekirse)
+
+`apps/api/repositories/{resource}_repo.py` — yalnızca DB erişimi.
+
+## Step 4: Service
+
+`apps/api/services/{resource}_service.py` — iş kuralları, audit çağrısı.
+
+## Step 5: Router
+
+`apps/api/routers/{resource}.py`:
+
+```python
+@router.post("", response_model=UserResponse, dependencies=[Depends(require_admin)])
+async def create_user(
+    body: CreateUserRequest,
+    db: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_admin),
+) -> UserResponse:
+    return await user_service.create(db, actor, body)
+```
+
+`main.py`'de router include.
+
+## Step 6: RBAC + Audit
+
+- [ ] Doğru `Depends(require_admin)` veya `get_current_user`
+- [ ] Mutating → `audit_service.log` aynı transaction
+
+## Step 7: Test
+
+`tests/integration/api/test_{resource}.py` — pozitif + RBAC deny.
+
+## Step 8: Dokümantasyon
+
+- [ ] `Docs/03_API_CONTRACTS.md` güncellendi
+- [ ] OpenAPI `/docs` smoke
+- [ ] PR checklist: `Docs/09_DEV_WORKFLOW.md` §4.2
+
+---
+
+Detay: `Docs/03_API_CONTRACTS.md`; `Docs/04_BACKEND_SPEC.md` §3–5; `Docs/07_SECURITY_IMPLEMENTATION.md` §5

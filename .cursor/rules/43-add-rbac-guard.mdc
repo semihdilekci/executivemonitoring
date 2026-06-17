@@ -1,0 +1,43 @@
+---
+description: Step-by-step for adding RBAC guard to endpoint or admin feature. Use when extending admin/viewer permissions.
+---
+
+# RBAC Guard Prosedürü
+
+## Step 1: Yetki Matrisi
+
+`Docs/07_SECURITY_IMPLEMENTATION.md` §5.3 ve `Docs/03_API_CONTRACTS.md` endpoint başlığındaki rol notu.
+
+## Step 2: Backend Guard
+
+```python
+@router.delete("/sources/{source_id}", dependencies=[Depends(require_admin)])
+```
+
+Viewer read-only endpoint'lerde yalnızca `get_current_user`.
+
+## Step 3: Service Katmanı (defense in depth)
+
+Kritik işlemde servis başında rol assert (opsiyonel, router yeterli değilse).
+
+## Step 4: Frontend
+
+Admin nav item `RoleGate`; route middleware `/admin/*`.
+
+## Step 5: Test (zorunlu)
+
+```python
+async def test_viewer_cannot_delete_source(viewer_client):
+    resp = await viewer_client.delete(f"/api/v1/sources/{id}")
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "FORBIDDEN"
+```
+
+## Step 6: Docs
+
+- [ ] `Docs/03` endpoint rol notu
+- [ ] `Docs/06` admin ekran permission (varsa)
+
+---
+
+Detay: `Docs/07_SECURITY_IMPLEMENTATION.md` §5; review: `Docs/09_DEV_WORKFLOW.md` §9.1

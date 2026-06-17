@@ -1,0 +1,55 @@
+---
+description: Audit log — event_type enum, transaction içi yazım, retention
+globs:
+  - "apps/api/**/audit*.py"
+  - "apps/api/**/services/audit*.py"
+  - "apps/api/**/routers/audit*.py"
+---
+
+# Audit Log
+
+Tüm state-changing operasyonlar `audit_logs` tablosuna yazılır. Yalnızca `admin` okuyabilir.
+
+## Loglanacak Olaylar (özet)
+
+`USER_LOGIN`, `USER_LOGOUT`, `USER_CREATED`, `USER_UPDATED`, `SOURCE_CREATED`, `SOURCE_DELETED`, `PROMPT_UPDATED`, `API_KEY_CREATED`, `DIGEST_GENERATED`, `SYSTEM_ERROR`, …
+
+Tam liste → `Docs/07` §9.1.
+
+## Yazım Pattern'i
+
+```python
+async def create_source(db: AsyncSession, actor: User, data: CreateSourceRequest):
+    async with db.begin():
+        source = await source_repo.create(db, data)
+        await audit_service.log(
+            db,
+            event_type=AuditEventType.SOURCE_CREATED,
+            actor_user_id=actor.id,
+            target_type="source",
+            target_id=source.id,
+            payload={"name": source.name, "source_type": source.source_type},
+        )
+    return source
+```
+
+**Fail-closed:** Audit yazımı başarısız → transaction rollback.
+
+## Payload Kuralları
+
+- Hassas içerik (şifre, token, API key plaintext) payload'a girmez
+- Makale/bülten tam metni kopyalanmaz — ID + metadata
+
+## Retention
+
+90 gün aktif tablo → S3 arşiv (Faz 8 Lambda).
+
+## Anti-pattern'ler
+
+- Audit ayrı transaction (fire-and-forget)
+- `print()` ile audit
+- Viewer'a audit endpoint expose
+
+---
+
+Detay: `Docs/07_SECURITY_IMPLEMENTATION.md` §9

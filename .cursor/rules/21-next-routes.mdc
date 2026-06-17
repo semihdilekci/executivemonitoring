@@ -1,0 +1,51 @@
+---
+description: Next.js App Router — route yapısı, auth middleware, layout hierarchy
+globs:
+  - "apps/web/src/app/**"
+---
+
+# Next.js Routes
+
+## Route Ağacı (özet)
+
+| Path | Rol | Ekran ID |
+|------|-----|----------|
+| `/login` | public | S-LOGIN |
+| `/` | viewer+ | S-HOME |
+| `/digests/[id]` | viewer+ | S-DIGEST-DETAIL |
+| `/chat` | viewer+ | S-CHATBOT |
+| `/admin/users` | admin | S-ADMIN-USERS |
+| `/admin/sources` | admin | S-ADMIN-SOURCES |
+| … | admin | `Docs/06` tam liste |
+
+## Auth Middleware
+
+```typescript
+// middleware.ts — cookie'de access token yok → /login
+// /admin/* → admin rolü yok → / (veya 403 sayfası)
+```
+
+Token refresh middleware'de değil — API client interceptor'da.
+
+## Layout Hierarchy
+
+```
+app/layout.tsx          → root, providers
+app/(auth)/login/       → auth layout (minimal)
+app/(dashboard)/layout  → sidebar, viewer nav
+app/admin/layout        → admin nav, RoleGate
+```
+
+## Dynamic Routes
+
+`[id]` UUID validate; geçersiz → `notFound()`.
+
+## Anti-pattern'ler
+
+- Admin sayfası `(dashboard)` layout altında guard'sız
+- Hardcoded Türkçe string dağınık (ortak messages dosyası tercih)
+- Client-only secret env (`NEXT_PUBLIC_` yalnızca public config)
+
+---
+
+Detay: `Docs/05_FRONTEND_SPEC.md` §4; `Docs/06_SCREEN_CATALOG.md` Ekran Haritası

@@ -1,0 +1,62 @@
+---
+alwaysApply: true
+---
+
+# Dil ve İsimlendirme
+
+## TR/EN Hibrit
+
+| Katman | Dil |
+|--------|-----|
+| UI metinleri, toast, form label | Türkçe |
+| Kod (değişken, sınıf, dosya, enum) | İngilizce |
+| Commit mesajı | Türkçe veya İngilizce (tutarlı) |
+| Error code | `SCREAMING_SNAKE_CASE` İngilizce |
+
+## Naming Convention
+
+| Öğe | Kural | Örnek |
+|-----|-------|-------|
+| Klasör/dosya | `kebab-case` | `prompt-templates.py` |
+| Python class | `PascalCase` | `DigestService` |
+| Python fn/var | `snake_case` | `get_by_id` |
+| TypeScript fn/var | `camelCase` | `useDigests` |
+| React component dosyası | `PascalCase.tsx` | `DigestCard.tsx` |
+| DB tablo/kolon | `snake_case`, tablo çoğul | `raw_items`, `source_id` |
+| Env / constant | `UPPER_SNAKE_CASE` | `DATABASE_URL` |
+| Ekran ID | `S-<DOMAIN>-<ACTION>` | `S-DIGEST-DETAIL` |
+
+## Commit Format
+
+Conventional Commits — tam kurallar `Docs/09_DEV_WORKFLOW.md` §3:
+
+```
+<type>: <description>
+```
+
+Types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`. Açıklama İngilizce, küçük harf, max 72 karakter.
+
+Branch: `feature/mvp-0`, `feature/mvp-1` … (`Docs/09` §2). `main`'e doğrudan push yasak; merge squash + PR + CI.
+
+## Error Code Pattern
+
+Merkezi `AppException` hierarchy — `error.code` alanı zorunlu:
+
+```python
+# ✓ Doğru
+raise ForbiddenException(
+    error_code="FORBIDDEN",
+    message="Bu işlem için yetkiniz yok.",
+)
+
+# ✗ Yanlış
+raise HTTPException(status_code=403, detail="Yetkisiz")
+```
+
+Standart kodlar: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ERROR`, `CONFLICT`, `RATE_LIMIT_EXCEEDED`, `INTERNAL_ERROR`. Domain-specific: `NO_ACTIVE_LLM_PROVIDER`, `ALL_LLM_PROVIDERS_FAILED`.
+
+Frontend error code'ları switch/map ile eşle; magic string kullanma.
+
+---
+
+Detay: `Docs/09_DEV_WORKFLOW.md` §2–3, §10; `Docs/04_BACKEND_SPEC.md` §13

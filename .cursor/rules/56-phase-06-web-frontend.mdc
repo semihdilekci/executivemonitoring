@@ -1,0 +1,127 @@
+---
+description: "[Faz 6] Web frontend — 9 iterasyon/chat (Next.js → login → home → digest → chat → admin users → sources → AI settings → audit/chat/notif). Mesajda \"Faz 6 — İterasyon M\" belirt."
+---
+
+# Faz 6: Web Frontend
+
+## Goal
+
+Next.js dashboard: viewer (ana sayfa, bülten detay, chatbot) + admin (7 yönetim sayfası). Auth guard, React Query, Türkçe UI.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0`. Öncül: Faz 1 (API) + Faz 4–5 (digest/chat/notification API'leri).
+
+## Bu fazın çalışma modeli
+
+`@56-phase-06-web-frontend` + **「Faz 6 — İterasyon M」**. Yalnızca `apps/web/` — mobil yok.
+
+---
+
+### İterasyon 1 — Next.js Boilerplate (6.1)
+
+**Hedef:** App Router, providers, API client, middleware iskelet, layout.
+
+**Minimum bağlam:** `Docs/10` §6.1; `Docs/05` §1–2, §6.
+
+**Stop:** [ ] `npm run build` OK; [ ] CSP middleware.
+
+---
+
+### İterasyon 2 — Login ve Şifre Sıfırlama (6.2)
+
+**Hedef:** S-LOGIN, S-RESET-PW, token refresh cycle.
+
+**Minimum bağlam:** `Docs/10` §6.2; `Docs/06` Grup 1.
+
+**Stop:** [ ] Login→dashboard; [ ] 401 redirect.
+
+---
+
+### İterasyon 3 — Ana Sayfa (6.3)
+
+**Hedef:** S-HOME digest listesi, loading/empty states.
+
+**Minimum bağlam:** `Docs/10` §6.3; `Docs/06` S-HOME.
+
+**Stop:** [ ] Cursor pagination veya sayfalama.
+
+---
+
+### İterasyon 4 — Rapor Detay (6.4)
+
+**Hedef:** S-DIGEST-DETAIL iki kolon, TOC, bölüm kartları.
+
+**Minimum bağlam:** `Docs/10` §6.4; `Docs/06` S-DIGEST-DETAIL.
+
+**Stop:** [ ] Viewer erişir; [ ] sanitize HTML render.
+
+---
+
+### İterasyon 5 — AI Chatbot (6.5)
+
+**Hedef:** S-CHATBOT, kaynak linkleri, FAB (detay sayfasında).
+
+**Minimum bağlam:** `Docs/10` §6.5; `Docs/06` S-CHATBOT.
+
+**Stop:** [ ] Streaming veya loading state; [ ] hata Türkçe.
+
+---
+
+### İterasyon 6 — Admin Kullanıcılar (6.6)
+
+**Hedef:** S-ADMIN-USERS, create/edit, RoleGate.
+
+**Minimum bağlam:** `Docs/10` §6.6; `Docs/06` Grup 3 users.
+
+**Stop:** [ ] Viewer /admin 403 veya redirect.
+
+---
+
+### İterasyon 7 — Admin Kaynaklar (6.7)
+
+**Hedef:** S-ADMIN-SOURCES, create form, source_type config.
+
+**Minimum bağlam:** `Docs/10` §6.7; `Docs/06` sources.
+
+**Stop:** [ ] JSON config validation UI.
+
+---
+
+### İterasyon 8 — Prompt, API Key, Ayarlar (6.8)
+
+**Hedef:** S-ADMIN-PROMPTS, S-ADMIN-API-KEYS, bildirim/JWT ayarları bölümü.
+
+**Minimum bağlam:** `Docs/10` §6.8; `Docs/06` Grup 4.
+
+**Stop:** [ ] API key maskeli; [ ] usage grafik placeholder veya chart.
+
+---
+
+### İterasyon 9 — Audit, Sohbet, Bildirim (6.9)
+
+**Hedef:** S-ADMIN-AUDIT-LOGS, S-ADMIN-CHAT-HISTORY, S-ADMIN-NOTIFICATIONS.
+
+**Minimum bağlam:** `Docs/10` §6.9; `Docs/06` Grup 5.
+
+**Stop:** [ ] Filtreleme; [ ] a11y temel kontroller.
+
+## Required Context
+
+- `Docs/10` Faz 6; `Docs/05_FRONTEND_SPEC.md`; `Docs/06_SCREEN_CATALOG.md`
+- `Docs/09_DEV_WORKFLOW.md` §4 PR checklist
+
+## Done Definition
+
+- [ ] MVP-0 başarı kriteri #2, #6 (`Docs/00` §8) web tarafı
+- [ ] Admin UI backend guard ile uyumlu
+- [ ] `npm run build` + lint green
+
+## Explicit Don'ts
+
+- React Native (Faz 7)
+- Backend API değişikliği (gerekirse ayrı PR Faz 1–5)
+
+---
+
+Phase done → `Docs/10` Faz 6 tamamlandı.

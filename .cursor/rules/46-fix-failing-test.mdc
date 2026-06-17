@@ -1,0 +1,46 @@
+---
+description: Step-by-step for fixing failing CI or local tests. Use when pytest, ruff, mypy or GitHub Actions fails.
+---
+
+# Failing Test Fix Prosedürü
+
+## Step 1: Reproduce
+
+```bash
+pytest tests/path/to/test.py -vv --tb=short
+ruff check path/
+mypy path/
+```
+
+CI log'dan tam hata mesajı ve commit.
+
+## Step 2: Sınıflandır
+
+| Tip | Yaklaşım |
+|-----|----------|
+| Regression (kod hatası) | Kodu düzelt |
+| Flaky (timing/network) | Deterministic mock/fixture |
+| Spec değişti | Önce `Docs/` sonra test |
+| Env/fixture eksik | `conftest.py`, CI service |
+
+## Step 3: Minimal Fix
+
+Kök neden; testi zayıflatma (assert kaldırma) yasak — gerçek davranışı düzelt.
+
+## Step 4: RBAC / Auth Testleri
+
+403/401 deny testleri silinmez; güvenlik regression öncelikli.
+
+## Step 5: Verify
+
+```bash
+ruff check . && mypy apps packages services && pytest tests/ -q
+```
+
+## Step 6: 3 Deneme Kuralı
+
+3 başarısız fix denemesi → developer'a escalate; kapsam netleştir.
+
+---
+
+Detay: `Docs/08_TESTING_STRATEGY.md` §7, §10; `Docs/09_DEV_WORKFLOW.md` §11

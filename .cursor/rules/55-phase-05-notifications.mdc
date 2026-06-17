@@ -1,0 +1,86 @@
+---
+description: "[Faz 5] Bildirim backend — 5 iterasyon/chat (SES → FCM → token API → orchestration → preferences). Mesajda \"Faz 5 — İterasyon M\" belirt."
+---
+
+# Faz 5: Bildirim Backend
+
+## Goal
+
+Digest hazır bildirimi: SES e-posta ("yeni rapor hazır"), FCM push, token kayıt API, orchestration ve kullanıcı bildirim tercihleri.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0`. Öncül: Faz 4 (digest tamamlanınca tetikleme).
+
+## Bu fazın çalışma modeli
+
+`@55-phase-05-notifications` + **「Faz 5 — İterasyon M」**. Backend notification servisleri + API.
+
+---
+
+### İterasyon 1 — SES Mail Service (5.1)
+
+**Hedef:** AWS SES wrapper, şablon (içerik link only, hassas veri yok).
+
+**Minimum bağlam:** `Docs/10` §5.1; `Docs/04` §11.
+
+**Stop:** [ ] Mock SES unit test; [ ] Türkçe subject/body.
+
+---
+
+### İterasyon 2 — FCM Push Service (5.2)
+
+**Hedef:** Firebase Admin SDK push gönderimi.
+
+**Minimum bağlam:** `Docs/10` §5.2.
+
+**Stop:** [ ] Mock FCM; [ ] invalid token handling.
+
+---
+
+### İterasyon 3 — FCM Token Registration API (5.3)
+
+**Hedef:** Mobil/web token kayıt endpoint.
+
+**Minimum bağlam:** `Docs/10` §5.3; `Docs/03` notifications.
+
+**Stop:** [ ] Auth required; [ ] token per user/device.
+
+---
+
+### İterasyon 4 — Bildirim Orchestration (5.4)
+
+**Hedef:** Digest complete → email+push fan-out, `notification_logs`.
+
+**Minimum bağlam:** `Docs/10` §5.4.
+
+**Stop:** [ ] Idempotent notification; [ ] partial failure log.
+
+---
+
+### İterasyon 5 — Bildirim Preferences API (5.5)
+
+**Hedef:** Admin alıcı listesi + kullanıcı tercihleri.
+
+**Minimum bağlam:** `Docs/10` §5.5; `Docs/06` S-ADMIN-NOTIFICATIONS.
+
+**Stop:** [ ] Admin-only alıcı yönetimi.
+
+## Required Context
+
+- `Docs/10` Faz 5; `Docs/04` §11; `Docs/03` notification endpoint'leri
+
+## Done Definition
+
+- [ ] Digest sonrası bildirim tetiklenir (dev SES sandbox)
+- [ ] `notification_logs` yazılır
+- [ ] Integration test mock external servislerle green
+
+## Explicit Don'ts
+
+- E-postada bülten tam içeriği (yalnızca link)
+- Frontend push UI (Faz 6/7)
+
+---
+
+Phase done → `Docs/10` Faz 5 tamamlandı.

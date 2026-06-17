@@ -1,0 +1,76 @@
+---
+description: "[Faz 7] Mobil uygulama — 4 iterasyon/chat (RN boilerplate → login+liste → detay+chat → push). Mesajda \"Faz 7 — İterasyon M\" belirt."
+---
+
+# Faz 7: Mobil Uygulama
+
+## Goal
+
+React Native iOS+Android: login, digest listesi/detay, chatbot, FCM push entegrasyonu. Viewer parity — admin ekranları yok.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0`. Öncül: Faz 5 (FCM API) + Faz 4 (digest/chat API).
+
+## Bu fazın çalışma modeli
+
+`@57-phase-07-mobile` + **「Faz 7 — İterasyon M」**. Yalnızca `apps/mobile/`.
+
+---
+
+### İterasyon 1 — React Native Boilerplate (7.1)
+
+**Hedef:** Navigation, API client, secure token storage, env config.
+
+**Minimum bağlam:** `Docs/10` §7.1; `Docs/05` §3.
+
+**Stop:** [ ] iOS+Android build; [ ] token AsyncStorage plaintext yok.
+
+---
+
+### İterasyon 2 — Login ve Digest Listesi (7.2)
+
+**Hedef:** Auth stack, ana liste, pull-to-refresh.
+
+**Minimum bağlam:** `Docs/10` §7.2; `Docs/06` viewer ekranları (mobil parity).
+
+**Stop:** [ ] Login→liste; [ ] offline hata mesajı Türkçe.
+
+---
+
+### İterasyon 3 — Rapor Detay ve Chatbot (7.3)
+
+**Hedef:** Digest detay native render, chat ekranı.
+
+**Minimum bağlam:** `Docs/10` §7.3.
+
+**Stop:** [ ] Kaynak linkleri açılır; [ ] chat history persist (session).
+
+---
+
+### İterasyon 4 — Push Notification (7.4)
+
+**Hedef:** FCM token kayıt, foreground/background handler, deep link digest.
+
+**Minimum bağlam:** `Docs/10` §7.4; `Docs/05` §10.
+
+**Stop:** [ ] Token API kayıt; [ ] tap→digest detay.
+
+## Required Context
+
+- `Docs/10` Faz 7; `Docs/05` §3, §10; `Docs/27-mobile-react-native.mdc`
+
+## Done Definition
+
+- [ ] MVP-0 başarı kriteri #3, #7 mobil tarafı
+- [ ] Enterprise build alınabilir
+- [ ] Push dev FCM test
+
+## Explicit Don'ts
+
+- Admin panel mobilde
+- Web Next.js değişikliği (paralel gerekmiyorsa)
+
+---
+
+Phase done → `Docs/10` Faz 7 tamamlandı.
