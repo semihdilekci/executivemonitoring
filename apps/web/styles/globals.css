@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply scroll-smooth text-[15px];
+  }
+
+  body {
+    @apply bg-bg font-sans text-gray-800 antialiased;
+  }
+}
+
+@media print {
+  header,
+  nav,
+  aside,
+  .no-print,
+  .digest-print-hide {
+    display: none !important;
+  }
+
+  main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .digest-detail-content {
+    width: 100% !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  article,
+  section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

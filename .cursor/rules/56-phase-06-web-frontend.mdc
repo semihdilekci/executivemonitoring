@@ -12,7 +12,7 @@ Next.js dashboard: viewer (S-HOME, S-DIGESTS-LIST, S-DIGEST-DETAIL, S-CHATBOT) +
 
 `feature/mvp-0` (`Docs/09_DEV_WORKFLOW.md` §2). **Önkoşul:** Faz 1 (auth/users API) + Faz 4 (digest/chat API) + Faz 5 (notification API) Done.
 
-**Stop (İterasyon 1, kod öncesi):** [ ] Faz 1–5 API'leri local çalışır; [ ] `feature/mvp-0` güncel; [ ] `NEXT_PUBLIC_API_URL` `.env` tanımlı.
+**Stop (İterasyon 1, kod öncesi):** [ ] Faz 1–5 API'leri local çalışır; [ ] `feature/mvp-0` güncel; [ ] `NEXT_PUBLIC_API_BASE_URL` `.env` tanımlı.
 
 ## Bu fazın çalışma modeli
 
@@ -36,7 +36,7 @@ Next.js dashboard: viewer (S-HOME, S-DIGESTS-LIST, S-DIGEST-DETAIL, S-CHATBOT) +
 - `apps/web/app/layout.tsx`, `app/(dashboard)/layout.tsx`
 - `apps/web/components/layout/pill-nav.tsx`, `sidebar.tsx`, `user-menu.tsx`, `admin-topbar.tsx`
 - `apps/web/components/common/empty-state.tsx`, `loading-skeleton.tsx` (iskelet)
-- `apps/web/.env.example` — `NEXT_PUBLIC_API_URL`
+- `apps/web/.env.example` — `NEXT_PUBLIC_API_BASE_URL`
 
 **Önkoşullar:**
 - [ ] Faz 1 Stop — auth API çalışır

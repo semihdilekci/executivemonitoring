@@ -67,6 +67,18 @@ ignore_missing_imports = true
 module = "tiktoken.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "cryptography.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "aiosmtplib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "firebase_admin.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

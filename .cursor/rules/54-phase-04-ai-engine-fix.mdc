@@ -1,0 +1,214 @@
+---
+description: '[Faz 4 Fix] AI engine gap remediation — 4 fix iterasyon/chat (LLM errors → digest tests → layer → docs). Mesajda "Faz 4 — Fix İterasyon M" belirt. Audit: phase-controller 2026-06-19.'
+---
+
+# Faz 4 Fix: AI Engine
+
+## Goal
+
+Aşağıdaki **Audit bulguları** bölümündeki gap'leri kapat. BLOCKER=0, HIGH=0 hedeflenir; MEDIUM/LOW fix iterasyonlarına veya bilinçli defer'e ayrılır. **Yeni feature yok** — yalnızca gap kapatma.
+
+**Kaynak faz:** `.cursor/rules/54-phase-04-ai-engine.mdc`  
+**Audit durumu:** PASS_WITH_GAPS (2026-06-19) — BLOCKER=0, HIGH=2
+
+## Feature branch (fix)
+
+Fix oturumları kaynak faz branch'inde veya dedicated fix branch'te:
+
+**Önerilen branch:** `feature/mvp-0` (mevcut) veya `fix/F4-ai-engine`
+
+**Stop (Fix İterasyon 1, kod öncesi):** [ ] Audit bulguları okundu; [ ] HIGH listesi net; [ ] branch checkout; [ ] Faz 4 kodu commit/PR'a alınmış.
+
+## Bu fix'in çalışma modeli
+
+Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@54-phase-04-ai-engine-fix` + **「Faz 4 — Fix İterasyon M」**.
+
+---
+
+## Audit bulguları (tek kaynak)
+
+| ID | Severity | Tip | Başlık | Kanıt |
+| --- | --- | --- | --- | --- |
+| F-04-001 | HIGH | WRONG | LLM hata kodları HTTP katmanına yansımıyor | `services/ai_engine/exceptions.py:22-39` `AppException` değil; `POST /chat` aktif key yoksa `apps/api/main.py:96-109` → `500 INTERNAL_ERROR`. `apps/api/core/exceptions.py:88-95` doğru sınıflar tanımlı ama kullanılmıyor |
+| F-04-002 | HIGH | TEST_GAP | 3 digest tipi test kapsamı eksik | `tests/unit/ai_engine/test_digest_generator.py` yalnızca `DigestType.FMCG_WEEKLY`; `digest_models.py:64-93` `turkish_media_weekly` / `strategy_weekly` sorgu config test edilmiyor |
+| F-04-003 | MEDIUM | PATTERN | Katman ihlali (`services` → `apps/api`) | `services/ai_engine/factory.py:5-7` → `ApiKeyService`; `digest_generator.py:66` → `apps.api.repositories.prompt_template_repository` |
+| F-04-004 | MEDIUM | DOC_DRIFT | Audit `event_type` Docs/02 dışı | Kod: `api_key.status_changed` (`api_key_service.py:131`), `prompt_template.created` (`prompt_service.py:104`); `Docs/02_DATABASE_SCHEMA.md:390` yalnızca `api_key.created/deleted`, `prompt_template.updated` |
+| F-04-005 | MEDIUM | PATTERN | Duplicate ölü exception sınıfları | `apps/api/core/exceptions.py:88-95` ile `services/ai_engine/exceptions.py:22-39` çift tanım; LLM client servis katmanını kullanıyor |
+| F-04-006 | MEDIUM | TEST_GAP | Plaintext log deny testi eksik | Roadmap §4.2 / faz iter 2: "key hiçbir zaman plain-text loglanmıyor" — `test_api_key_encryption.py` encrypt/decrypt var; `caplog` ile log deny yok |
+| F-04-007 | LOW | MISSING | `.env.example` `RATE_LIMIT_CHATBOT` yok | `apps/api/core/config.py:34` default `20`; self-review checklist yeni env → `.env.example` |
+| F-04-008 | LOW | PATTERN | `services/ai-engine/` vs `services/ai_engine/` isim drift | Kod `ai_engine` (underscore); `services/ai-engine/README.md` yalnızca README |
+| F-04-009 | INFO | — | Integration testler audit oturumunda skip | 28 test mevcut + RBAC deny senaryoları; yerel PG bağlantısı yok; CI `.github/workflows/test.yml:48-51` PG service ile çalıştırıyor |
+| F-04-010 | INFO | — | Faz `.mdc` audit event isimleri Docs'tan sapıyor | `.mdc` `digest.generated` / `digest.generation_failed`; kod + `Docs/02` `digest.started/completed/failed` — kod Docs ile uyumlu |
+| F-04-011 | INFO | — | Explicit Don'ts uyumlu | SMTP/FCM/web UI yok; digest bildirimi stub (`digest_generator.py:75-88`) |
+
+**Explicit Don'ts:** ✅ SMTP/FCM, web/mobil UI, processor keyword enrich, MVP-1 LLMEnricher yok.
+
+**Uyumlu alanlar (fix gerekmez):** 8 iterasyon deliverable dosyaları mevcut; `main.py` router mount; RBAC admin/viewer deny integration testleri yazılmış; AES-256-GCM encrypt (`encryption.py`); API key response'ta plaintext yok; `POST /digests/generate` 202; viewer non-ready digest 404; chat rate limit 20/dk (`deps.py:133-149`); unit testler 40 passed; `ruff` + `mypy` yeşil; `services/ai_engine` unit coverage %70.89 (≥%70).
+
+---
+
+### Fix İterasyon 1 — LLM exception boundary (HIGH)
+
+**Hedef:** F-04-001, F-04-005 kapat.
+
+**Yapılacaklar:**
+
+1. **Tek kaynak exception:** `services/ai_engine/exceptions.py` içindeki `NoActiveLLMProviderError` / `AllProvidersFailedError` ya `apps/api/core/exceptions.AppException` alt sınıfı olacak şekilde birleştir **veya** API katmanında (`chatbot_service`, `get_llm_client` dependency) servis exception'larını `AppException` eşdeğerine map et (`502`, `NO_ACTIVE_LLM_PROVIDER` / `ALL_LLM_PROVIDERS_FAILED`).
+2. `apps/api/core/exceptions.py:88-95` duplicate tanımları kaldır veya servis katmanından re-export et — ölü kod kalmasın.
+3. `apps/api/main.py` exception handler: LLM domain hataları `INTERNAL_ERROR` yerine doğru `error.code` dönsün.
+4. Unit test: `test_llm_client.py` error_code assert'leri yeşil kalsın.
+5. Integration/unit: chat endpoint mock — aktif key yok → `502` + `NO_ACTIVE_LLM_PROVIDER` (veya seçilen mapping).
+
+**Kapatılacak bulgular:** F-04-001, F-04-005
+
+**Minimum bağlam:**
+
+- Bu dosya §Audit bulguları (F-04-001, F-04-005)
+- `Docs/04_BACKEND_SPEC.md` §9.1 — error sınıfları, usage hook
+- `.cursor/rules/02-language-naming.mdc` — `NO_ACTIVE_LLM_PROVIDER`, `ALL_LLM_PROVIDERS_FAILED`
+- `services/ai_engine/llm_client.py`, `apps/api/main.py`, `apps/api/services/chatbot_service.py`
+
+**Bu fix iterasyonda yok:** Digest tipi testleri, katman refaktörü.
+
+**Stop:** [ ] Chat/LLM hata response doğru error code; [ ] duplicate exception temiz; [ ] `pytest tests/unit/ai_engine/test_llm_client.py -v` yeşil. PR/onay → Fix İterasyon 2.
+
+---
+
+### Fix İterasyon 2 — Digest tipi + encryption log testleri (HIGH / MEDIUM)
+
+**Hedef:** F-04-002, F-04-006 kapat.
+
+**Yapılacaklar:**
+
+1. `tests/unit/ai_engine/test_digest_generator.py` genişlet:
+   - `turkish_media_weekly` — `source_category=turkish_media`, section keys `headlines` / `sector_highlights`
+   - `strategy_weekly` — topic keyword filtre mock, section keys `executive_summary` / `global_trends`
+   - Her tip için mock repo + template resolver; en az başarı veya makale seçimi assert
+2. `tests/unit/services/test_api_key_encryption.py` — `caplog` ile `encrypt_api_key` / `decrypt_api_key` çağrısında plaintext key log'a düşmediğini assert (roadmap §4.2).
+3. Opsiyonel: `api_key_service.create` mock audit path'te plaintext yok assert.
+
+**Kapatılacak bulgular:** F-04-002, F-04-006
+
+**Minimum bağlam:**
+
+- `services/ai_engine/digest_models.py` — `DIGEST_TYPE_QUERY_CONFIG`, `SECTION_ORDER`
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` §4.5 — 3 digest_type
+- `.cursor/rules/04-quality-gates.mdc` — AI engine digest ≥%70
+
+**Bu fix iterasyonda yok:** Katman refaktörü, Docs güncellemesi.
+
+**Stop:** [ ] 3 digest_type unit test yeşil; [ ] encryption log deny test yeşil; [ ] `pytest tests/unit/ai_engine/ tests/unit/services/test_api_key_encryption.py -v` yeşil. PR/onay → Fix İterasyon 3.
+
+---
+
+### Fix İterasyon 3 — Katman refaktörü (MEDIUM)
+
+**Hedef:** F-04-003 kapat.
+
+**Yapılacaklar:**
+
+1. `services/ai_engine/factory.py` — `apps.api.services.ApiKeyService` bağımlılığını kaldır:
+   - **A (önerilen):** `build_llm_client` parametre olarak `list[LLMProvider]` veya decrypt callback alır; DB okuma `apps/api/core/deps.py` veya `digest_service` içinde kalır.
+   - **B:** Ortak interface `packages/shared/` veya ince port protocol — `apps/api` implement eder, `services/ai_engine` yalnızca protocol'e bağlanır.
+2. `digest_generator.py` `_DbPromptTemplateResolver` — `apps.api.repositories` import'unu kaldır; template listesi constructor inject veya `PromptTemplateResolver` protocol (testlerde zaten `_FakeTemplateResolver` var).
+3. `mypy services/ai_engine` — `apps.api` import'u kalmamalı.
+4. Mevcut unit testler regresyon yeşil.
+
+**Kapatılacak bulgular:** F-04-003
+
+**Minimum bağlam:**
+
+- `.cursor/rules/10-backend-architecture.mdc` — katman sorumlulukları
+- `services/ai_engine/factory.py`, `digest_generator.py`, `apps/api/core/deps.py`
+
+**Bu fix iterasyonda yok:** Yeni API endpoint, digest iş kuralı değişikliği.
+
+**Stop:** [ ] `rg "from apps.api" services/ai_engine` → 0; [ ] unit testler yeşil; [ ] `mypy services/ai_engine` yeşil. PR/onay → Fix İterasyon 4.
+
+---
+
+### Fix İterasyon 4 — Docs + env temizlik (MEDIUM / LOW)
+
+**Hedef:** F-04-004, F-04-007, F-04-008 kapat; integration smoke.
+
+**Yapılacaklar:**
+
+1. **F-04-004** — `Docs/02_DATABASE_SCHEMA.md` §audit `event_type` listesine ekle: `api_key.status_changed`, `prompt_template.created` (kod zaten yazıyor; Docs spec güncellemesi — kod değilse tersi).
+2. **F-04-007** — `.env.example` → `RATE_LIMIT_CHATBOT=20` (veya yorum satırı + default notu).
+3. **F-04-008** — `services/ai-engine/README.md` içeriğini `services/ai_engine/` yoluna taşı/senkronize et veya README'de canonical path `services/ai_engine` olarak düzelt.
+4. **F-04-009 smoke** — CI veya local PG + migration sonrası:
+   ```bash
+   pytest tests/integration/test_api_key_endpoints.py \
+          tests/integration/test_api_usage_endpoints.py \
+          tests/integration/test_prompt_endpoints.py \
+          tests/integration/test_digest_endpoints.py \
+          tests/integration/test_rag_pgvector.py \
+          tests/integration/test_chatbot_endpoints.py -v
+   ```
+
+**Kapatılacak bulgular:** F-04-004, F-04-007, F-04-008, F-04-009 (smoke)
+
+**Minimum bağlam:**
+
+- `Docs/02_DATABASE_SCHEMA.md` §audit_logs
+- `.env.example`, `apps/api/core/config.py`
+- `tests/integration/conftest.py` — `DATABASE_URL` / `ygip_test`
+
+**Bu fix iterasyonda yok:** S3 gerçek upload, SMTP bildirim, frontend.
+
+**Stop:** [ ] Docs/02 audit listesi güncel; [ ] `.env.example` güncel; [ ] integration suite yeşil (CI veya local PG). PR/onay → regression audit.
+
+---
+
+## Required Context
+
+- Bu fix `.mdc` §Audit bulguları — tüm F-04-NNN
+- `.cursor/rules/54-phase-04-ai-engine.mdc` — orijinal Done Definition
+- `Docs/03_API_CONTRACTS.md` §5–8 — REST sözleşmeleri
+- `Docs/04_BACKEND_SPEC.md` §9 — LLM, digest, RAG
+- `Docs/02_DATABASE_SCHEMA.md` — audit event_type
+- `.cursor/rules/18-ai-engine.mdc` — anti-pattern'ler
+
+## Fix Done Definition
+
+| Bulgu ID | Severity | Kapatıldı |
+| -------- | -------- | --------- |
+| F-04-001 | HIGH | [x] |
+| F-04-002 | HIGH | [x] |
+| F-04-003 | MEDIUM | [x] |
+| F-04-004 | MEDIUM | [x] |
+| F-04-005 | MEDIUM | [x] |
+| F-04-006 | MEDIUM | [x] |
+| F-04-007 | LOW | [x] |
+| F-04-008 | LOW | [x] |
+| F-04-009 | INFO | [x] |
+
+### Kalite kapıları
+
+- [ ] `ruff check .` + `mypy apps/ services/ packages/` green
+- [ ] `pytest tests/unit/ai_engine/ --cov=services/ai_engine --cov-fail-under=70` green
+- [ ] Faz 4 integration testleri green (CI veya local PG + `alembic upgrade head`)
+- [ ] Orijinal Faz 4 Done Definition spot-check (3 digest API, chat, api-keys, usage-stats)
+- [ ] BLOCKER = 0, HIGH = 0
+- [ ] Regression audit (`@phase-controller`) veya developer onayı
+
+## Explicit Don'ts
+
+- SMTP/FCM bildirim implementasyonu (digest stub yeterli)
+- Web/mobil UI
+- Processor keyword enrich değişikliği
+- MVP-1 `LLMEnricherProcessor`
+- Yeni API endpoint / sonraki faz scope
+- Fix sırasında `Docs/` spec'i kod uydurmak (spec doğruysa kod fix; audit event listesi gibi Docs eksikliği → Docs güncellemesi bu fix'te izinli)
+- Audit raporunu "PASS" diye elle yazmadan kapatma
+
+## Deferred (bilinçli erteleme)
+
+| Bulgu ID | Gerekçe | Hedef |
+| -------- | ------- | ----- |
+| F-04-010 | Faz `.mdc` metin drift; kod Docs ile uyumlu — orijinal `54-phase-04-ai-engine.mdc` ayrı docs oturumu | phase-creator / roadmap senkron |
+| F-04-011 | Bilinçli stub — Faz 5 SMTP | Faz 5 bildirim backend |
+
+---
+
+Fix done → `@phase-controller` regression audit → `Docs/10` Faz 4 tamamlandı işareti → Human Gate.

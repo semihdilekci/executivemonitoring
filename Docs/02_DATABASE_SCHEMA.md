@@ -387,7 +387,7 @@ CREATE INDEX idx_audit_logs_target ON audit_logs (target_type, target_id);
 
 **ON DELETE davranışı:** Kullanıcı silindiğinde `actor_user_id` SET NULL olur — audit kaydı korunur, aktör bilgisi kaybolur.
 
-**event_type değerleri:** `user.login`, `user.logout`, `user.created`, `user.deleted`, `user.role_changed`, `user.deactivated`, `source.created`, `source.deleted`, `source.status_changed`, `prompt_template.updated`, `api_key.created`, `api_key.deleted`, `digest.started`, `digest.completed`, `digest.failed`, `system.error`, `password.reset_initiated`, `password.reset_completed`.
+**event_type değerleri:** `user.login`, `user.logout`, `user.created`, `user.deleted`, `user.role_changed`, `user.deactivated`, `source.created`, `source.deleted`, `source.status_changed`, `prompt_template.created`, `prompt_template.updated`, `api_key.created`, `api_key.deleted`, `api_key.status_changed`, `digest.started`, `digest.completed`, `digest.failed`, `system.error`, `password.reset_initiated`, `password.reset_completed`.
 
 ### 4.13 notification_preferences
 

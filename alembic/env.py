@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-import os
 from logging.config import fileConfig
 
 from alembic import context
+from packages.shared.env_loader import (
+    async_to_sync_database_url,
+    get_database_url,
+    load_dotenv_file,
+)
 from packages.shared.models import Base
 from sqlalchemy import engine_from_config, pool
 
@@ -20,13 +24,9 @@ target_metadata = Base.metadata
 
 def _sync_database_url() -> str:
     """asyncpg URL'ini Alembic için psycopg2 sync URL'ine çevirir."""
-    url = os.environ.get(
-        "DATABASE_URL",
-        "postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev",
-    )
-    if url.startswith("postgresql+asyncpg://"):
-        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
-    return url
+    load_dotenv_file(override=False)
+    url = get_database_url(required=True)
+    return async_to_sync_database_url(url)
 
 
 def run_migrations_offline() -> None:

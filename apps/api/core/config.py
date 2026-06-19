@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     )
 
     ENVIRONMENT: str = "development"
-    DATABASE_URL: str = "postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev"
+    DATABASE_URL: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
     JWT_SECRET_KEY: str = "dev-only-change-me"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_CHATBOT: int = 20
 
     PASSWORD_RESET_BASE_URL: str = "http://localhost:3000/reset-password"
+
+    ENCRYPTION_KEY: str = ""
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

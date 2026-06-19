@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from services.ai_engine.exceptions import AIEngineHTTPError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from apps.api.core.config import Settings, get_settings
@@ -22,8 +23,21 @@ from apps.api.middleware.rate_limiter import (
 )
 from apps.api.middleware.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
 from apps.api.middleware.request_logger import RequestLoggerMiddleware
-from apps.api.routers import audit_logs, auth, health, sources, users
+from apps.api.routers import (
+    api_keys,
+    audit_logs,
+    auth,
+    chat,
+    digests,
+    health,
+    notifications,
+    prompt_templates,
+    sources,
+    users,
+)
 from apps.api.routers import settings as settings_router
+from apps.api.services.api_key_service import ApiKeyService
+from apps.api.services.api_usage_service import ApiUsageService
 
 logger = logging.getLogger("ygip")
 
@@ -51,6 +65,23 @@ def _register_exception_handlers(app: FastAPI, settings: Settings) -> None:
                 }
             },
             headers=headers,
+        )
+
+    @app.exception_handler(AIEngineHTTPError)
+    async def ai_engine_http_exception_handler(
+        request: Request,
+        exc: AIEngineHTTPError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": exc.error_code,
+                    "message": str(exc) or exc.message,
+                    "details": {},
+                }
+            },
+            headers=_error_headers(request),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -125,6 +156,8 @@ def create_app(
         app.state.settings = resolved_settings
         app.state.engine = engine
         app.state.session_factory = session_factory
+        app.state.api_key_service = ApiKeyService(settings=resolved_settings)
+        app.state.api_usage_service = ApiUsageService()
         yield
         await engine.dispose()
 
@@ -135,6 +168,7 @@ def create_app(
     )
 
     backend = rate_limiter_backend or create_rate_limiter_backend(resolved_settings)
+    app.state.rate_limiter_backend = backend
 
     app.add_middleware(
         CORSMiddleware,
@@ -159,6 +193,11 @@ def create_app(
     app.include_router(audit_logs.router)
     app.include_router(settings_router.router)
     app.include_router(sources.router)
+    app.include_router(api_keys.router)
+    app.include_router(prompt_templates.router)
+    app.include_router(digests.router)
+    app.include_router(chat.router)
+    app.include_router(notifications.router)
 
     return app
 

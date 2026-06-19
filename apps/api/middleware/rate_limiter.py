@@ -136,8 +136,8 @@ def resolve_rate_limit(path: str, settings: Settings) -> tuple[str | None, int, 
         )
     if path.startswith("/api/v1/auth"):
         return "auth", settings.RATE_LIMIT_AUTH, WINDOW_SECONDS
-    if path.startswith("/api/v1/chatbot"):
-        return "chatbot", settings.RATE_LIMIT_CHATBOT, WINDOW_SECONDS
+    if path == "/api/v1/chat":
+        return None, 0, WINDOW_SECONDS
     return "general", settings.RATE_LIMIT_GENERAL, WINDOW_SECONDS
 
 

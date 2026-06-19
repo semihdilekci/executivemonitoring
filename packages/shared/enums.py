@@ -56,6 +56,13 @@ class ApiProvider(StrEnum):
     GEMINI = "gemini"
 
 
+class LlmRequestType(StrEnum):
+    """LLM çağrısı işlem tipi (`api_usage_logs.request_type`)."""
+
+    DIGEST_GENERATION = "digest_generation"
+    CHATBOT = "chatbot"
+
+
 PROCESSED_ITEM_SCHEMAS: tuple[str, ...] = ("news", "market", "geo", "transport", "fmcg")
 
 
@@ -73,3 +80,23 @@ class DigestStatus(StrEnum):
     GENERATING = "generating"
     READY = "ready"
     FAILED = "failed"
+
+
+class NotificationChannel(StrEnum):
+    """Bildirim kanalı (`notification_channel_enum`)."""
+
+    EMAIL = "email"
+    PUSH = "push"
+
+
+class NotificationStatus(StrEnum):
+    """Bildirim teslimat durumu (`notification_status_enum`)."""
+
+    SENT = "sent"
+    FAILED = "failed"
+
+
+class NotificationType(StrEnum):
+    """Bildirim tipi — `notification_logs.notification_type`."""
+
+    DIGEST_READY = "digest_ready"

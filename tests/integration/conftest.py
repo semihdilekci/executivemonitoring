@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import os
+import asyncio
+import base64
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -12,42 +13,39 @@ from apps.api.core.config import Settings
 from apps.api.core.security import hash_password
 from apps.api.main import create_app
 from apps.api.middleware.rate_limiter import InMemoryRateLimiterBackend
+from apps.api.services.api_key_service import ApiKeyService
+from apps.api.services.api_usage_service import ApiUsageService
 from httpx import ASGITransport, AsyncClient
 from packages.shared.enums import UserRole
+from packages.shared.env_loader import (
+    can_connect_async,
+    get_database_url,
+    load_dotenv_file,
+    safe_database_target,
+)
 from packages.shared.models.user import User
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-_LOCAL_DEV_URL = "postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev"
-_CI_TEST_URL = "postgresql+asyncpg://test:test@localhost:5432/ygip_test"
-
-
-def _candidate_database_urls() -> list[str]:
-    if env_url := os.environ.get("DATABASE_URL"):
-        return [env_url]
-    return [_LOCAL_DEV_URL, _CI_TEST_URL]
-
-
-async def _can_connect(url: str) -> bool:
-    engine = create_async_engine(url)
-    try:
-        async with engine.connect() as connection:
-            await connection.exec_driver_sql("SELECT 1")
-        return True
-    except Exception:
-        return False
-    finally:
-        await engine.dispose()
+TEST_ENCRYPTION_KEY = base64.b64encode(b"0" * 32).decode()
 
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    for url in _candidate_database_urls():
-        import asyncio
+    """`.env` / ortam `DATABASE_URL` — birincil kaynak."""
+    load_dotenv_file(override=False)
+    try:
+        url = get_database_url(required=True)
+    except RuntimeError as exc:
+        pytest.skip(str(exc))
 
-        if asyncio.run(_can_connect(url)):
-            return url
-    pytest.skip("PostgreSQL not available for integration tests")
+    if not asyncio.run(can_connect_async(url)):
+        target = safe_database_target(url)
+        pytest.skip(
+            f"DATABASE_URL ile PostgreSQL'e bağlanılamadı ({target}). "
+            "`.env` kimlik bilgilerini ve veritabanının çalıştığını kontrol edin."
+        )
+    return url
 
 
 @pytest.fixture
@@ -58,14 +56,16 @@ def test_settings(database_url: str) -> Settings:
         JWT_SECRET_KEY="test-secret-key",
         CORS_ORIGINS=["http://localhost:3000"],
         ENVIRONMENT="development",
+        ENCRYPTION_KEY=TEST_ENCRYPTION_KEY,
     )
 
 
 @pytest.fixture
 async def api_client(test_settings: Settings) -> AsyncIterator[AsyncClient]:
+    backend = InMemoryRateLimiterBackend()
     app = create_app(
         settings=test_settings,
-        rate_limiter_backend=InMemoryRateLimiterBackend(),
+        rate_limiter_backend=backend,
     )
     engine = create_async_engine(
         test_settings.DATABASE_URL,
@@ -80,6 +80,8 @@ async def api_client(test_settings: Settings) -> AsyncIterator[AsyncClient]:
     app.state.settings = test_settings
     app.state.engine = engine
     app.state.session_factory = session_factory
+    app.state.api_key_service = ApiKeyService(settings=test_settings)
+    app.state.api_usage_service = ApiUsageService()
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

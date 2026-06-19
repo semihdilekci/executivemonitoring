@@ -60,8 +60,8 @@ alembic downgrade -1
 alembic upgrade head
 ```
 
-Local DB: `postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev` (`.env.example` ile uyumlu)  
-CI test DB: `postgresql+asyncpg://test:test@localhost:5432/ygip_test`
+Local DB: `.env` içindeki `DATABASE_URL` (şablon: `.env.example`) — test, migration ve seed bu değeri kullanır.  
+CI test DB: `postgresql+asyncpg://test:test@localhost:5432/ygip_test` (GitHub Actions ortam değişkeni)
 
 ### Dev seed data
 
@@ -93,7 +93,7 @@ ruff check .
 ruff format --check .
 mypy apps/ services/ packages/
 pytest tests/unit -v
-pytest tests/integration -v  # local'de PostgreSQL yoksa smoke test skip edilir
+pytest tests/integration -v  # `.env` DATABASE_URL gerekir; bağlantı yoksa anlamlı skip mesajı
 ```
 
 CI pipeline (her PR): `.github/workflows/test.yml` — lint → mypy → unit → integration → coverage (%70).

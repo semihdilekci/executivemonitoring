@@ -27,6 +27,7 @@ from packages.shared.enums import (  # noqa: E402
     SourceType,
     UserRole,
 )
+from packages.shared.env_loader import load_dotenv_file  # noqa: E402
 from packages.shared.models.notification_preference import NotificationPreference  # noqa: E402
 from packages.shared.models.prompt_template import PromptTemplate  # noqa: E402
 from packages.shared.models.source import Source  # noqa: E402
@@ -246,6 +247,7 @@ def _print_summary(result: SeedResult) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv_file(override=False)
     parser = argparse.ArgumentParser(description="YGIP dev fixture seed (idempotent)")
     parser.add_argument(
         "--database-url",

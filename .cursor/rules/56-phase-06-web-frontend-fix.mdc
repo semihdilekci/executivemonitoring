@@ -1,0 +1,226 @@
+---
+description: '[Faz 6 Fix] Web frontend gap remediation — 4 fix iterasyon/chat (read-state → brief → notifications → polish). Mesajda "Faz 6 — Fix İterasyon M" belirt. Audit: phase-controller 2026-06-19.'
+---
+
+# Faz 6 Fix: Web Frontend
+
+## Goal
+
+Aşağıdaki **Audit bulguları** bölümündeki gap'leri kapat. BLOCKER=0, HIGH=0 hedeflenir; MEDIUM/LOW fix iterasyonlarına veya bilinçli defer'e ayrılır. **Yeni feature yok** — yalnızca gap kapatma.
+
+**Kaynak faz:** `.cursor/rules/56-phase-06-web-frontend.mdc`  
+**Audit durumu:** PASS_WITH_GAPS (2026-06-19) — BLOCKER=0, HIGH=4
+
+## Feature branch (fix)
+
+Fix oturumları kaynak faz branch'inde veya dedicated fix branch'te:
+
+**Önerilen branch:** `feature/mvp-0` (mevcut) veya `fix/F6-web-frontend`
+
+**Stop (Fix İterasyon 1, kod öncesi):** [ ] Audit bulguları okundu; [ ] HIGH listesi net; [ ] branch checkout; [ ] Faz 6 `apps/web/` kodu commit/PR'a alınmış.
+
+## Bu fix'in çalışma modeli
+
+Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@56-phase-06-web-frontend-fix` + **「Faz 6 — Fix İterasyon M」**.
+
+Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients) **ayrı PR** (Faz 1/4/5); fix iterasyonları FE tarafını spec'e hizalar, BE hazır olunca entegrasyonu tamamlar.
+
+---
+
+## Audit bulguları (tek kaynak)
+
+| ID | Severity | Tip | Başlık | Kanıt |
+| --- | --- | --- | --- | --- |
+| F-06-001 | HIGH | SECURITY | `localStorage` ile digest okuma durumu | `apps/web/lib/digest-read-store.ts:11-23` — `Docs/05_FRONTEND_SPEC.md` §token storage: `localStorage`/`sessionStorage` yasak |
+| F-06-002 | HIGH | WRONG | Okuma durumu API yerine client-side cache | `use-digests.ts:118-129` client filtre; `use-digest-read.ts:22-24` 404/405 sessiz yutma; İterasyon 3: `GET /digests?is_read=false&limit=3` (`Docs/06` S-HOME §2) |
+| F-06-003 | HIGH | MISSING | Executive Brief backend bağımlılığı | `use-brief.ts:15` → `GET /briefs/today`; repo'da backend route yok (`rg briefs` — yalnızca FE) |
+| F-06-004 | HIGH | MISSING | S-ADMIN-NOTIFICATIONS kısmi | `notification-settings-form.tsx` yalnızca tercih toggle + JWT; `Docs/06` S-ADMIN-NOTIFICATIONS §3 bölüm (alıcı CRUD, zamanlama, chatbot ayarları) eksik |
+| F-06-005 | MEDIUM | MISSING | Chatbot digest bağlamı API'ye gitmiyor | `chat-fab.tsx:10` `?digest_id=`; `use-chatbot.ts:26` yalnızca `{ question }`; `Docs/06` S-CHATBOT digest context |
+| F-06-006 | MEDIUM | PATTERN | API key mask formatı spec dışı | `api-labels.ts:13-15` sabit `••••`; `Docs/06` S-ADMIN-API-KEYS `sk-...xxxx` |
+| F-06-007 | LOW | PATTERN | URL güvenliği `http:` izni | `safe-url.ts:1` — `http:` ve `https:`; `Docs/05` §13.3 `https://` whitelist |
+| F-06-008 | LOW | DOC_DRIFT | Faz kuralı env adı | İterasyon 1 Stop `NEXT_PUBLIC_API_URL`; kod + `Docs/05` → `NEXT_PUBLIC_API_BASE_URL` (`constants.ts:4`) |
+| F-06-009 | INFO | — | E2E / FE unit test yok | MVP-0 kapsam dışı (`Docs/08` §1); bilinçli N/A |
+| F-06-010 | INFO | — | S-SESSION-EXPIRED modal yok | İterasyon 2 "Bu iterasyonda yok" ile uyumlu |
+
+**Explicit Don'ts:** ✅ RN yok; ✅ `dangerouslySetInnerHTML` yok; ✅ viewer'da admin link DOM'da yok (`layout.tsx:49-62`); ✅ Playwright yok.
+
+**Uyumlu alanlar (fix gerekmez):** 9 iterasyon route'ları build'de (`npm run build` 18 route); middleware CSP + admin guard (`middleware.ts`); httpOnly auth cookie proxy (`app/api/auth/*`); `RoleGate` tüm admin sayfalarda; login rate limit UX (`login-form.tsx`); chatbot 429 UX (`use-chatbot.ts:86-89`); print CSS (`globals.css` @media print); `gsap` + `prefers-reduced-motion` (`pill-nav.tsx`); `npm run lint` yeşil.
+
+---
+
+### Fix İterasyon 1 — Okuma durumu + localStorage kaldırma (HIGH / SECURITY)
+
+**Hedef:** F-06-001, F-06-002 kapat.
+
+**Yapılacaklar:**
+
+1. `apps/web/lib/digest-read-store.ts` kaldır veya tamamen deprecate et — `localStorage`/`sessionStorage` kullanımı sıfır (`rg localStorage apps/web` → 0).
+2. **BE hazırsa** (`POST/DELETE /digests/{id}/read`, `GET /digests?is_read=` — `Docs/06` + backend PR):
+   - `use-digest-read.ts` — 404/405 yutmayı kaldır; hata kullanıcıya Türkçe
+   - `use-digests.ts` — `useUnreadDigestTeasers` → `is_read=false&limit=3` API filtresi
+   - `useDigestsWithRead` — API `is_read` alanından türet (client Set kaldır)
+3. **BE henüz yoksa** (geçici, localStorage **yasak**):
+   - Okuma durumu yalnızca React Query cache + mutation optimistic update (session/memory)
+   - `syncReadToApi` çağrısı disabled veya açık "sunucu senkronu yok" notu — sessiz fail yok
+   - BE PR merge sonrası Fix İterasyon 1b veya bu iterasyonda BE branch birleştir
+4. `digests/[id]/page.tsx:52-59` — `getReadDigestIds` import'unu kaldır; hook tabanlı read mark
+5. ReadToggle optimistic update React Query ile (`queryKeys.digests.readState` kaldır veya API-driven yap)
+
+**Kapatılacak bulgular:** F-06-001, F-06-002
+
+**Minimum bağlam:**
+
+- Bu dosya §Audit bulguları (F-06-001, F-06-002)
+- `Docs/06_SCREEN_CATALOG.md` — S-HOME §2, S-DIGESTS-LIST ReadToggle
+- `Docs/05_FRONTEND_SPEC.md` §token storage — localStorage yasağı
+- `.cursor/rules/03-security-baseline.mdc` §5 — token storage
+- `apps/web/hooks/use-digests.ts`, `use-digest-read.ts`, `lib/digest-read-store.ts`
+
+**Backend bağımlılık (ayrı PR):** digest read endpoint + `is_read` query param — Faz 4 veya dedicated BE fix; Faz 6 Explicit Don'ts backend değişikliğini bu PR'a dahil etme.
+
+**Bu fix iterasyonda yok:** Brief API, notifications tam ekran.
+
+**Stop:** [ ] `rg localStorage apps/web` → 0; [ ] teaser/liste read state spec uyumlu veya BE-blocker dokümante; [ ] `cd apps/web && npm run build && npm run lint` yeşil. PR/onay → Fix İterasyon 2.
+
+---
+
+### Fix İterasyon 2 — Executive Brief + ana sayfa (HIGH)
+
+**Hedef:** F-06-003 kapat.
+
+**Yapılacaklar:**
+
+1. **BE hazırsa** — `GET /api/v1/briefs/today` (`Docs/06` S-HOME):
+   - `use-brief.ts` response shape'i `Docs/03` ile doğrula
+   - `executive-brief.tsx` — ready/pending/empty state'ler (`Docs/06` state tablosu)
+2. **BE yoksa** — önce backend PR (Faz 4 scope): brief endpoint + seed/fixture veri; ardından FE entegrasyonu
+3. `UnreadTeasers` — Fix İterasyon 1 sonrası `is_read=false&limit=3` API kullanımını doğrula
+4. `types/api.ts` — `TodayBrief` tipi contract ile hizalı
+
+**Kapatılacak bulgular:** F-06-003
+
+**Minimum bağlam:**
+
+- `Docs/06_SCREEN_CATALOG.md` — S-HOME
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3
+- `apps/web/hooks/use-brief.ts`, `components/home/executive-brief.tsx`
+
+**Backend bağımlılık (ayrı PR):** `briefs/today` router — Faz 4; FE bu iterasyonda yalnızca contract'a bağlanır.
+
+**Bu fix iterasyonda yok:** Admin notifications, chatbot context.
+
+**Stop:** [ ] Brief veri/empty/pending smoke; [ ] ana sayfa 3 teaser API filtresi; [ ] build yeşil. PR/onay → Fix İterasyon 3.
+
+---
+
+### Fix İterasyon 3 — Bildirim admin tamamlama (HIGH)
+
+**Hedef:** F-06-004 kapat.
+
+**Yapılacaklar:**
+
+1. `notification-settings-form.tsx` — `Docs/06` S-ADMIN-NOTIFICATIONS üç bölüm:
+   - **Bölüm 1:** Mail alıcı listesi — tablo + "Alıcı Ekle" + kaldır (`GET/POST/DELETE /notifications/recipients` — BE yoksa ayrı PR)
+   - **Bölüm 2:** Bildirim zamanlaması — digest tipi × gün/saat/toggle (`GET/PUT settings notification_schedule`)
+   - **Bölüm 3:** JWT ayarları — mevcut; chatbot parametreleri ekle (rate limit, temperature — `Docs/03` §11 settings keys)
+2. `hooks/use-notifications.ts` — recipients CRUD + schedule mutations; `queryKeys` genişlet
+3. `admin/notifications/page.tsx` — empty state'ler (`Docs/06` empty table)
+4. Mevcut bildirim tercihleri tablosu korunur veya alıcı listesi ile birleştirilir (spec öncelikli)
+
+**Kapatılacak bulgular:** F-06-004
+
+**Minimum bağlam:**
+
+- `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-NOTIFICATIONS
+- `Docs/03_API_CONTRACTS.md` §9–11
+- `.cursor/rules/56-phase-06-web-frontend.mdc` İterasyon 9
+- `apps/web/app/(dashboard)/admin/notifications/page.tsx`
+
+**Backend bağımlılık (ayrı PR):** `/notifications/recipients`, `notification_schedule` settings — Faz 5; contract `Docs/03`'te eksikse önce Docs + BE, sonra FE.
+
+**Bu fix iterasyonda yok:** Chatbot digest context, URL mask polish.
+
+**Stop:** [ ] 3 bölüm UI render; [ ] JWT + schedule kaydet smoke; [ ] build + lint yeşil. PR/onay → Fix İterasyon 4.
+
+---
+
+### Fix İterasyon 4 — Chatbot context + pattern polish (MEDIUM / LOW)
+
+**Hedef:** F-06-005, F-06-006, F-06-007, F-06-008 kapat.
+
+**Yapılacaklar:**
+
+1. **F-06-005** — `use-chatbot.ts`: `digestId` prop → request body (`digest_id` veya `Docs/03`/`AskRequest` alanı); BE desteklemiyorsa BE PR önce
+2. **F-06-006** — `formatMaskedApiKey(apiKey)` — alias veya provider prefix + son 4 karakter (`sk-...xxxx` görsel)
+3. **F-06-007** — `safe-url.ts` — production'da yalnızca `https:`; dev `http://localhost` istisnası `NODE_ENV` veya allowlist ile
+4. **F-06-008** — `.cursor/rules/56-phase-06-web-frontend.mdc` İterasyon 1 Stop: `NEXT_PUBLIC_API_URL` → `NEXT_PUBLIC_API_BASE_URL` (Docs/05 ile hizala) — **yalnızca faz .mdc**, kod değişmez
+5. Smoke: `/chatbot?digest_id=...` banner + API payload; digest detay FAB link
+
+**Kapatılacak bulgular:** F-06-005, F-06-006, F-06-007, F-06-008
+
+**Minimum bağlam:**
+
+- `Docs/06_SCREEN_CATALOG.md` — S-CHATBOT, S-ADMIN-API-KEYS
+- `Docs/05_FRONTEND_SPEC.md` §13.3
+- `apps/web/hooks/use-chatbot.ts`, `lib/safe-url.ts`, `lib/api-labels.ts`
+
+**Bu fix iterasyonda yok:** Yeni ekran, E2E Playwright.
+
+**Stop:** [ ] Chatbot digest context smoke; [ ] mask + URL güvenliği; [ ] `cd apps/web && npm run build && npm run lint` yeşil. PR/onay → regression audit.
+
+---
+
+## Required Context
+
+- Bu fix `.mdc` §Audit bulguları — tüm F-06-NNN
+- `.cursor/rules/56-phase-06-web-frontend.mdc` — orijinal Done Definition
+- `Docs/05_FRONTEND_SPEC.md` — §4–9, §12–13 (route, auth, güvenlik)
+- `Docs/06_SCREEN_CATALOG.md` — S-HOME, S-DIGESTS-*, S-CHATBOT, S-ADMIN-NOTIFICATIONS
+- `Docs/03_API_CONTRACTS.md` — §2–11 (BE contract; eksik endpoint'ler BE PR)
+- `Docs/07_SECURITY_IMPLEMENTATION.md` — §10 (cookie, CSP, RBAC UI)
+- `Docs/08_TESTING_STRATEGY.md` — §1 (FE unit/E2E MVP-0 dışı)
+
+## Fix Done Definition
+
+| Bulgu ID | Severity | Kapatıldı |
+| -------- | -------- | --------- |
+| F-06-001 | HIGH | [ ] |
+| F-06-002 | HIGH | [ ] |
+| F-06-003 | HIGH | [ ] |
+| F-06-004 | HIGH | [ ] |
+| F-06-005 | MEDIUM | [ ] |
+| F-06-006 | MEDIUM | [ ] |
+| F-06-007 | LOW | [ ] |
+| F-06-008 | LOW | [ ] |
+| F-06-009 | INFO | [x] |
+| F-06-010 | INFO | [x] |
+
+### Kalite kapıları
+
+- [ ] `cd apps/web && npm run build && npm run lint` green
+- [ ] `rg localStorage apps/web` → 0
+- [ ] `rg dangerouslySetInnerHTML apps/web` → 0
+- [ ] Viewer `/admin/*` middleware redirect smoke
+- [ ] Orijinal Faz 6 Done Definition spot-check (7 admin + 4 viewer route)
+- [ ] BLOCKER = 0, HIGH = 0
+- [ ] Regression audit (`@phase-controller`) veya developer onayı
+
+## Explicit Don'ts
+
+- React Native (Faz 7)
+- Backend API değişikliği **bu PR'da** (gerekirse ayrı PR Faz 1/4/5 — fix .mdc BE bağımlılık notu)
+- Playwright E2E
+- `dangerouslySetInnerHTML` digest/chat içeriğinde
+- Viewer sidebar veya admin linklerinin viewer DOM'unda render edilmesi
+- Yeni viewer/admin ekranı (gap kapatma dışı)
+
+## Deferred (bilinçli erteleme)
+
+| Bulgu ID | Gerekçe | Hedef |
+| -------- | ------- | ----- |
+| F-06-009 | MVP-0 FE unit/E2E kapsam dışı (`Docs/08`) | MVP-1 Playwright değerlendirme |
+| F-06-010 | İterasyon 2 bilinçli erteleme | Opsiyonel polish |
+
+---
+
+Fix done → `@phase-controller` regression audit → Human Gate (`Docs/10` §Faz 6).

@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterator
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from packages.shared.env_loader import (
+    get_database_url,
+    load_dotenv_file,
+    safe_database_target,
+    try_resolve_sync_database_url,
+)
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import OperationalError
-
-# Local docker-compose (Docs/09 §1.3) önce; CI service container yedek
-_LOCAL_DEV_URL = "postgresql+asyncpg://ygip:ygip_dev_pass@localhost:5432/ygip_dev"
-_CI_TEST_URL = "postgresql+asyncpg://test:test@localhost:5432/ygip_test"
 
 CORE_TABLES = {
     "users",
@@ -26,42 +26,20 @@ CORE_TABLES = {
 CORE_REVISION = "001_core_tables"
 
 
-def _to_sync_url(url: str) -> str:
-    if url.startswith("postgresql+asyncpg://"):
-        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
-    return url
-
-
-def _candidate_database_urls() -> list[str]:
-    if env_url := os.environ.get("DATABASE_URL"):
-        return [_to_sync_url(env_url)]
-    return [_to_sync_url(_LOCAL_DEV_URL), _to_sync_url(_CI_TEST_URL)]
-
-
-def _can_connect(sync_url: str) -> bool:
-    engine = create_engine(sync_url)
-    try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        return True
-    except OperationalError:
-        return False
-    finally:
-        engine.dispose()
-
-
-def _resolve_sync_database_url() -> str | None:
-    for url in _candidate_database_urls():
-        if _can_connect(url):
-            return url
-    return None
-
-
 @pytest.fixture(scope="session")
 def sync_database_url() -> str:
-    url = _resolve_sync_database_url()
+    load_dotenv_file(override=False)
+    url = try_resolve_sync_database_url()
     if url is None:
-        pytest.skip("PostgreSQL not available or credentials invalid for integration tests")
+        try:
+            raw = get_database_url(required=True)
+            target = safe_database_target(raw)
+        except RuntimeError as exc:
+            pytest.skip(str(exc))
+        pytest.skip(
+            f"DATABASE_URL ile PostgreSQL'e bağlanılamadı ({target}). "
+            "`.env` kimlik bilgilerini kontrol edin."
+        )
     return url
 
 
