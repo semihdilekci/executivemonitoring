@@ -36,9 +36,7 @@ def _sanitize_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     if not payload:
         return {}
     return {
-        key: value
-        for key, value in payload.items()
-        if key.lower() not in _SENSITIVE_PAYLOAD_KEYS
+        key: value for key, value in payload.items() if key.lower() not in _SENSITIVE_PAYLOAD_KEYS
     }
 
 

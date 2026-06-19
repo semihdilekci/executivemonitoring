@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="ISO-8859-9"?>
+<rss version="2.0">
+  <channel>
+    <title>Türkçe Karakter Feed</title>
+    <item>
+      <title>İstanbul'da şırınga ve ğüş testi</title>
+      <link>https://example.com/tr/1</link>
+      <description>Öğrenci çalışması: ısı ölçümü yapıldı.</description>
+    </item>
+  </channel>
+</rss>

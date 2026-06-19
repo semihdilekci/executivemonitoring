@@ -111,8 +111,7 @@ async def test_initiate_creates_token_and_sends_email(
     assert capturing_mailer.last_raw_token
     mock_audit_service.log_event.assert_awaited_once()
     assert (
-        mock_audit_service.log_event.await_args.kwargs["event_type"]
-        == "password.reset_initiated"
+        mock_audit_service.log_event.await_args.kwargs["event_type"] == "password.reset_initiated"
     )
 
 
@@ -190,6 +189,5 @@ async def test_complete_updates_password_and_marks_token_used(
     mock_user_repo.update_password_hash.assert_awaited_once()
     mock_reset_repo.mark_used.assert_awaited_once_with(db, reset_row)
     assert (
-        mock_audit_service.log_event.await_args.kwargs["event_type"]
-        == "password.reset_completed"
+        mock_audit_service.log_event.await_args.kwargs["event_type"] == "password.reset_completed"
     )

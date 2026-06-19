@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>YGIP Test RSS</title>
+    <link>https://example.com</link>
+    <description>Fixture feed for unit tests</description>
+    <item>
+      <title>TCMB faiz kararı açıklandı</title>
+      <link>https://example.com/article/1</link>
+      <guid isPermaLink="true">https://example.com/article/1</guid>
+      <pubDate>Mon, 16 Jun 2026 06:00:00 GMT</pubDate>
+      <description>Merkez Bankası politika faizini yüzde 50 olarak açıkladı.</description>
+    </item>
+    <item>
+      <title>Enflasyon verileri</title>
+      <link>https://example.com/article/2</link>
+      <guid>article-2-guid</guid>
+      <description><![CDATA[<p>Mayıs ayı enflasyonu <strong>yüzde 3,2</strong> olarak açıklandı.</p>]]></description>
+    </item>
+  </channel>
+</rss>

@@ -17,9 +17,7 @@ class AuditRepository:
 
     async def get_by_id(self, db: AsyncSession, audit_id: uuid.UUID) -> AuditLog | None:
         result = await db.execute(
-            select(AuditLog)
-            .options(joinedload(AuditLog.actor))
-            .where(AuditLog.id == audit_id)
+            select(AuditLog).options(joinedload(AuditLog.actor)).where(AuditLog.id == audit_id)
         )
         return result.scalar_one_or_none()
 

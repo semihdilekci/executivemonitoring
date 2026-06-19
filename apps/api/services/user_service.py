@@ -148,11 +148,7 @@ class UserService:
         if user is None:
             raise NotFoundException(message="Kullanıcı bulunamadı.")
 
-        if (
-            body.full_name is None
-            and body.role is None
-            and body.is_active is None
-        ):
+        if body.full_name is None and body.role is None and body.is_active is None:
             return _to_user_response(user)
 
         previous_role = user.role

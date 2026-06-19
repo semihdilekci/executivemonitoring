@@ -51,9 +51,7 @@ def _access_token_ttl(
     expire_minutes: int | None = None,
 ) -> timedelta:
     minutes = (
-        expire_minutes
-        if expire_minutes is not None
-        else settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        expire_minutes if expire_minutes is not None else settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
     )
     return timedelta(minutes=minutes)
 
@@ -63,9 +61,7 @@ def _refresh_token_ttl(
     *,
     expire_days: int | None = None,
 ) -> timedelta:
-    days = (
-        expire_days if expire_days is not None else settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    days = expire_days if expire_days is not None else settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
     return timedelta(days=days)
 
 

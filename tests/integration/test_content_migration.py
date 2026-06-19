@@ -179,9 +179,7 @@ def test_content_migration_prompt_templates_name_unique(migrated_content_db: Eng
 def test_content_migration_full_chain_upgrade(migrated_content_db: Engine) -> None:
     """001→003 ardışık upgrade sonrası alembic revision doğrulaması."""
     with migrated_content_db.connect() as connection:
-        result = connection.execute(
-            text("SELECT version_num FROM alembic_version")
-        )
+        result = connection.execute(text("SELECT version_num FROM alembic_version"))
         assert result.scalar() == CONTENT_REVISION
 
 

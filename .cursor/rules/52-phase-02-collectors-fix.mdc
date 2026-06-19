@@ -1,0 +1,212 @@
+---
+description: '[Faz 2 Fix] Collector gap remediation — 4 fix iterasyon/chat (error lifecycle → audit → coverage → contract). Mesajda "Faz 2 — Fix İterasyon M" belirt. Audit: phase-controller 2026-06-17.'
+---
+
+# Faz 2 Fix: Collector'lar
+
+## Goal
+
+Aşağıdaki **Audit bulguları** bölümündeki gap'leri kapat. BLOCKER=0, HIGH=0 hedeflenir; MEDIUM/LOW fix iterasyonlarına veya bilinçli defer'e ayrılır. **Yeni feature yok** — yalnızca gap kapatma.
+
+**Kaynak faz:** `.cursor/rules/52-phase-02-collectors.mdc`  
+**Audit durumu:** PASS_WITH_GAPS (2026-06-17) — BLOCKER=0, HIGH=3
+
+## Feature branch (fix)
+
+Fix oturumları kaynak faz branch'inde veya dedicated fix branch'te:
+
+**Önerilen branch:** `feature/mvp-0` (mevcut) veya `fix/F2-collectors`
+
+**Stop (Fix İterasyon 1, kod öncesi):** [ ] Audit bulguları okundu; [ ] HIGH listesi net; [ ] branch checkout; [ ] Faz 2 kodu commit/PR'a alınmış.
+
+## Bu fix'in çalışma modeli
+
+Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@52-phase-02-collectors-fix` + **「Faz 2 — Fix İterasyon M」**.
+
+---
+
+## Audit bulguları (tek kaynak)
+
+| ID | Severity | Tip | Başlık | Kanıt |
+| --- | --- | --- | --- | --- |
+| F-02-001 | HIGH | MISSING | Source `error_count` yaşam döngüsü eksik | `rg error_count services/collectors` → 0; `Docs/01` §collector |
+| F-02-002 | HIGH | SECURITY | `system.error` audit DB'ye yazılmıyor | `error_handler.py:64-84` — `StubCollectionAuditLogger` yalnızca logger |
+| F-02-003 | HIGH | TEST_GAP | Collector modül coverage %64 < %70 | `pytest tests/unit/collectors/ --cov=services/collectors --cov-fail-under=70` → FAIL |
+| F-02-004 | MEDIUM | MISSING | `last_fetched_at` başarılı çekimde güncellenmiyor | `rg last_fetched_at services/collectors` → 0; `Docs/01` |
+| F-02-005 | MEDIUM | TEST_GAP | Handler/source_loader modülleri test dışı | `handlers/*_handler.py`, `source_loader.py` → %0 coverage |
+| F-02-006 | MEDIUM | EXTRA | `GET /api/v1/sources/{id}` spec dışı | `sources.py:56-62`; `Docs/03` §4'te yok |
+| F-02-007 | MEDIUM | TEST_GAP | Integration testler yerelde doğrulanamadı | `conftest.py:50` skip; 8 test skipped (CI'da PG service var) |
+| F-02-008 | LOW | DOC_DRIFT | `.env.example` yalnızca `IMAP_PASSWORD` | `.env.example:36-37`; İterasyon 2.4 `IMAP_*` beklentisi |
+| F-02-009 | LOW | PATTERN | `PUT /sources` audit event yok | `source_service.py:155-190` — `Docs/07` event listesinde `source.updated` yok |
+| F-02-010 | INFO | — | Lambda CDK stub 501 — bilinçli | `infra/README.md:80`, `lambda_stub/handler.py` |
+| F-02-011 | INFO | — | `Docs/10` Faz 2 tamamlandı işareti yok | Human Gate sonrası beklenen |
+| F-02-012 | INFO | — | Explicit Don'ts uyumlu | processor/FE/canlı fetch ihlali yok |
+
+**Explicit Don'ts:** ✅ Uyumlu (processor iş mantığı, FE/mobil, canlı RSS/IMAP unit test, onaysız prod source/AWS delete yok)
+
+**Uyumlu alanlar (fix gerekmez):** BaseCollector + 3 collector implementasyonu; SQS publisher format; Redis dedup key; source CRUD + RBAC (`require_admin`); audit `source.created/deleted/status_changed`; config validation (`ingest_mode`, `default_category`, tip-spesifik alanlar); EventBridge schedule (15/60/30 dk) + Lambda IaC + CloudWatch log group; `cdk synth` testleri yeşil; ruff + mypy yeşil; unit collector parse testleri (fixture-driven); genel unit coverage %73 (CI eşiği geçer).
+
+---
+
+### Fix İterasyon 1 — Collector hata yaşam döngüsü (HIGH)
+
+**Hedef:** F-02-001, F-02-004 kapat.
+
+**Yapılacaklar:**
+
+1. `services/collectors/` — başarılı collect sonrası `source.last_fetched_at` güncelle ve `error_count = 0` sıfırla (aynı DB session veya repository helper).
+2. `handle_collection_error` / `run_collector_for_source` path'inde 3 retry sonrası:
+   - `error_count` artır (`Docs/01` — ardışık hata sayacı)
+   - `error_count >= 3` → `source.status = error`
+3. Repository veya shared helper: `SourceRepository.record_fetch_success()` / `record_fetch_failure()` — collector handler'dan çağrılır; raw SQL yasak.
+4. Unit test: başarılı run → `error_count` sıfır + `last_fetched_at` set; 3. fail → `error_count++`; 3. fail sonrası `status=error`.
+5. Negatif deny: inactive source skip'te DB güncellenmez (mevcut davranış korunur).
+
+**Kapatılacak bulgular:** F-02-001, F-02-004
+
+**Minimum bağlam:**
+
+- Bu dosya §Audit bulguları (F-02-001, F-02-004)
+- `Docs/01_DOMAIN_MODEL.md` — source lifecycle, `error_count`, `last_fetched_at`
+- `Docs/04_BACKEND_SPEC.md` §7 — handler loop, retry
+- `services/collectors/handler.py`, `error_handler.py`
+- `apps/api/repositories/source_repository.py` (veya collector-scoped repo)
+
+**Bu fix iterasyonda yok:** Audit DB yazımı, coverage artırımı.
+
+**Stop:** [ ] Domain lifecycle unit testleri yeşil; [ ] `ruff` + `mypy services/collectors` yeşil. PR/onay → Fix İterasyon 2.
+
+---
+
+### Fix İterasyon 2 — `system.error` audit entegrasyonu (HIGH / SECURITY)
+
+**Hedef:** F-02-002 kapat.
+
+**Yapılacaklar:**
+
+1. `StubCollectionAuditLogger` yerine (veya yanında) production path: `audit_logs` tablosuna `system.error` yazan `DbCollectionAuditLogger` — `AuditService.log_event` pattern'i (`apps/api/services/audit_service.py`) reuse veya collector-scoped adapter.
+2. Payload: `source_id`, `source_name`, `error_message` (hassas içerik/credential yok — `03-security-baseline`).
+3. Lambda handler'da DB session açılıp audit aynı transaction'da commit edilmeli veya collector audit için explicit flush+commit pattern dokümante edilmeli.
+4. Unit test: mock session ile `log_collection_error` → `event_type=system.error` assert.
+5. `error_handler.py` stub testleri güncelle — stub yalnızca test/Lambda-less path'te kalsın.
+
+**Kapatılacak bulgular:** F-02-002
+
+**Minimum bağlam:**
+
+- `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — `system.error`
+- `Docs/04_BACKEND_SPEC.md` §7 — 3. retry fail → audit
+- `services/collectors/error_handler.py`
+- `apps/api/services/audit_service.py`
+
+**Bu fix iterasyonda yok:** SMTP admin bildirimi (Faz 5), processor scope.
+
+**Stop:** [ ] Audit yazım unit testi yeşil; [ ] plaintext secret log yok (grep review). PR/onay → Fix İterasyon 3.
+
+---
+
+### Fix İterasyon 3 — Collector test coverage (HIGH)
+
+**Hedef:** F-02-003, F-02-005, F-02-007 kapat.
+
+**Yapılacaklar:**
+
+1. `tests/unit/collectors/test_handler.py` (yeni) — `run_collector_batch`, `lambda_handler`, inactive skip, collector map miss.
+2. `tests/unit/collectors/test_handlers.py` veya per-file — `rss_handler`, `email_handler`, `gov_handler` lambda entry (mock `_sources_loader`).
+3. `tests/unit/collectors/test_source_loader.py` (yeni) — mock DB session ile aktif source listesi.
+4. `tests/unit/collectors/test_persistence.py` genişlet — `ingest_message` happy path + DB duplicate + Redis duplicate (mock session/redis).
+5. Coverage hedefi: `services/collectors/` ≥%70 line (`04-quality-gates` collector parse satırı).
+6. Integration smoke (PG varsa veya CI): `pytest tests/integration/test_collector_sqs_flow.py tests/integration/test_source_endpoints.py -v`.
+
+**Kapatılacak bulgular:** F-02-003, F-02-005, F-02-007
+
+**Minimum bağlam:**
+
+- `Docs/08_TESTING_STRATEGY.md` §3.1
+- `.cursor/rules/04-quality-gates.mdc` — collector ≥%70
+- `tests/unit/collectors/`, `tests/integration/test_collector_sqs_flow.py`
+
+**Bu fix iterasyonda yok:** Yeni collector tipi, infra deploy.
+
+**Stop:** [ ] `pytest tests/unit/collectors/ --cov=services/collectors --cov-fail-under=70` yeşil; [ ] integration suite yeşil (CI veya local PG). PR/onay → Fix İterasyon 4.
+
+---
+
+### Fix İterasyon 4 — Contract ve env temizlik (MEDIUM / LOW)
+
+**Hedef:** F-02-006, F-02-008 kapat; F-02-009 defer kararı.
+
+**Yapılacaklar:**
+
+1. **F-02-006** — İki seçenekten biri (ADR gerektirmez, küçük diff tercih):
+   - **A (önerilen):** `Docs/03_API_CONTRACTS.md` §4'e `GET /api/v1/sources/{source_id}` ekle (admin-only, 200/404).
+   - **B:** Endpoint kaldır — admin UI Faz 6'da list'ten id kullanır.
+2. **F-02-008** — `.env.example`: collector IMAP için yorumlu placeholder'lar (`IMAP_HOST`, `IMAP_USER` opsiyonel; şifre `IMAP_PASSWORD` — repo'ya değer yok).
+3. **F-02-009** — `source.updated` audit: `Docs/07` event listesine ekleme **veya** bilinçli defer (bu fix'te kod değişikliği yok — Deferred tablosuna al).
+
+**Kapatılacak bulgular:** F-02-006, F-02-008
+
+**Minimum bağlam:**
+
+- `Docs/03_API_CONTRACTS.md` §4
+- `.env.example`
+- `apps/api/routers/sources.py`
+
+**Bu fix iterasyonda yok:** Frontend admin sources ekranı (Faz 6).
+
+**Stop:** [ ] Docs/kod uyumu; [ ] `.env.example` güncel. PR/onay → regression audit veya Human Gate.
+
+---
+
+## Required Context
+
+- Bu fix `.mdc` §Audit bulguları — tüm F-02-NNN
+- `.cursor/rules/52-phase-02-collectors.mdc` — orijinal Done Definition
+- `Docs/01_DOMAIN_MODEL.md` — source lifecycle
+- `Docs/03_API_CONTRACTS.md` §4 — source API
+- `Docs/04_BACKEND_SPEC.md` §7 — collector framework
+- `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — audit events
+- `Docs/08_TESTING_STRATEGY.md` §3.1 — collector testleri
+
+## Fix Done Definition
+
+| Bulgu ID | Severity | Kapatıldı |
+| -------- | -------- | --------- |
+| F-02-001 | HIGH | [ ] |
+| F-02-002 | HIGH | [ ] |
+| F-02-003 | HIGH | [ ] |
+| F-02-004 | MEDIUM | [ ] |
+| F-02-005 | MEDIUM | [ ] |
+| F-02-006 | MEDIUM | [ ] |
+| F-02-007 | MEDIUM | [ ] |
+| F-02-008 | LOW | [ ] |
+
+### Kalite kapıları
+
+- [ ] `ruff check services/collectors apps/api/routers/sources.py` + `mypy services/collectors` green
+- [ ] `pytest tests/unit/collectors/ --cov=services/collectors --cov-fail-under=70` green
+- [ ] `pytest tests/integration/test_source_endpoints.py tests/integration/test_collector_sqs_flow.py -v` green (PG/CI)
+- [ ] `pytest tests/unit/infra/test_stack_synth.py -v` regresyon yeşil
+- [ ] Orijinal Faz 2 Done Definition spot-check
+- [ ] BLOCKER = 0, HIGH = 0
+- [ ] Regression audit (`@phase-controller`) veya developer onayı
+
+## Explicit Don'ts
+
+- Yeni collector tipi / processor pipeline / Faz 3 scope ekleme
+- Onaysız production `sources` kaydı veya AWS kaynak silme
+- Canlı RSS/IMAP URL unit test içine alma
+- Audit raporunu "PASS" diye elle yazmadan kapatma
+- Fix sırasında `Docs/` spec'i kod uydurmak (spec doğruysa kod fix; spec yanlışsa ayrı docs oturumu)
+
+## Deferred (bilinçli erteleme)
+
+| Bulgu ID | Gerekçe | Hedef |
+| -------- | ------- | ----- |
+| F-02-009 | `source.updated` audit `Docs/07` event listesinde yok — product kararı | Faz 6 admin sources veya ayrı docs PR |
+| F-02-010 | Lambda bundle deploy — IaC stub bilinçli; `infra/README.md` dokümante | Faz 8 production launch |
+| F-02-011 | Roadmap tamamlandı işareti Human Gate sonrası | Developer onayı |
+
+---
+
+Fix done → `@phase-controller` regression audit → `Docs/10` Faz 2 tamamlandı işareti → Human Gate.

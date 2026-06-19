@@ -303,6 +303,19 @@ Tüm veri kaynaklarını listeler.
 }
 ```
 
+### GET /api/v1/sources/{source_id} _(Admin only)_
+
+Tek bir veri kaynağının detayını döner.
+
+**Response (200):** `SourceResponse` — liste öğesi ile aynı alanlar (`id`, `name`, `source_type`, `config`, `polling_interval_minutes`, `status`, `last_fetched_at`, `error_count`, `category`, `target_phase`, `created_at`).
+
+**Hatalar:**
+
+| Kod | Durum |
+|-----|-------|
+| `NOT_FOUND` | Kaynak bulunamadı |
+| `FORBIDDEN` | Admin değil |
+
 ### POST /api/v1/sources _(Admin only)_
 
 Yeni veri kaynağı ekler.

@@ -39,6 +39,34 @@ disallow_untyped_defs = false
 module = "pgvector.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "boto3.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "botocore.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "feedparser.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "trafilatura.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "bs4.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langdetect.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tiktoken.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

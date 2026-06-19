@@ -158,9 +158,7 @@ async def seed_prompt_templates(db: AsyncSession) -> SeedStats:
     stats = SeedStats()
     for item in _load_fixture("prompt_templates.json"):
         name = item["name"]
-        existing = await db.execute(
-            select(PromptTemplate).where(PromptTemplate.name == name)
-        )
+        existing = await db.execute(select(PromptTemplate).where(PromptTemplate.name == name))
         if existing.scalar_one_or_none() is not None:
             stats = SeedStats(created=stats.created, skipped=stats.skipped + 1)
             continue

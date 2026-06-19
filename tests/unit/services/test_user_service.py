@@ -160,8 +160,7 @@ async def test_deactivate_user_writes_audit(
     )
 
     event_types = [
-        call.kwargs["event_type"]
-        for call in mock_audit_service.log_event.await_args_list
+        call.kwargs["event_type"] for call in mock_audit_service.log_event.await_args_list
     ]
     assert "user.deactivated" in event_types
     assert "user.updated" in event_types
@@ -255,8 +254,7 @@ async def test_update_user_role_change_writes_audit(
     )
 
     event_types = [
-        call.kwargs["event_type"]
-        for call in mock_audit_service.log_event.await_args_list
+        call.kwargs["event_type"] for call in mock_audit_service.log_event.await_args_list
     ]
     assert "user.role_changed" in event_types
 
@@ -327,7 +325,6 @@ async def test_update_user_full_name_writes_audit(
     )
 
     event_types = [
-        call.kwargs["event_type"]
-        for call in mock_audit_service.log_event.await_args_list
+        call.kwargs["event_type"] for call in mock_audit_service.log_event.await_args_list
     ]
     assert "user.updated" in event_types

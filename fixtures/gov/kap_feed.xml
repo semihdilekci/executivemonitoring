@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>KAP Bildirimleri</title>
+    <link>https://www.kap.org.tr</link>
+    <description>Kamuyu Aydınlatma Platformu</description>
+    <item>
+      <title>ABC Holding A.Ş. - Özel Durum Açıklaması (2026/0898)</title>
+      <link>https://www.kap.org.tr/tr/Bildirim/898</link>
+      <guid isPermaLink="true">kap-2026-0898</guid>
+      <pubDate>Mon, 16 Jun 2026 14:30:00 +0300</pubDate>
+      <description>
+        Şirketimizin yönetim kurulu toplantısında alınan kararlar kamuya açıklanmıştır.
+        Yatırımcılarımızın bilgisine sunarız.
+      </description>
+    </item>
+    <item>
+      <title>XYZ Gıda A.Ş. - Finansal Tablo Bildirimi (2026/0901)</title>
+      <link>https://www.kap.org.tr/tr/Bildirim/901</link>
+      <guid>kap-2026-0901</guid>
+      <pubDate>Tue, 17 Jun 2026 08:15:00 +0300</pubDate>
+      <description>2026 yılı ilk çeyrek finansal sonuçları KAP'ta yayımlanmıştır.</description>
+    </item>
+  </channel>
+</rss>

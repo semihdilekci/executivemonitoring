@@ -7,3 +7,5 @@ pytest-cov>=6.0.0
 pytest-asyncio>=0.24.0
 coverage>=7.6.0
 httpx>=0.28.0
+moto[sqs]>=5.0.0
+fakeredis>=2.26.0

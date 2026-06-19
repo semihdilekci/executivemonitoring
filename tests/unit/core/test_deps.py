@@ -160,4 +160,3 @@ async def test_require_role_factory_denies_wrong_role() -> None:
 
     with pytest.raises(ForbiddenException):
         await guard(current_user=viewer)
-

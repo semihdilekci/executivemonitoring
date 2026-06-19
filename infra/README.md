@@ -10,7 +10,9 @@ YGIP dev ortamı kaynakları AWS CDK (Python) ile tanımlanır. Kaynak adlandır
 | RDS PostgreSQL 16 | `dev-ygip-rds` — t3.micro, VPC-internal, backup kapalı |
 | S3 | `dev-ygip-archive-{account}` — ham arşiv + digest HTML |
 | SQS + DLQ | `dev-ygip-sqs-{rss,email,gov,api}` + `-dlq` |
-| EventBridge | `dev-ygip-collector-schedule-placeholder` (disabled) |
+| EventBridge | `dev-ygip-collector-schedule-{rss,email,gov}` — 15/60/30 dk |
+| Lambda | `dev-ygip-collector-{rss,email,gov}` — collector worker'lar |
+| CloudWatch | `/aws/lambda/dev-ygip-collector-*` log grupları |
 | IAM | `dev-ygip-lambda-execution` — dev kaynakları + prod deny |
 
 **E-posta (SMTP):** AWS SES kullanılmaz. Dev'de Gmail SMTP (`smtp.gmail.com:587`, uygulama şifresi); production'da kurumsal SMTP relay. Kimlik bilgileri `.env` / Secrets Manager'da — IaC dışı.
@@ -61,6 +63,25 @@ Deploy sonrası çıktılar (`cdk deploy` Outputs):
 - `Sqs{Rss,Email,Gov,Api}Url` → `SQS_QUEUE_*_URL`
 - `RdsEndpoint` + `RdsSecretArn` → `DATABASE_URL` (Secrets Manager'dan)
 - `LambdaExecutionRoleArn` — Faz 2+ Lambda deploy
+- `Collector{Rss,Email,Gov}Arn` — collector Lambda ARN'leri
+
+### Collector Lambda (manuel invoke)
+
+Deploy sonrası tek collector tipini test etmek için:
+
+```bash
+aws lambda invoke \
+  --function-name dev-ygip-collector-rss \
+  --payload '{"source_type":"rss"}' \
+  /tmp/collector-out.json
+cat /tmp/collector-out.json
+```
+
+> **Not:** CDK'daki `infra/collectors/lambda_stub/` yalnızca IaC synth içindir. Gerçek deploy'da monorepo paketi (`services/`, `packages/`) bundle edilmelidir. Lambda ortam değişkenleri: `DATABASE_URL`, `REDIS_URL`, `SQS_QUEUE_*_URL` (CDK queue URL'leri otomatik enjekte eder).
+
+### SQS → raw_items (Faz 2.6)
+
+Collector mesajı SQS'e yazar; `services/collectors/persistence.py` mesajı Redis dedup + `raw_items` insert ile işler (Faz 3 processor öncesi stub).
 
 SMTP için `.env` örneği (dev Gmail):
 

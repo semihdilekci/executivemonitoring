@@ -22,7 +22,7 @@ from apps.api.middleware.rate_limiter import (
 )
 from apps.api.middleware.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
 from apps.api.middleware.request_logger import RequestLoggerMiddleware
-from apps.api.routers import audit_logs, auth, health, users
+from apps.api.routers import audit_logs, auth, health, sources, users
 from apps.api.routers import settings as settings_router
 
 logger = logging.getLogger("ygip")
@@ -158,6 +158,7 @@ def create_app(
     app.include_router(users.router)
     app.include_router(audit_logs.router)
     app.include_router(settings_router.router)
+    app.include_router(sources.router)
 
     return app
 

@@ -15,9 +15,6 @@ from aws_cdk import (
     aws_ec2 as ec2,
 )
 from aws_cdk import (
-    aws_events as events,
-)
-from aws_cdk import (
     aws_iam as iam,
 )
 from aws_cdk import (
@@ -29,6 +26,7 @@ from aws_cdk import (
 from aws_cdk import (
     aws_sqs as sqs,
 )
+from collectors.construct import CollectorOrchestration
 from constructs import Construct
 
 from ygip_infra.config import (
@@ -57,8 +55,14 @@ class YgipDevStack(Stack):
         archive_bucket = self._create_archive_bucket()
         queues = self._create_sqs_queues()
         database = self._create_database(vpc)
-        self._create_eventbridge_placeholder()
-        self._create_lambda_execution_role(archive_bucket, queues)
+        lambda_role = self._create_lambda_execution_role(archive_bucket, queues)
+        collectors = CollectorOrchestration(
+            self,
+            "Collectors",
+            lambda_role=lambda_role,
+            queues=queues,
+        )
+        self._wire_collector_outputs(collectors)
 
         CfnOutput(self, "VpcId", value=vpc.vpc_id, export_name="YgipDevVpcId")
         CfnOutput(
@@ -190,15 +194,14 @@ class YgipDevStack(Stack):
             database_name="ygip_dev",
         )
 
-    def _create_eventbridge_placeholder(self) -> events.Rule:
-        return events.Rule(
-            self,
-            "CollectorSchedulePlaceholder",
-            rule_name=resource_name("collector-schedule-placeholder"),
-            description="Placeholder — collector cron rules added in Faz 2",
-            schedule=events.Schedule.rate(Duration.days(1)),
-            enabled=False,
-        )
+    def _wire_collector_outputs(self, collectors: CollectorOrchestration) -> None:
+        for source_type, fn in collectors.functions.items():
+            CfnOutput(
+                self,
+                f"Collector{source_type.title()}Arn",
+                value=fn.function_arn,
+                export_name=f"YgipDevCollector{source_type.title()}Arn",
+            )
 
     def _create_lambda_execution_role(
         self,

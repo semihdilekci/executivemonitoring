@@ -63,9 +63,7 @@ async def test_admin_can_list_settings(
     keys = {item["key"] for item in body["data"]}
     assert "jwt_access_token_minutes" in keys
     assert "embedding_model" in keys
-    jwt_setting = next(
-        item for item in body["data"] if item["key"] == "jwt_access_token_minutes"
-    )
+    jwt_setting = next(item for item in body["data"] if item["key"] == "jwt_access_token_minutes")
     assert jwt_setting["value"] == 60
     assert jwt_setting["description"] == "Access token geçerlilik süresi (dk)"
     assert "updated_at" in jwt_setting
@@ -136,9 +134,7 @@ async def test_update_embedding_model_returns_warning(
     body = response.json()
     assert body["key"] == "embedding_model"
     assert body["value"] == "cohere/embed-v3"
-    assert body["warning"] == (
-        "Embedding modeli değişti. Reindex job arka planda başlatıldı."
-    )
+    assert body["warning"] == ("Embedding modeli değişti. Reindex job arka planda başlatıldı.")
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,25 @@
+From: Weekly Digest <newsletter@ygip.test>
+To: fmcg-inbox@ygip.test
+Subject: Haftalık FMCG Trendleri — Haziran 2026
+Date: Mon, 16 Jun 2026 08:00:00 +0000
+Message-ID: <newsletter-001@ygip.test>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="boundary42"
+
+--boundary42
+Content-Type: text/plain; charset=utf-8
+
+Bu haftanın öne çıkan FMCG haberleri özeti.
+
+--boundary42
+Content-Type: text/html; charset=utf-8
+
+<html>
+<body>
+<h1>Haftalık FMCG Trendleri</h1>
+<p>Perakende satışlar <strong>%4,2</strong> arttı. Türkiye pazarında gıda enflasyonu yavaşlıyor.</p>
+<p><a href="https://example.com/fmcg-report">Detaylı rapor</a></p>
+</body>
+</html>
+
+--boundary42--

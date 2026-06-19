@@ -1,0 +1,208 @@
+---
+description: '[Faz 3 Fix] Processor pipeline gap remediation — 4 fix iterasyon/chat (lint → transaction → coverage → semantik). Mesajda "Faz 3 — Fix İterasyon M" belirt. Audit: phase-controller 2026-06-18.'
+---
+
+# Faz 3 Fix: Processor Pipeline
+
+## Goal
+
+Aşağıdaki **Audit bulguları** bölümündeki gap'leri kapat. BLOCKER=0, HIGH=0 hedeflenir; MEDIUM/LOW fix iterasyonlarına veya bilinçli defer'e ayrılır. **Yeni feature yok** — yalnızca gap kapatma.
+
+**Kaynak faz:** `.cursor/rules/53-phase-03-processor.mdc`  
+**Audit durumu:** FAIL (2026-06-18) — BLOCKER=1, HIGH=3
+
+## Feature branch (fix)
+
+Fix oturumları kaynak faz branch'inde veya dedicated fix branch'te:
+
+**Önerilen branch:** `feature/mvp-0` (mevcut) veya `fix/F3-processor`
+
+**Stop (Fix İterasyon 1, kod öncesi):** [ ] Audit bulguları okundu; [ ] BLOCKER + HIGH listesi net; [ ] branch checkout; [ ] Faz 3 kodu commit/PR'a alınmış.
+
+## Bu fix'in çalışma modeli
+
+Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@53-phase-03-processor-fix` + **「Faz 3 — Fix İterasyon M」**.
+
+---
+
+## Audit bulguları (tek kaynak)
+
+| ID | Severity | Tip | Başlık | Kanıt |
+| --- | --- | --- | --- | --- |
+| F-03-001 | BLOCKER | TEST_GAP | `ruff check .` CI kırık | 4 hata: `packages/shared/utils/__init__.py:3` (I001, E501), `tests/unit/processor/test_base_processor.py:86` (E501), `tests/unit/processor/test_dedup.py:12` (F401) |
+| F-03-002 | HIGH | TEST_GAP | Processor modül coverage %72 < %80 | `pytest tests/unit/processor/ --cov=services/processor --cov-fail-under=80` → FAIL; düşük: `embedding_service` %42, `persistence` %30, `pipeline_orchestrator` %47, `raw_item_lifecycle` %31 |
+| F-03-003 | HIGH | WRONG | Persist hatasında transaction rollback yok | `pipeline_orchestrator.py:110-127` exception yakalanıp `failed` dönülüyor; `db_session.py:28` exception olmadan commit — flush sonrası orphan `processed_item` riski |
+| F-03-004 | HIGH | TEST_GAP | Orchestrator/persist fail path unit testi yok | `rg "persist.*fail\|PipelineOrchestrator" tests/unit/processor` — orchestrator/persistence test dosyası yok |
+| F-03-005 | MEDIUM | PATTERN | Skip path `raw_items.status = PROCESSED` | `raw_item_lifecycle.py:85-93` (`mark_skipped`); `Docs/01` §RawItem — yalnızca başarılı işlemde `processed`; gate/dedup skip'te `processed_item` yok |
+| F-03-006 | MEDIUM | DOC_DRIFT | `transport` schema map'te tanımlı | `keyword_pool.py:151` — Explicit Don't: MVP-0'da transport routing kullanılmaz |
+| F-03-007 | MEDIUM | TEST_GAP | Integration testler yerelde doğrulanamıyor | `tests/integration/conftest.py:50` skip; 5 processor integration test skipped (CI'da PG service var) |
+| F-03-008 | LOW | TEST_GAP | `OpenAIEmbeddingBackend` HTTP path test dışı | `embedding_service.py:55-103` — yalnızca `DeterministicEmbeddingBackend` unit test edilmiş |
+| F-03-009 | INFO | — | Processor Lambda CDK/IaC yok | `infra/` grep processor → yalnızca README notu; İterasyon 3.1 opsiyonel |
+| F-03-010 | INFO | — | Faz 3 kodu henüz commit/PR'da değil | `git status` — `services/processor/**` untracked/modified |
+| F-03-011 | INFO | — | Explicit Don'ts genel uyumlu | LLM enrich, digest, chatbot, FE, yeni collector yok |
+
+**Explicit Don'ts:** ✅ Genel uyum (LLM enrichment, digest/chatbot/notification, FE, yeni collector yok). ⚠️ F-03-006 — `transport` map kenar durumu.
+
+**Uyumlu alanlar (fix gerekmez):** 7 iterasyon deliverable dosyaları mevcut; chain pattern + partial batch failure handler; dedup Redis SETNX TTL 604800; normalizer HTML/NFC/min 10 kelime; gate ingest_mode + master keyword; enricher keyword + schema routing; scorer `keyword_intensity * 0.6 + freshness * 0.4`; chunker 512/64 + `asyncio.to_thread`; unit testler 65 passed; `mypy services/processor` yeşil; gate DROP → `None` (processed_items yazılmaz); `.env.example` embedding env var'ları mevcut.
+
+---
+
+### Fix İterasyon 1 — CI / lint (BLOCKER)
+
+**Hedef:** F-03-001 kapat.
+
+**Yapılacaklar:**
+
+1. `packages/shared/utils/__init__.py` — import satırını ruff formatına uygun böl (I001 + E501).
+2. `tests/unit/processor/test_base_processor.py:86` — uzun satırı böl veya dict'i çok satıra al (E501).
+3. `tests/unit/processor/test_dedup.py:12` — kullanılmayan `ProcessorChain` import'unu kaldır (F401).
+4. Doğrulama: `ruff check .` yeşil; `ruff format .` gerekiyorsa uygula.
+
+**Kapatılacak bulgular:** F-03-001
+
+**Minimum bağlam:**
+
+- Bu dosya §Audit bulguları (F-03-001)
+- `.github/workflows/test.yml` §Lint — `ruff check .`
+
+**Bu fix iterasyonda yok:** Processor iş mantığı, coverage, transaction fix.
+
+**Stop:** [ ] `ruff check .` yeşil; [ ] `pytest tests/unit/processor/ -q` regresyon yeşil. PR/onay → Fix İterasyon 2.
+
+---
+
+### Fix İterasyon 2 — Transaction integrity (HIGH)
+
+**Hedef:** F-03-003, F-03-004 kapat.
+
+**Yapılacaklar:**
+
+1. `pipeline_orchestrator.py` — `persist_pipeline_output` exception path'inde `await self._session.rollback()` (veya flush öncesi savepoint pattern); ardından `mark_failed`; exception'ı yukarı fırlat **veya** handler'ın commit etmemesini garanti et (`Docs/10` §3.7 — rollback processed_item + chunks).
+2. `processor_handler.py` / `db_session.py` — failed persist sonrası session commit olmamalı: orchestrator failed döndüğünde rollback zorunlu; handler partial batch failure ile uyumlu kalsın.
+3. `tests/unit/processor/test_orchestrator.py` (yeni) — mock session + mock chain success output:
+   - persist raise → session.rollback çağrıldı assert
+   - `raw_item.status = failed` (mock lifecycle)
+   - ikinci `processed_item` insert yok (idempotency)
+4. Negatif deny: persist fail → DLQ batch failure (`handle_sqs_event` mevcut testlerle uyum).
+
+**Kapatılacak bulgular:** F-03-003, F-03-004
+
+**Minimum bağlam:**
+
+- Bu dosya §Audit bulguları (F-03-003, F-03-004)
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` §3.7 — transaction rollback
+- `Docs/04_BACKEND_SPEC.md` §8.6–8.7 — idempotency, DLQ
+- `services/processor/pipeline_orchestrator.py`, `persistence.py`, `db_session.py`
+- `services/processor/handlers/processor_handler.py`
+
+**Bu fix iterasyonda yok:** Coverage artırımı, skip status semantiği.
+
+**Stop:** [ ] Fail path unit testleri yeşil; [ ] rollback kanıtlandı; [ ] `mypy services/processor` yeşil. PR/onay → Fix İterasyon 3.
+
+---
+
+### Fix İterasyon 3 — Processor test coverage (HIGH)
+
+**Hedef:** F-03-002, F-03-008 kapat; F-03-007 CI smoke.
+
+**Yapılacaklar:**
+
+1. `tests/unit/processor/test_persistence.py` (yeni) — mock session: `persist_pipeline_output` happy path, idempotent skip, chunk yok → ValueError.
+2. `tests/unit/processor/test_raw_item_lifecycle.py` (yeni) — mock session: mark_processing/processed/failed/skipped geçişleri.
+3. `tests/unit/processor/test_embedding_service.py` genişlet — `OpenAIEmbeddingBackend` için `httpx` mock (API key response'ta/log'da yok assert); `embed_and_persist`, `chunks_from_extras`, `similarity_search` stub.
+4. `tests/unit/processor/test_orchestrator.py` genişlet — happy path mock chain + persist success (Fix İterasyon 2 ile birleştirilebilir).
+5. Coverage hedefi: `services/processor/` ≥%80 line (`53-phase-03-processor` Done Definition).
+6. Integration smoke (PG varsa veya CI): `pytest tests/integration/test_pipeline_e2e.py tests/integration/test_embedding_pgvector.py -v`.
+
+**Kapatılacak bulgular:** F-03-002, F-03-008, F-03-007
+
+**Minimum bağlam:**
+
+- `Docs/08_TESTING_STRATEGY.md` §3.2 — processor testleri
+- `.cursor/rules/04-quality-gates.mdc` — processor pipeline ≥%80
+- `.cursor/rules/17-processor-pipeline.mdc` — test önceliği
+- `tests/unit/processor/`, `tests/integration/test_pipeline_e2e.py`
+
+**Bu fix iterasyonda yok:** Processor Lambda IaC, digest/AI engine.
+
+**Stop:** [ ] `pytest tests/unit/processor/ --cov=services/processor --cov-fail-under=80` yeşil; [ ] integration suite yeşil (CI veya local PG). PR/onay → Fix İterasyon 4.
+
+---
+
+### Fix İterasyon 4 — Semantik temizlik (MEDIUM / LOW)
+
+**Hedef:** F-03-005, F-03-006 kapat; bilinçli defer kararları.
+
+**Yapılacaklar:**
+
+1. **F-03-005** — Skip lifecycle kararı (küçük diff tercih):
+   - **A (önerilen):** Gate/dedup/normalize skip → `raw_items.status` mevcut enum'da kalır (`processed` = processor tüketti, `processed_item` yok); `Docs/01` §RawItem'a skip notu ekle **veya** `mark_skipped` docstring + integration assert (gate DROP → raw PROCESSED, processed_item count 0).
+   - **B:** Yeni status gerekir — **scope dışı** (migration); defer.
+2. **F-03-006** — `keyword_pool.py` `CATEGORY_TO_SCHEMA`'dan `"transport": "transport"` satırını kaldır; bilinmeyen kategori fallback `"news"` kalsın (`17-processor-pipeline` MVP-0).
+3. Unit test: `default_category=transport` config ile routing → `"news"` fallback assert.
+
+**Kapatılacak bulgular:** F-03-005, F-03-006
+
+**Minimum bağlam:**
+
+- `Docs/01_DOMAIN_MODEL.md` §RawItem lifecycle
+- `services/processor/keyword_pool.py`, `raw_item_lifecycle.py`
+- `.cursor/rules/53-phase-03-processor.mdc` §Explicit Don'ts
+
+**Bu fix iterasyonda yok:** Yeni DB enum, processor Lambda deploy.
+
+**Stop:** [ ] Semantik test/assert yeşil; [ ] transport map temiz. PR/onay → regression audit veya Human Gate.
+
+---
+
+## Required Context
+
+- Bu fix `.mdc` §Audit bulguları — tüm F-03-NNN
+- `.cursor/rules/53-phase-03-processor.mdc` — orijinal Done Definition
+- `Docs/04_BACKEND_SPEC.md` §8 — processor pipeline
+- `Docs/01_DOMAIN_MODEL.md` — raw_item → processed_item lifecycle
+- `Docs/08_TESTING_STRATEGY.md` §3.2 — processor testleri
+- `.cursor/rules/17-processor-pipeline.mdc` — DLQ, idempotency, coverage
+
+## Fix Done Definition
+
+| Bulgu ID | Severity | Kapatıldı |
+| -------- | -------- | --------- |
+| F-03-001 | BLOCKER | [ ] |
+| F-03-002 | HIGH | [ ] |
+| F-03-003 | HIGH | [ ] |
+| F-03-004 | HIGH | [ ] |
+| F-03-005 | MEDIUM | [ ] |
+| F-03-006 | MEDIUM | [ ] |
+| F-03-007 | MEDIUM | [ ] |
+| F-03-008 | LOW | [ ] |
+
+### Kalite kapıları
+
+- [ ] `ruff check .` + `mypy services/processor` green
+- [ ] `pytest tests/unit/processor/ --cov=services/processor --cov-fail-under=80` green
+- [ ] `pytest tests/integration/test_pipeline_e2e.py tests/integration/test_embedding_pgvector.py -v` green (PG/CI)
+- [ ] Orijinal Faz 3 Done Definition spot-check (gate DROP, LLM yok, E2E)
+- [ ] BLOCKER = 0, HIGH = 0
+- [ ] Regression audit (`@phase-controller`) veya developer onayı
+
+## Explicit Don'ts
+
+- LLM enrichment processor'a ekleme (MVP-1)
+- Digest/chatbot/notification, frontend, yeni collector
+- `transport` schema routing aktif etme (MVP-0)
+- Processor Lambda production deploy (Faz 8)
+- Fix sırasında `Docs/` spec'i kod uydurmak (spec doğruysa kod fix; spec yanlışsa ayrı docs oturumu)
+- Audit raporunu "PASS" diye elle yazmadan kapatma
+
+## Deferred (bilinçli erteleme)
+
+| Bulgu ID | Gerekçe | Hedef |
+| -------- | ------- | ----- |
+| F-03-009 | Processor Lambda IaC — İterasyon 3.1 opsiyonel; collector stub pattern | Faz 8 production launch veya ayrı infra iterasyonu |
+| F-03-010 | Commit/PR — developer Human Gate öncesi | İlk fix PR merge |
+| F-03-011 | Roadmap tamamlandı işareti Human Gate sonrası | Developer onayı |
+
+---
+
+Fix done → `@phase-controller` regression audit → `Docs/10` Faz 3 tamamlandı işareti → Human Gate.

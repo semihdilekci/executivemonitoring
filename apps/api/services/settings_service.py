@@ -20,9 +20,7 @@ logger = logging.getLogger("ygip")
 settings_repository = SettingsRepository()
 
 EMBEDDING_MODEL_KEY = "embedding_model"
-EMBEDDING_MODEL_WARNING = (
-    "Embedding modeli değişti. Reindex job arka planda başlatıldı."
-)
+EMBEDDING_MODEL_WARNING = "Embedding modeli değişti. Reindex job arka planda başlatıldı."
 
 JWT_ACCESS_TOKEN_MINUTES_KEY = "jwt_access_token_minutes"
 JWT_REFRESH_TOKEN_DAYS_KEY = "jwt_refresh_token_days"

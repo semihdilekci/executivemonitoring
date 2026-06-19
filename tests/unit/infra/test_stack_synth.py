@@ -1,4 +1,4 @@
-"""CDK dev stack synthesis smoke tests."""
+"""Collector orchestration CDK synthesis testleri."""
 
 from __future__ import annotations
 
@@ -72,4 +72,55 @@ def test_lambda_role_scoped_to_dev_queues(dev_template: Template) -> None:
         {
             "RoleName": "dev-ygip-lambda-execution",
         },
+    )
+
+
+def test_collector_lambdas_defined(dev_template: Template) -> None:
+    dev_template.resource_count_is("AWS::Lambda::Function", 3)
+    dev_template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {
+            "FunctionName": "dev-ygip-collector-rss",
+            "MemorySize": 256,
+            "Timeout": 60,
+        },
+    )
+    dev_template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {
+            "FunctionName": "dev-ygip-collector-email",
+            "MemorySize": 512,
+            "Timeout": 120,
+        },
+    )
+
+
+def test_collector_eventbridge_schedules(dev_template: Template) -> None:
+    dev_template.has_resource_properties(
+        "AWS::Events::Rule",
+        {
+            "Name": "dev-ygip-collector-schedule-rss",
+            "ScheduleExpression": "rate(15 minutes)",
+        },
+    )
+    dev_template.has_resource_properties(
+        "AWS::Events::Rule",
+        {
+            "Name": "dev-ygip-collector-schedule-email",
+            "ScheduleExpression": "rate(1 hour)",
+        },
+    )
+    dev_template.has_resource_properties(
+        "AWS::Events::Rule",
+        {
+            "Name": "dev-ygip-collector-schedule-gov",
+            "ScheduleExpression": "rate(30 minutes)",
+        },
+    )
+
+
+def test_collector_log_groups(dev_template: Template) -> None:
+    dev_template.has_resource_properties(
+        "AWS::Logs::LogGroup",
+        {"LogGroupName": "/aws/lambda/dev-ygip-collector-rss"},
     )
