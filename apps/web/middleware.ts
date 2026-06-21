@@ -34,9 +34,16 @@ function buildCspHeader(): string {
     // Varsayılan 'self' kalır
   }
 
+  // Next.js dev modu (Fast Refresh + webpack HMR) hot-reload için eval kullanır;
+  // bu yalnızca development'ta gerekir, production build'de eklenmez.
+  const scriptSrc =
+    process.env.NODE_ENV === "development"
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
+
   return [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self'",

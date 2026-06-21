@@ -83,6 +83,69 @@ export function SourceTableSkeleton() {
   );
 }
 
+export function PipelineTableSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white" aria-busy="true">
+      <div className="border-b border-gray-100 bg-gray-50/80 px-4 py-3">
+        <div className="h-4 w-44 animate-pulse rounded bg-gray-200" />
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3 px-4 py-4">
+            <div className="h-4 w-28 animate-pulse rounded bg-gray-200" />
+            <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-6 w-16 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-6 w-20 animate-pulse rounded-full bg-gray-200" />
+            <div className="flex flex-1 gap-1.5">
+              {Array.from({ length: 4 }).map((_, dot) => (
+                <div key={dot} className="h-2.5 w-2.5 animate-pulse rounded-full bg-gray-200" />
+              ))}
+            </div>
+            <div className="h-4 w-14 animate-pulse rounded bg-gray-200" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Pipeline çalıştırmaları yükleniyor…</span>
+    </div>
+  );
+}
+
+export function PipelineDetailSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy="true">
+      {/* Üst bilgi kartı skeleton */}
+      <div className="animate-pulse space-y-4 rounded-lg border border-gray-200 bg-white p-6">
+        <div className="flex gap-3">
+          <div className="h-6 w-32 rounded-full bg-gray-200" />
+          <div className="h-6 w-24 rounded-full bg-gray-200" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-14 rounded-lg bg-gray-100" />
+          ))}
+        </div>
+      </div>
+      {/* 4 aşama kartı skeleton */}
+      <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="flex gap-4">
+            <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-gray-200" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
+              <div className="flex gap-2">
+                <div className="h-7 w-20 animate-pulse rounded-md bg-gray-100" />
+                <div className="h-7 w-20 animate-pulse rounded-md bg-gray-100" />
+                <div className="h-7 w-20 animate-pulse rounded-md bg-gray-100" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">Pipeline detayı yükleniyor…</span>
+    </div>
+  );
+}
+
 export function PromptTableSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white" aria-busy="true">
@@ -144,6 +207,31 @@ export function AuditLogTableSkeleton() {
         ))}
       </div>
       <span className="sr-only">Denetim kayıtları yükleniyor…</span>
+    </div>
+  );
+}
+
+export function ContentArchiveTableSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white" aria-busy="true">
+      <div className="border-b border-gray-100 bg-gray-50/80 px-4 py-3">
+        <div className="h-4 w-52 animate-pulse rounded bg-gray-200" />
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3 px-4 py-4">
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-full max-w-md animate-pulse rounded bg-gray-200" />
+              <div className="h-3 w-32 animate-pulse rounded bg-gray-200" />
+            </div>
+            <div className="h-6 w-12 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-5 w-24 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-6 w-20 animate-pulse rounded-full bg-gray-200" />
+            <div className="h-8 w-14 animate-pulse rounded bg-gray-200" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">İçerik arşivi yükleniyor…</span>
     </div>
   );
 }

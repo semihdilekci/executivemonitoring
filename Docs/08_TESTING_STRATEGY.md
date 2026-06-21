@@ -123,9 +123,10 @@ async def test_dedup_allows_new_hash():
 - `ingest_mode: "filtered"` + eşleşme yok → DROP (`processed_items` yazılmaz)
 
 **Score:**
-- Deterministik formül: `keyword_intensity * 0.6 + freshness * 0.4`
-- Edge case: `relevance_score` her zaman 0.0–1.0 aralığında
-- Source reliability weight yok (K3 kararı)
+- Deterministik saf-keyword formülü: `0.7 * coverage + 0.3 * freq` (güncellik/freshness skora dahil değil)
+- Daha çok keyword eşleşmesi → daha yüksek skor; tek keyword düşük skor
+- Edge case: `relevance_score` her zaman 0.0–1.0 aralığında; eşleşme yoksa 0.0
+- Source reliability weight yok (K3 kararı); freshness yok (K4 kararı)
 
 ### 3.3 AI Engine Testleri
 
@@ -199,6 +200,43 @@ def test_create_user_request_rejects_invalid_email():
     with pytest.raises(ValidationError):
         CreateUserRequest(email="not-an-email", full_name="Test", password="ValidPass1")
 ```
+
+### 3.6 Pipeline Orkestratör Testleri (Faz 6.1)
+
+`services/orchestrator/` için unit testler — dış invoke (collector Lambda, SQS) ve digest generator mock'lanır:
+
+- **State machine geçişleri:** `pending → running → completed/partial/failed/cancelled`; her aşama (collect/ingest/process/digest) `pipeline_run_steps` durumunu doğru günceller.
+- **Idempotency:** Aynı run tekrar sürülürse `completed` step yeniden koşmaz.
+- **Stage executor'lar:** Collect — kaynak bazlı ok/failed sayacı; Process — SQS drain gözlem (moto/mock) ile tamamlanma; Digest — `digest_update` run'ında yalnızca digest aşaması, diğerleri `skipped`.
+- **Hata politikası:** Kaynak hatası → `partial`; kritik aşama boş → sonrası `skipped`, run `failed`; `error_message` + `system.error` audit yazılır.
+
+### 3.7 Pipeline Runtime Integration Testleri (Faz 8)
+
+Collector → SQS → Processor Lambda handler → PostgreSQL uçtan uca akış integration test ile doğrulanır:
+
+| Journey | Kapsam | Araç |
+|---------|--------|------|
+| `pipeline-runtime-happy` | SQS publish → processor handler → `raw_items` + `processed_items` + `content_chunks` | moto SQS + testcontainers PG |
+| `pipeline-ingest-idempotent` | Aynı mesaj tekrar → duplicate skip, çift kayıt yok | FakeRedis + PG |
+| `pipeline-runtime-deny` | Invalid SQS body → partial batch failure / DLQ path | unit + integration |
+
+Processor E2E testlerinde manuel `_seed_raw_item` kaldırılır — ingest wire (`Docs/04` §8.0) sonrası handler kendi yazar.
+
+AWS dev smoke (`scripts/smoke_pipeline_dev.sh`) CI dışı manuel kapı; Faz 8 Done Definition parçası.
+
+### 3.8 İçerik Arşivi API Testleri (Faz 6.2)
+
+`tests/integration/test_content_archive_api.py`:
+
+| Senaryo | Beklenen |
+|---------|----------|
+| Admin list | `GET /admin/processed-items` → 200, `data[]`, `pagination.has_more` |
+| Admin detail | `GET /admin/processed-items/{id}?schema_category=…` → 200, `clean_content` dolu |
+| Viewer deny | Aynı endpoint'ler viewer JWT → `403 FORBIDDEN` |
+| Filtre smoke | `source_id` + `min_score` query → yalnızca eşleşen kayıtlar |
+| Pagination | İlk sayfa `next_cursor` → ikinci sayfa farklı id seti |
+
+Fixture: seed `processed_items` + `digest_sections.source_references` ile en az bir `digest_usages` satırı.
 
 ---
 
@@ -277,6 +315,8 @@ Her endpoint grubu için test edilecek senaryolar:
 | Digest trigger | ✅ | ✅ | ✅ (viewer) | — | — |
 | Chatbot ask | ✅ | ✅ | — | ✅ (boş soru) | — |
 | Audit logs | ✅ | ✅ | ✅ (viewer) | — | — |
+| Pipeline trigger | ✅ | ✅ | ✅ (viewer) | ✅ (geçersiz source_type) | ✅ (already running) |
+| Pipeline list/detail | ✅ | ✅ | ✅ (viewer) | — | — |
 
 ### 4.3 SQS Mesaj Akışı Testleri
 

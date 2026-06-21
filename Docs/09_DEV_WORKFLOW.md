@@ -327,7 +327,18 @@ jobs:
         run: ./scripts/run-migration.sh
 ```
 
-Deploy script'leri Faz 8'de (production deploy) oluşturulur. Dev ortamında deploy manual veya ayrı workflow ile yapılır.
+Production deploy script'leri (`deploy.yml`) **MVP-1 Production Launch** sprint'inde oluşturulur.
+
+#### 5.3 Dev Deploy (Faz 8.5)
+
+Dev ortamı deploy'u `.github/workflows/deploy-dev.yml` ile **manuel** yapılır (`workflow_dispatch`; maliyet kontrolü için otomatik push tetikleme yok):
+
+- Adımlar: `build_lambda.sh collector|processor` → `cdk deploy YgipDevStack --require-approval never` (yalnızca dev stack; prod stack'e dokunulmaz).
+- AWS erişimi OIDC ile (`AWS_DEV_DEPLOY_ROLE_ARN`); secret'lar `dev` GitHub environment'ında (`DEV_DATABASE_URL`, `DEV_REDIS_URL`).
+- Deploy sonrası `scripts/smoke_pipeline_dev.sh` ile `collector → SQS → processor → DB` smoke doğrulaması (`run_smoke` input veya yerel çalıştırma).
+- `cdk destroy` / kaynak silme agent tarafından onaysız çalıştırılmaz (§6.1).
+
+Detay: `infra/README.md` (Dev deploy workflow + Pipeline smoke), `Docs/10` Faz 8.5.
 
 ---
 

@@ -14,13 +14,14 @@ from packages.shared.models.content_chunk import ContentChunk
 from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS
 from packages.shared.models.raw_item import RawItem
 from packages.shared.models.source import Source
-from packages.shared.utils.hashing import compute_content_hash, sqs_content_hash
+from packages.shared.utils.hashing import sqs_content_hash
 from services.processor.embedding_service import DeterministicEmbeddingBackend, EmbeddingService
 from services.processor.models import ProcessorInput
 from services.processor.persistence import (
     count_content_chunks,
     count_processed_items_for_raw_item,
     find_processed_item_for_raw_item,
+    resolve_raw_item_id,
 )
 from services.processor.pipeline_orchestrator import PipelineOrchestrator
 from sqlalchemy import delete, select
@@ -103,22 +104,6 @@ def _build_processor_input(source: Source, *, content_suffix: str = "") -> Proce
     )
 
 
-async def _seed_raw_item(session: AsyncSession, item: ProcessorInput) -> RawItem:
-    raw_item = RawItem(
-        source_id=item.source_id,
-        external_id=(item.external_id or item.url or "pipeline-e2e")[:512],
-        content_hash=compute_content_hash(item.content),
-        title=item.title,
-        raw_content=item.content,
-        raw_metadata=dict(item.raw_metadata),
-        fetched_at=item.collected_at or datetime.now(UTC),
-        status=RawItemStatus.PENDING,
-    )
-    session.add(raw_item)
-    await session.flush()
-    return raw_item
-
-
 def _sqs_body(item: ProcessorInput) -> str:
     return json.dumps(
         {
@@ -142,7 +127,7 @@ async def test_pipeline_e2e_writes_processed_item_and_chunks(
     database_url: str,
     pipeline_source: Source,
 ) -> None:
-    """Fixture SQS body → tam pipeline → news.processed_items + content_chunks."""
+    """SQS body → ingest-at-entry → tam pipeline → news.processed_items + content_chunks."""
     item = _build_processor_input(pipeline_source)
     engine = create_async_engine(database_url)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -150,21 +135,18 @@ async def test_pipeline_e2e_writes_processed_item_and_chunks(
     embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
 
     async with session_factory() as session:
-        raw_item = await _seed_raw_item(session, item)
-        await session.commit()
-        raw_item_id = raw_item.id
-
-    async with session_factory() as session:
         orchestrator = PipelineOrchestrator(
             session=session,
             redis=redis,
             embedding_service=embedding,
         )
-        result = await orchestrator.process(item)
+        result = await orchestrator.process(item, sqs_body=_sqs_body(item))
         assert result.status == "success"
         await session.commit()
 
     async with session_factory() as session:
+        raw_item_id = await resolve_raw_item_id(session, item)
+        assert raw_item_id is not None
         raw_row = await session.get(RawItem, raw_item_id)
         assert raw_row is not None
         assert raw_row.status == RawItemStatus.PROCESSED
@@ -191,17 +173,13 @@ async def test_pipeline_duplicate_message_does_not_create_second_processed_item(
     database_url: str,
     pipeline_source: Source,
 ) -> None:
-    """İkinci SQS mesajı dedup ile skip — tek processed_item."""
+    """İkinci SQS mesajı ingest dedup ile skip — tek processed_item."""
     item = _build_processor_input(pipeline_source, content_suffix=" dup-test")
+    body = _sqs_body(item)
     engine = create_async_engine(database_url)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     redis = FakeRedis()
     embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
-
-    async with session_factory() as session:
-        raw_item = await _seed_raw_item(session, item)
-        await session.commit()
-        raw_item_id = raw_item.id
 
     async with session_factory() as session:
         orchestrator = PipelineOrchestrator(
@@ -209,7 +187,7 @@ async def test_pipeline_duplicate_message_does_not_create_second_processed_item(
             redis=redis,
             embedding_service=embedding,
         )
-        first = await orchestrator.process(item)
+        first = await orchestrator.process(item, sqs_body=body)
         assert first.status == "success"
         await session.commit()
 
@@ -219,11 +197,14 @@ async def test_pipeline_duplicate_message_does_not_create_second_processed_item(
             redis=redis,
             embedding_service=embedding,
         )
-        second = await orchestrator.process(item)
+        second = await orchestrator.process(item, sqs_body=body)
         assert second.status == "skipped"
+        assert second.skip_reason == "ingest_duplicate"
         await session.commit()
 
     async with session_factory() as session:
+        raw_item_id = await resolve_raw_item_id(session, item)
+        assert raw_item_id is not None
         assert await count_processed_items_for_raw_item(session, raw_item_id) == 1
 
     await redis.aclose()
@@ -235,7 +216,10 @@ async def test_sqs_body_roundtrip_through_handler_orchestrator(
     database_url: str,
     pipeline_source: Source,
 ) -> None:
-    """SQS JSON deserialize → orchestrator — handler entegrasyonu."""
+    """SQS JSON deserialize → ingest-at-entry → orchestrator (ADR-0001 wire).
+
+    Handler ingest adımı raw_item'ı kendisi yazar; ön-seed yok (`Docs/04` §8.0).
+    """
     from services.processor.handlers.processor_handler import process_sqs_record
 
     item = _build_processor_input(pipeline_source, content_suffix=" handler-test")
@@ -243,10 +227,6 @@ async def test_sqs_body_roundtrip_through_handler_orchestrator(
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     redis = FakeRedis()
     embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
-
-    async with session_factory() as session:
-        await _seed_raw_item(session, item)
-        await session.commit()
 
     record = {"messageId": "msg-1", "body": _sqs_body(item)}
 

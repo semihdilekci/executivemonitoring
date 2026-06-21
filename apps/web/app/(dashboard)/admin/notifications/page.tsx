@@ -35,7 +35,7 @@ export default function AdminNotificationsPage() {
   const preferencesQuery = useNotificationPreferences();
   const recipientsQuery = useNotificationRecipients();
   const settingsQuery = useSettings();
-  const usersQuery = useUsers({ is_active: true, limit: 100 });
+  const usersQuery = useUsers({ is_active: true, limit: 50 });
   const updatePreference = useUpdateNotificationPreference();
   const createRecipient = useCreateNotificationRecipient();
   const deleteRecipient = useDeleteNotificationRecipient();

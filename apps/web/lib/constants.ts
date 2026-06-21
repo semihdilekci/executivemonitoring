@@ -3,6 +3,9 @@ import type { NavItem } from "@/types/models";
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
+export const APP_ENV =
+  process.env.NEXT_PUBLIC_APP_ENV ?? process.env.NODE_ENV ?? "production";
+
 export const PUBLIC_PATHS = ["/login", "/reset-password"] as const;
 
 export const ADMIN_PATH_PREFIX = "/admin";
@@ -22,6 +25,8 @@ export const VIEWER_NAV_ITEMS: readonly NavItem[] = [
 export const ADMIN_NAV_ITEMS: readonly NavItem[] = [
   { label: "Kullanıcılar", href: "/admin/users" },
   { label: "Kaynaklar", href: "/admin/sources" },
+  { label: "Pipeline İzleme", href: "/admin/pipeline" },
+  { label: "İçerik Arşivi", href: "/admin/content-archive" },
   { label: "Prompt Şablonları", href: "/admin/prompt-templates" },
   { label: "API Anahtarları", href: "/admin/api-keys" },
   { label: "Bildirimler", href: "/admin/notifications" },
@@ -109,6 +114,36 @@ export const queryKeys = {
   },
   settings: {
     all: ["settings"] as const,
+  },
+  pipeline: {
+    all: ["pipeline"] as const,
+    list: (filters?: {
+      run_type?: string;
+      status?: string;
+      start_date?: string;
+      end_date?: string;
+      limit?: number;
+    }) => ["pipeline", "list", filters ?? {}] as const,
+    run: (id: string) => ["pipeline", "run", id] as const,
+  },
+  contentArchive: {
+    all: ["content-archive"] as const,
+    list: (filters?: {
+      source_id?: string;
+      schema_category?: string;
+      content_category?: string;
+      published_from?: string;
+      published_to?: string;
+      min_score?: number;
+      topic?: string;
+      q?: string;
+      has_digest?: boolean;
+      sort_by?: string;
+      sort_dir?: string;
+      limit?: number;
+    }) => ["content-archive", "list", filters ?? {}] as const,
+    detail: (id: string, schemaCategory: string) =>
+      ["content-archive", "detail", id, schemaCategory] as const,
   },
 } as const;
 

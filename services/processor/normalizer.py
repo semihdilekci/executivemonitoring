@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import re
 import unicodedata
@@ -20,8 +21,25 @@ ISTANBUL_TZ = ZoneInfo("Europe/Istanbul")
 MIN_WORD_COUNT = 10
 _WHITESPACE_RE = re.compile(r"\s+")
 _UNDEFINED_LANGUAGE = "und"
+_MAX_UNESCAPE_PASSES = 3
 
 DetectorFactory.seed = 0
+
+
+def unescape_entities(text: str) -> str:
+    """Çift kodlanmış HTML entity'leri çözer (`&amp;#039;` → `'`, `&amp;quot;` → `\"`).
+
+    Kaynak feed'ler bazen tek kodlanmış entity'yi (`&#039;`) tekrar escape eder
+    (`&amp;#039;`). Stabil hale gelene kadar (en fazla birkaç tur) tekrarlı çözer.
+    """
+    if not text:
+        return text
+    for _ in range(_MAX_UNESCAPE_PASSES):
+        unescaped = html.unescape(text)
+        if unescaped == text:
+            break
+        text = unescaped
+    return text
 
 
 def strip_html(text: str) -> str:
@@ -43,8 +61,10 @@ def collapse_whitespace(text: str) -> str:
 
 
 def normalize_text(text: str) -> str:
-    """HTML strip → NFC → whitespace düzenleme."""
-    return collapse_whitespace(normalize_unicode(strip_html(text)))
+    """HTML strip → entity decode → NFC → whitespace düzenleme."""
+    return collapse_whitespace(
+        normalize_unicode(unescape_entities(strip_html(text)))
+    )
 
 
 def word_count(text: str) -> int:

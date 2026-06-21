@@ -47,10 +47,15 @@ Faz 6 — Web Frontend
 Faz 7 — Mobil Uygulama
   │
   ▼
-Faz 8 — Production Deploy + Launch
+Faz 8 — Pipeline Runtime Tamamlama
+  │
+  ▼
+MVP-0 tamamlandı → main merge (onaylı) → MVP-1 (Production Launch dahil)
 ```
 
 Her faz tek bir katmana odaklanır. Bir sonraki faza geçmeden önceki fazın tüm iterasyonları tamamlanmış olmalıdır.
+
+> **Not:** Eski "Faz 8 — Production Deploy + Launch" içeriği MVP-1 Wave'e taşındı (`Docs/10` MVP-1 bölümü).
 
 ---
 
@@ -519,11 +524,11 @@ Testler:
 
 Oluşturulacaklar:
 - `services/processor/enricher.py` — `EnricherProcessor(BaseProcessor)`: `CATEGORY_RULES` ile kategori (en çok eşleşme → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`), schema routing (news/market/geo/fmcg), `topics` tag extraction
-- `services/processor/scorer.py` — `ScorerProcessor(BaseProcessor)`: `relevance_score` 0.0–1.0 (`keyword_intensity * 0.6 + freshness * 0.4`); source reliability weight yok
+- `services/processor/scorer.py` — `ScorerProcessor(BaseProcessor)`: `relevance_score` 0.0–1.0 saf keyword ilgisi (`0.7 * coverage + 0.3 * freq`; freshness yok); source reliability weight yok
 
 Testler:
 - `tests/unit/processor/test_enricher.py` — kategori çözümleme, schema routing, `ingest_mode: "all"` default_category
-- `tests/unit/processor/test_scorer.py` — deterministik skor, freshness bucket'ları, skor 0.0–1.0 aralığı
+- `tests/unit/processor/test_scorer.py` — deterministik saf-keyword skor, coverage/freq doyumu, skor 0.0–1.0 aralığı
 
 **Cursor context:** `services/processor/base_processor.py`, `services/processor/keyword_pool.py`, `packages/shared/enums.py` (schema_name enum)
 
@@ -940,10 +945,204 @@ Oluşturulacaklar:
 
 ---
 
+## Faz 6.1 — Pipeline Monitoring (Süreç Kokpiti)
+
+> Öncül: Faz 6 (web admin shell + RBAC + data hook'ları) + Faz 2–4 (collector/processor/ai-engine çalışır)
+> Ardıl: Faz 7
+> Katman: Full-stack dikey (DB + orkestrasyon + API + admin ekran)
+
+**Amaç:** Admin'in `collect → ingest → process → digest` pipeline'ını (seçili kaynak tipleriyle) ve bülten güncellemesini **manuel tetikleyip** her aşamayı **gerçek-zamanlı izlediği** kokpit ekranı. Her tetikleme `pipeline_runs` olarak tarihsel kaydedilir; orkestratör aşamaları otomatik ilerletip her adımın durumunu/sayaçlarını/hatasını `pipeline_run_steps` üzerinde kalıcılaştırır. MVP-0'a bilinçli operasyonel ekleme.
+
+**Mimari kararlar (MVP-0):**
+- Gerçek-zamanlı izleme = **polling** (SSE/WebSocket MVP dışı).
+- Orkestrasyon = **uygulama-seviyesi kalıcı state machine** + collector Lambda **boto3 invoke** + SQS depth / `processed_items` artış gözlemi (Step Functions IaC MVP dışı).
+- Aşamalar: `collect` (collector fetch) → `ingest` (raw_items persist + SQS publish) → `process` (processor → processed_items) → `digest` (ai-engine). `digest_update` run tipinde yalnızca `digest` aşaması koşar.
+- Collector/processor/ai-engine **iş mantığı değişmez** — yalnızca programatik invoke + gözlem adapter eklenir. EventBridge cron'a dokunulmaz.
+
+### 6.1.1 — Pipeline Run DB + Domain
+
+**Çıktı:** `pipeline_runs` + `pipeline_run_steps` tabloları, enum'lar, migration
+
+Oluşturulacaklar:
+- Enum'lar: `pipeline_run_type_enum`, `pipeline_run_status_enum`, `pipeline_stage_enum`, `pipeline_step_status_enum` (`Docs/02` §3)
+- `pipeline_runs`, `pipeline_run_steps` tabloları (`Docs/02` §4.18–4.19)
+- SQLAlchemy modelleri + `005_pipeline_tables.py` migration
+- Entity tanımı + state machine (`Docs/01` §2.18–2.19, §5.5)
+
+**Cursor context:** `packages/shared/models/`, `alembic/versions/`, `Docs/02` §4.18–4.19
+
+---
+
+### 6.1.2 — Orkestratör Çekirdeği (State Machine)
+
+**Çıktı:** Aşamaları ilerleten, her step geçişini kalıcılaştıran orkestratör servis
+
+Oluşturulacaklar:
+- `services/orchestrator/pipeline_orchestrator.py` — run state machine: `pending → running → completed/failed/partial`; step bazlı ilerletme, idempotent advance
+- `services/orchestrator/stage_executors.py` — `StageExecutor` arayüzü + stub executor'lar (henüz gerçek invoke yok)
+- `services/orchestrator/run_repository.py` — run/step CRUD + status transition
+- `tests/unit/orchestrator/test_pipeline_orchestrator.py` — geçiş + idempotency
+
+**Cursor context:** `services/processor/base_processor.py` (servis kalıbı), `Docs/04` §pipeline orkestratör
+
+---
+
+### 6.1.3 — Collect + Ingest Stage Adapter
+
+**Çıktı:** Seçili `source_type`'lar için gerçek collector tetikleme + raw_items takibi
+
+Oluşturulacaklar:
+- `CollectStageExecutor` — seçili tiplerin collector Lambda'larını boto3 ile invoke eder; `IngestStageExecutor` — `raw_items` (status=pending) artışını gözlemler, kaynak bazlı sayaç `pipeline_run_steps.detail`'e yazar
+- IAM: orkestratör role'üne collector Lambda `lambda:InvokeFunction` izni (`infra/`)
+- `tests/unit/orchestrator/test_collect_stage.py` — invoke mock + sayaç
+
+**Cursor context:** `services/collectors/handler.py`, `Docs/04` §8, `30-infra-aws.mdc`
+
+---
+
+### 6.1.4 — Process Stage Adapter (SQS + Processed Gözlem)
+
+**Çıktı:** SQS depth + `processed_items` artışı ile process aşamasının tamamlanma tespiti
+
+Oluşturulacaklar:
+- `ProcessStageExecutor` — SQS `ApproximateNumberOfMessages` + `processed_items` artışını drain olana kadar gözlemler (timeout + max poll); sonuç sayaçları step'e yazar
+- IAM: orkestratör role'üne SQS `GetQueueAttributes` izni
+- `tests/unit/orchestrator/test_process_stage.py` — drain gözlem (moto/mock)
+
+**Cursor context:** `services/processor/consumer.py`, SQS queue config, `Docs/04` §processor
+
+---
+
+### 6.1.5 — Digest Stage Adapter + digest_update
+
+**Çıktı:** Digest üretimini orkestratöre bağlama + bülten güncelleme run tipi
+
+Oluşturulacaklar:
+- `DigestStageExecutor` — mevcut digest üretim akışını çağırır (`services/ai-engine/digest_generator.py`), `digests.status` `ready/failed`'i step'e yansıtır
+- `digest_update` run tipi: yalnızca `digest` aşaması; `collect/ingest/process` `skipped`
+- `tests/unit/orchestrator/test_digest_stage.py` + `digest_update` run akışı
+
+**Cursor context:** `services/ai-engine/digest_generator.py`, `apps/api/routers/digests.py`, `Docs/03` §7
+
+---
+
+### 6.1.6 — Pipeline API Endpoint'leri
+
+**Çıktı:** Trigger / list / detail / cancel REST endpoint'leri
+
+Oluşturulacaklar:
+- `apps/api/routers/pipeline.py` — `POST /pipeline/runs`, `GET /pipeline/runs`, `GET /pipeline/runs/{id}`, `POST /pipeline/runs/{id}/cancel` (`Docs/03` §11.5)
+- `apps/api/schemas/pipeline.py` — request/response şemaları
+- Audit (`pipeline.triggered/completed/failed/cancelled`) + trigger rate limit (`Docs/07` §9.1, §rate-limit); concurrency guard (`PIPELINE_ALREADY_RUNNING`)
+- `tests/integration/test_pipeline_api.py` — trigger + viewer 403 + concurrency 409
+
+**Cursor context:** `apps/api/routers/digests.py` (async trigger kalıbı), `Docs/03` §11.5, `Docs/07` §9
+
+---
+
+### 6.1.7 — FE: Kokpit Listesi + Tetikleme
+
+**Çıktı:** `S-ADMIN-PIPELINE` geçmiş tablosu + tetik modal + navigasyon
+
+Oluşturulacaklar:
+- `app/(dashboard)/admin/pipeline/page.tsx` — run geçmişi DataTable + "Yeni Pipeline Başlat" / "Bülten Güncelle" + auto-refresh (`Docs/06` S-ADMIN-PIPELINE)
+- `S-ADMIN-PIPELINE-TRIGGER` modal: kaynak tipi çoklu seçim (Resmi / RSS / E-posta / Tümü)
+- `hooks/use-pipeline.ts` — list + trigger + cancel; sidebar'a "Pipeline İzleme" + route (`Docs/05` §4)
+- Empty/loading state (`Docs/06` §empty/loading)
+
+**Cursor context:** `apps/web/app/(dashboard)/admin/sources/page.tsx`, `Docs/06` S-ADMIN-PIPELINE, `Docs/05` §4
+
+---
+
+### 6.1.8 — FE: Run Detay Timeline + Canlı İzleme
+
+**Çıktı:** `S-ADMIN-PIPELINE-DETAIL` adım timeline'ı + polling + hata teşhisi
+
+Oluşturulacaklar:
+- `app/(dashboard)/admin/pipeline/[id]/page.tsx` — 4 aşamalı timeline (Toplama → Ingest → İşleme → Bülten), step durumu/sayaç/süre, hata teşhis paneli
+- `hooks/use-pipeline-run.ts` — run koşarken `refetchInterval` polling, terminal statüde durur (`Docs/05` §8)
+- Bülten güncelleme tetik akışı (`digest_update`)
+
+**Cursor context:** 6.1.7 çıktıları, `Docs/06` S-ADMIN-PIPELINE-DETAIL, `Docs/05` §8
+
+---
+
+## Faz 6.2 — İçerik Arşivi
+
+> Öncül: Faz 3 (processed_items + topics + relevance_score) + Faz 4 (digest source_references) + Faz 6 (admin shell)
+> Ardıl: Faz 7
+> Katman: Full-stack dikey (migration + processor persist → API → admin ekran)
+
+**Amaç:** Admin'in processor'dan geçmiş tüm haber içeriklerini cursor pagination ile listeleyip filtreleyebildiği, satır detayında tam metin ve bülten kullanım geçmişini görebildiği **`S-ADMIN-CONTENT-ARCHIVE`** ekranı. **Admin only** — viewer erişimi yok.
+
+**Mimari kararlar (MVP-0):**
+- Liste API yanıtında `clean_content` **dönmez** (performans); tam metin yalnızca detay endpoint.
+- Cross-schema sorgu: 5 `{schema}.processed_items` tablosu UNION ALL + cursor (`processed_at DESC, id DESC`).
+- Bülten çapraz referans: `digest_sections.source_references` JSONB batch tarama (sayfa başına N+1 yok).
+- `content_category` kolonu enricher kategorisini kalıcı yapar (Faz 6.2 öncesi kayıtlar `NULL`).
+
+### 6.2.1 — content_category Persist + Migration
+
+**Çıktı:** `content_category` kolonu 5 şemada + processor persist + unit test
+
+Oluşturulacaklar:
+- `alembic/versions/006_content_category.py` — 5 şemada `content_category VARCHAR(50)` + index; `down_revision` `005_pipeline_tables`
+- `packages/shared/models/processed_item.py` — `content_category` mapped column (nullable)
+- `services/processor/persistence.py` — `output.extras["category"]` → `content_category` yazımı
+- `tests/unit/processor/test_persistence.py` — persist sonrası `content_category` assert
+
+**Cursor context:** `services/processor/enricher.py`, `Docs/02` §4.4, `Docs/04` §8.4
+
+---
+
+### 6.2.2 — List API + Cross-Schema Repository
+
+**Çıktı:** `GET /api/v1/admin/processed-items` — cursor pagination, filtreler, özet DTO (digest_usages özet)
+
+Oluşturulacaklar:
+- `apps/api/repositories/processed_item_repository.py` — UNION ALL list + filtreler
+- `apps/api/services/content_archive_service.py` — list orchestration + source join
+- `apps/api/schemas/content_archive.py` — list/detail response modelleri
+- `apps/api/routers/content_archive.py` — `require_admin` guard
+- `apps/api/main.py` — router include
+
+Filtreler: `source_id`, `schema_category`, `content_category`, `published_from`, `published_to`, `min_score`, `topic`, `q`, `has_digest`, `cursor`, `limit`.
+
+**Cursor context:** `apps/api/repositories/audit_repository.py` (cursor kalıbı), `Docs/03` §11.6
+
+---
+
+### 6.2.3 — Detail API + Digest Cross-Ref + Integration Test
+
+**Çıktı:** `GET /api/v1/admin/processed-items/{id}` — tam metin + `digest_usages[]` + integration test
+
+Oluşturulacaklar:
+- `processed_item_repository.get_by_id(schema, id)` + `find_digest_usages(processed_item_id)`
+- `tests/integration/test_content_archive_api.py` — admin 200, viewer 403, filtre + pagination smoke
+
+**Cursor context:** `packages/shared/models/digest_section.py`, `Docs/03` §11.6
+
+---
+
+### 6.2.4 — FE: İçerik Arşivi Liste + Detay Drawer
+
+**Çıktı:** `S-ADMIN-CONTENT-ARCHIVE` — filtre bandı, DataTable, "Daha fazla yükle", detay drawer, sidebar link
+
+Oluşturulacaklar:
+- `app/(dashboard)/admin/content-archive/page.tsx`
+- `components/admin/content-archive-table.tsx`, `content-archive-detail-drawer.tsx`, `content-archive-filters.tsx`
+- `hooks/use-content-archive.ts`, `hooks/use-content-archive-detail.ts`
+- `lib/content-archive-labels.ts`
+- `lib/constants.ts` — sidebar "İçerik Arşivi" linki
+
+**Cursor context:** `apps/web/app/(dashboard)/admin/audit-logs/page.tsx`, `Docs/06` S-ADMIN-CONTENT-ARCHIVE
+
+---
+
 ## Faz 7 — Mobil Uygulama
 
 > Öncül: Faz 6 (API kontratları web'de valide edilmiş)
-> Ardıl: Faz 8
+> Ardıl: Faz 8 (Pipeline Runtime)
 > Katman: Mobil (React Native)
 
 ### 7.1 — React Native Boilerplate
@@ -1003,90 +1202,126 @@ Oluşturulacaklar:
 
 ---
 
-## Faz 8 — Production Deploy ve Launch
+## Faz 8 — Pipeline Runtime Tamamlama
 
-> Öncül: Faz 0-7 tamamlanmış
-> Ardıl: MVP-1
-> Katman: Infra, Operasyon
+> Öncül: Faz 0 (dev CDK), Faz 2–3 (collector + processor kodu), Faz 6.1 (tercihen tamam — manuel kokpit smoke)
+> Ardıl: MVP-0 tamamlandı → `main` merge (onaylı)
+> Katman: Backend wiring + Infra (Lambda deploy)
 
-### 8.1 — Production AWS Ortamı
+**Amaç:** Collector → SQS → Processor → PostgreSQL akışının **AWS dev ortamında gerçek Lambda'larla** uçtan uca çalışması. Uygulama iş mantığı değişmez; ingest wire, Lambda bundle, CDK deploy ve dev smoke tamamlanır.
 
-**Çıktı:** Prod ortamı kaynakları
+**Mimari karar:** Processor Lambda girişinde idempotent `raw_item` ingest — ayrı ingest Lambda yok (`docs/adr/0001-processor-ingest-at-entry.md`, `Docs/04` §8.0).
 
-Oluşturulacaklar:
-- Prod RDS PostgreSQL: t3.micro (MVP-0), DeletionProtection: true, automated daily backup, 7 gün retention, PITR aktif
-- Prod S3: `ygip-prod-archive`
-- Prod SQS: tüm queue'lar + DLQ'lar (`ygip-prod-*`)
-- Kurumsal SMTP relay yapılandırması (Secrets Manager `ygip/prod/smtp`)
-- Domain + SSL: `ygip.yildizholding.com` + ACM sertifika + CloudFront dağıtımı
-- IAM role'lar: prod-scoped ARN kısıtlaması (`ygip-prod-*`)
+### 8.1 — Ingest Wire + ADR
 
-**Cursor context:** `/infra/` dizini, 0.6 dev ortamı (prod karşılıkları)
-
----
-
-### 8.2 — Secret Migration
-
-**Çıktı:** Tüm secret'lar AWS Secrets Manager'da
+**Çıktı:** Processor pipeline girişinde `ingest_message` entegrasyonu; ADR onaylı
 
 Oluşturulacaklar:
-- Secrets Manager'da secret oluşturma: JWT_SECRET_KEY, DATABASE_URL, REDIS_URL, ENCRYPTION_KEY, SMTP config, FCM service account
-- Lambda/ECS IAM role'larına Secrets Manager read erişimi
-- Application config güncelleme: prod ortamda `.env` yerine Secrets Manager'dan okuma
-- KMS CMK oluşturma (LLM API key encryption için)
+- `docs/adr/0001-processor-ingest-at-entry.md` — ingest stratejisi kararı
+- `services/processor/pipeline_orchestrator.py` — `process()` başında idempotent ingest
+- `tests/unit/processor/test_orchestrator.py` — ingest happy path + duplicate + raw_item yokken persist
 
-**Cursor context:** 07_SECURITY_IMPLEMENTATION.md (secret yönetimi bölümü), `/infra/`
-
----
-
-### 8.3 — Smoke Test ve Performans
-
-**Çıktı:** Production-ready doğrulama
-
-Yapılacaklar:
-- Smoke test: login → ana sayfa (brief) → bülten listesi → detay → chatbot soru/yanıt → logout (web + mobil)
-- Collector cycle test: 35+ kaynak × 15 dk cycle → raw_items DB'de
-- Pipeline test: raw_items → processed_items → embeddings akışı tamamlanıyor
-- Digest üretim test: manuel trigger → digest ready → mail + push bildirimi
-- Rate limit doğrulama: auth 10/dk, chatbot 20/dk, genel 100/dk
-- Performans ölçümü: digest üretim süresi, chatbot yanıt süresi, API response time p95
+**Cursor context:** `services/collectors/persistence.py`, `Docs/04` §8.0–8.7
 
 ---
 
-### 8.4 — Prod Seed ve Kullanıcı Oluşturma
+### 8.2 — Lambda Bundle Script
 
-**Çıktı:** Platform kullanıma hazır
-
-Yapılacaklar:
-- Production source'lar: 35+ RSS, 9 email, 3 gov kaynağı (gerçek URL'ler ve config'ler)
-- Prompt şablonları: 3 bülten tipi × bölüm şablonları (Türkçe, üst yönetim diline uygun)
-- Sistem ayarları: production varsayılanları
-- İlk admin kullanıcısı oluşturma
-- 5-10 üst yönetim kullanıcısı oluşturma (CEO ofisi, CFO, strateji direktörleri)
-- LLM API key'leri ekleme (Groq + Gemini)
-
----
-
-### 8.5 — Audit Archive Lambda
-
-**Çıktı:** 90 gün → S3 arşivleme otomatik job'ı
+**Çıktı:** Monorepo paketini Lambda deploy artifact'ına bundle eden script
 
 Oluşturulacaklar:
-- `services/maintenance/audit_archiver.py` — Lambda fonksiyonu: 90 günden eski audit_logs → S3 JSON Lines export → batch delete
-- EventBridge: her ayın 1'i 05:00 TR cron
-- S3 path pattern: `s3://ygip-prod-archive/audit-logs/{YYYY}/{MM}/audit_{timestamp}.jsonl`
+- `scripts/build_lambda.sh` (veya `scripts/build_lambda.py`) — `services/`, `packages/shared/` paketleme, bağımlılık vendoring
+- `infra/README.md` — bundle + deploy prosedürü güncelleme
+- `.env.example` — Lambda ortam değişkenleri notu
 
 Testler:
-- `tests/unit/maintenance/test_audit_archiver.py` — date filtre, S3 write mock, batch delete
+- `tests/unit/infra/test_lambda_bundle.py` — artifact içeriği smoke (handler import path)
 
-**Cursor context:** `packages/shared/models/audit_log.py`, S3 client config
+**Cursor context:** `infra/collectors/lambda_stub/`, `Docs/09` §7
+
+---
+
+### 8.3 — Collector Lambda Gerçek Deploy (CDK)
+
+**Çıktı:** CDK collector Lambda'ları stub yerine gerçek bundle kullanır
+
+Oluşturulacaklar:
+- `infra/collectors/construct.py` — `Code.from_asset` bundle path; unified `handler.lambda_handler`
+- Ortam değişkenleri: `DATABASE_URL`, `REDIS_URL`, `SQS_QUEUE_*_URL` (Secrets Manager veya deploy-time inject)
+- Legacy `handlers/rss_handler.py` vb. kaldırma veya `handler.py`'ye yönlendirme
+- IAM: RDS/VPC erişimi gerekiyorsa security group
+
+Testler:
+- `tests/unit/infra/test_stack_synth.py` — collector function resource doğrulama
+
+**Cursor context:** Faz 2.6 CDK, `services/collectors/handler.py`
+
+---
+
+### 8.4 — Processor Lambda CDK + SQS Trigger
+
+**Çıktı:** Processor Lambda SQS event source mapping (rss/email/gov)
+
+Oluşturulacaklar:
+- `infra/processor/construct.py` — `dev-ygip-processor-{type}` Lambda, SQS trigger, partial batch failure
+- IAM: SQS consume, RDS, Redis, Secrets Manager (dev scope)
+- DLQ redrive policy doğrulama
+- Memory/timeout profili (embedding CPU-bound — `asyncio.to_thread`)
+
+Testler:
+- `tests/unit/infra/test_stack_synth.py` — processor + event source mapping
+
+**Cursor context:** `services/processor/handlers/processor_handler.py`, `Docs/04` §8.6–8.7
+
+---
+
+### 8.5 — Dev Deploy Workflow + Smoke Script
+
+**Çıktı:** `deploy-dev.yml` aktivasyon; manuel/CI dev smoke
+
+Oluşturulacaklar:
+- `.github/workflows/deploy-dev.yml` — `cdk deploy` dev stack (onaylı branch)
+- `scripts/smoke_pipeline_dev.sh` — collector invoke → SQS → processor → DB row doğrulama
+- `Docs/09` §5 — deploy prosedürü güncelleme
+
+**Cursor context:** Faz 0.2 CI, `infra/README.md`
+
+---
+
+### 8.6 — Pipeline Runtime E2E Integration
+
+**Çıktı:** Moto SQS + PostgreSQL ile tam runtime smoke; Faz 6.1 stage uyumu
+
+Oluşturulacaklar:
+- `tests/integration/test_pipeline_runtime_flow.py` — collect publish → processor handler → raw_items + processed_items + chunks
+- Mevcut `test_pipeline_e2e.py` — manuel `_seed_raw_item` kaldırma (ingest wire sonrası)
+- Faz 6.1 `IngestStageExecutor` / `ProcessStageExecutor` sayaç uyumu doğrulama notu
+
+Testler:
+- Integration suite regresyon yeşil; processor coverage ≥%80 korunur
+
+**Cursor context:** `tests/integration/test_collector_sqs_flow.py`, Faz 6.1 stage executor'lar
 
 ---
 
 ## MVP-1 — Piyasa Verisi ve Alarm Motoru (Üst Seviye)
 
-> Öncül: MVP-0 canlı ve stabil
+> Öncül: MVP-0 canlı ve stabil (`main` merge + Faz 8 pipeline runtime tamam)
 > Tahmini kapsam: 2-3 sprint
+
+### MVP-1 — Production Launch (eski Faz 8 içeriği)
+
+MVP-0 Faz 8 pipeline runtime tamamlandıktan sonra production ortamına geçiş ayrı sprint olarak planlanır:
+
+| Maddde | İçerik |
+|--------|--------|
+| Prod AWS | `ygip-prod-*` RDS, SQS, Lambda, S3, CloudFront, ACM |
+| Secret migration | Secrets Manager `ygip/prod/*`; prod'da `.env` yok |
+| Smoke + performans | Auth, digest, chat, collector cycle, pipeline, rate limit, p95 |
+| Prod seed | Admin + viewer kullanıcılar, gerçek source'lar, prompt şablonları, LLM key'ler |
+| Audit archive Lambda | 90 gün+ audit → S3, EventBridge aylık cron |
+
+Detay: eski `Docs/10` Faz 8.1–8.5 maddeleri; implementasyon MVP-1 sprint planında `.cursor/rules/` ile yeniden üretilir.
 
 **Yeni collector'lar:** Finnhub (hisse/kur, 5 dk), FRED (makro, günlük), FAO (gıda fiyat endeksi, haftalık), Yahoo Finance (emtia vadeli, 5 dk). Tümü `BaseCollector` implement eder, REST API tipi.
 

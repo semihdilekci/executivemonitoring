@@ -639,6 +639,43 @@ Manuel bülten üretimi tetikler. Cron dışında ad-hoc üretim için kullanıl
 
 İşlem asenkron çalışır; sonuç `GET /api/v1/digests/{id}` ile sorgulanır.
 
+### GET /api/v1/briefs/today _(Admin + Viewer)_
+
+Ana sayfa (S-HOME) "Günün Özeti" (Executive Brief) kartının veri kaynağı. Bugün için üretilmiş günlük özeti ve istatistik bandını döner. Brief, o günkü `ready` bültenlerden türetilir; ayrı bir kalıcı kaynak değildir (read-only türev).
+
+**Query parametreleri:** Yok.
+
+**Response (200) — özet hazır:**
+```json
+{
+  "summary": "Bu hafta **3 yeni bülten** yayınlandı; **FMCG kategorisinde** fiyat baskısı öne çıkıyor. Yıldız Holding'i etkileyen **2 kritik gelişme** raporlandı.",
+  "stats": {
+    "source_count": 28,
+    "new_digest_count": 3,
+    "processed_news_count": 142,
+    "yildiz_impact_count": 2
+  },
+  "generated_at": "2026-06-16T09:15:00Z"
+}
+```
+
+- `summary`: 2-4 cümlelik düz metin. Vurgulanacak ifadeler `**...**` (Markdown bold) ile işaretlenir; frontend bunları altın renkte (`.hl`) render eder. `dangerouslySetInnerHTML` kullanılmaz — yalnızca `**...**` token'ları parse edilir.
+- `stats`: 4 metrik (kaynak, yeni bülten, işlenen haber, Yıldız etkili gelişme sayısı). Tümü `integer ≥ 0`.
+- `generated_at`: ISO 8601 UTC; özetin üretildiği an.
+
+**Response (404) — özet henüz üretilmedi:**
+```json
+{
+  "error": {
+    "code": "BRIEF_NOT_READY",
+    "message": "Günün özeti henüz hazırlanmadı.",
+    "details": {}
+  }
+}
+```
+
+Frontend bu durumu "Günün özeti hazırlanıyor…" (pending) olarak gösterir. Hiç `ready` bülten bulunmuyorsa `summary` boş string döner ve frontend "veri yok" (empty) durumunu render eder.
+
 ---
 
 ## 8. AI Chatbot Endpoint'leri
@@ -650,9 +687,15 @@ Chatbot'a soru gönderir. RAG pipeline ile yanıt üretir.
 **Request:**
 ```json
 {
-  "question": "Bu hafta FMCG sektöründe önemli gelişmeler neler?"
+  "question": "Bu hafta FMCG sektöründe önemli gelişmeler neler?",
+  "digest_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `question` | string (min 1) | ✅ | Kullanıcı sorusu |
+| `digest_id` | UUID | ❌ | Opsiyonel digest bağlamı (`S-DIGEST-DETAIL` FAB → `?digest_id=`). Gönderilirse RAG bağlamı bu bültene öncelik verir; verilmezse tüm içerik üzerinden yanıt üretilir. BE `AskRequest` bu alanı kabul etmiyorsa FE soru-yalnız fallback'e döner (422 probe). |
 
 **Response (200):**
 ```json
@@ -775,6 +818,47 @@ Mobil uygulama FCM device token'ını kaydeder veya günceller. Uygulama her aç
 }
 ```
 
+### GET /api/v1/notifications/recipients _(Admin only)_
+
+Digest ve hata bildirimi mail alıcılarını listeler (S-ADMIN-NOTIFICATIONS Bölüm 1).
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "rr0e8400-...",
+      "user_id": "550e8400-...",
+      "user_name": "Ali Yılmaz",
+      "email": "ali@yildizholding.com",
+      "types": ["digest", "error_alert"]
+    }
+  ]
+}
+```
+
+`types` değerleri: `digest` (digest gönderimi), `error_alert` (toplama/işleme hata bildirimi).
+
+### POST /api/v1/notifications/recipients _(Admin only)_
+
+Mevcut bir kullanıcıyı mail alıcı listesine ekler. Aynı kullanıcı birden fazla kez eklenemez (409 `RECIPIENT_EXISTS`).
+
+**Request:**
+```json
+{
+  "user_id": "550e8400-...",
+  "types": ["digest"]
+}
+```
+
+**Response (201):** Eklenen alıcı kaydı (`NotificationRecipientItem` şeması — yukarıdaki liste öğesiyle aynı).
+
+### DELETE /api/v1/notifications/recipients/{id} _(Admin only)_
+
+Alıcıyı listeden kaldırır.
+
+**Response (204):** Body yok.
+
 ---
 
 ## 10. Audit Log Endpoint'leri
@@ -849,10 +933,35 @@ Tüm sistem ayarlarını döner.
       "value": "openai/text-embedding-3-small",
       "description": "Aktif embedding modeli",
       "updated_at": "2026-06-01T10:00:00Z"
+    },
+    {
+      "key": "chatbot_rate_limit_per_minute",
+      "value": 20,
+      "description": "Chatbot dakika başına istek limiti (Min: 1, Max: 120)",
+      "updated_at": "2026-06-01T10:00:00Z"
+    },
+    {
+      "key": "chatbot_temperature",
+      "value": 0.7,
+      "description": "Chatbot yanıt sıcaklığı (Min: 0, Max: 2)",
+      "updated_at": "2026-06-01T10:00:00Z"
+    },
+    {
+      "key": "notification_schedule",
+      "value": {
+        "strategy_weekly": { "day": "friday", "time": "18:00", "enabled": true },
+        "turkish_media_weekly": { "day": "saturday", "time": "10:00", "enabled": true },
+        "fmcg_weekly": { "day": "saturday", "time": "12:00", "enabled": true },
+        "daily_brief": { "day": "everyday", "time": "09:00", "enabled": true }
+      },
+      "description": "Digest tipi bazlı gönderim zamanlaması (S-ADMIN-NOTIFICATIONS Bölüm 2)",
+      "updated_at": "2026-06-01T10:00:00Z"
     }
   ]
 }
 ```
+
+Ayar `value` alanı polimorfiktir: skaler (`jwt_*`, `chatbot_*`) veya nesne (`notification_schedule`) olabilir. `notification_schedule` öğelerinde `day` değerleri: `monday`–`sunday` veya `everyday`; `time` `HH:mm` formatında.
 
 ### PUT /api/v1/settings/{key} _(Admin only)_
 
@@ -885,6 +994,242 @@ Tek bir sistem ayarını günceller.
   "updated_at": "2026-06-16T11:00:00Z"
 }
 ```
+
+---
+
+## 11.5 Pipeline Monitoring Endpoint'leri (Faz 6.1)
+
+Admin'in pipeline çalıştırmalarını manuel tetikleyip izlediği kokpit endpoint'leri (S-ADMIN-PIPELINE). Tetikleme asenkrondur; ilerleme `GET /pipeline/runs/{id}` polling ile izlenir. Tüm endpoint'ler **Admin only**.
+
+### POST /api/v1/pipeline/runs _(Admin only)_
+
+Yeni bir pipeline çalıştırması tetikler. `collect_pipeline` collect→ingest→process→digest aşamalarını seçili kaynak tipleriyle koşar; `digest_update` yalnızca digest üretir.
+
+**Request (collect_pipeline):**
+```json
+{
+  "run_type": "collect_pipeline",
+  "source_types": ["rss", "gov"]
+}
+```
+
+**Request (digest_update):**
+```json
+{
+  "run_type": "digest_update",
+  "digest_type": "fmcg_weekly",
+  "period_start": "2026-06-09",
+  "period_end": "2026-06-15",
+  "send_notification": true
+}
+```
+
+**Alan kuralları:**
+- `source_types`: yalnızca `collect_pipeline` için; izinli değerler `rss` | `email` | `gov` | `all`. `["all"]` → tüm aktif kaynak tipleri. `digest_update` için gönderilmez/yok sayılır.
+- `digest_type`, `period_start`, `period_end`, `send_notification`: yalnızca `digest_update` için (kurallar `Docs/03` §7 `/digests/generate` ile aynı).
+
+**Response (202 Accepted):**
+```json
+{
+  "id": "pp0e8400-...",
+  "run_type": "collect_pipeline",
+  "status": "pending",
+  "message": "Pipeline çalıştırması başlatıldı."
+}
+```
+
+Aynı tipte `pending`/`running` bir run varken yeni `collect_pipeline` tetiklenirse `409 PIPELINE_ALREADY_RUNNING` döner (eşzamanlılık guard). Geçersiz `source_types` değeri `422 INVALID_SOURCE_TYPE`.
+
+### GET /api/v1/pipeline/runs _(Admin only)_
+
+Pipeline çalıştırma geçmişini listeler (cursor pagination).
+
+**Query parametreleri:** `cursor`, `limit` (varsayılan 20, max 50), `run_type`, `status`, `start_date`, `end_date`.
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "pp0e8400-...",
+      "run_type": "collect_pipeline",
+      "status": "running",
+      "source_types": ["rss", "gov"],
+      "stats": { "collected": 84, "ingested": 84, "processed": 51 },
+      "triggered_by_name": "Admin Kullanıcı",
+      "current_stage": "process",
+      "started_at": "2026-06-20T08:00:00Z",
+      "finished_at": null,
+      "created_at": "2026-06-20T08:00:00Z"
+    }
+  ],
+  "pagination": { "next_cursor": "qq0e8400-...", "has_more": true }
+}
+```
+
+`current_stage`: `running` durumdaki run için o an koşan aşama; terminal durumda `null`.
+
+### GET /api/v1/pipeline/runs/{run_id} _(Admin only)_
+
+Tek bir run'ın aşama bazlı detayı — FE bu endpoint'i run koşarken polling ile çağırır.
+
+**Response (200):**
+```json
+{
+  "id": "pp0e8400-...",
+  "run_type": "collect_pipeline",
+  "status": "partial",
+  "source_types": ["rss", "email", "gov"],
+  "params": {},
+  "stats": { "collected": 84, "ingested": 84, "processed": 51, "digest_id": "gg0e..." },
+  "error_summary": "email kaynağı: IMAP bağlantı hatası",
+  "triggered_by_name": "Admin Kullanıcı",
+  "started_at": "2026-06-20T08:00:00Z",
+  "finished_at": "2026-06-20T08:06:30Z",
+  "created_at": "2026-06-20T08:00:00Z",
+  "steps": [
+    {
+      "stage": "collect",
+      "status": "completed",
+      "sequence": 1,
+      "items_in": 3,
+      "items_out": 84,
+      "items_failed": 1,
+      "detail": { "rss": { "ok": 60 }, "gov": { "ok": 24 }, "email": { "failed": 1 } },
+      "error_message": null,
+      "started_at": "2026-06-20T08:00:05Z",
+      "finished_at": "2026-06-20T08:02:00Z"
+    },
+    {
+      "stage": "process",
+      "status": "completed",
+      "sequence": 3,
+      "items_in": 84,
+      "items_out": 51,
+      "items_failed": 0,
+      "detail": { "drain_polls": 7 },
+      "error_message": null,
+      "started_at": "2026-06-20T08:02:10Z",
+      "finished_at": "2026-06-20T08:05:40Z"
+    }
+  ]
+}
+```
+
+`steps` dizisi `sequence` sırasında döner (collect=1 … digest=4). `digest_update` run'ında koşmayan aşamalar `status: "skipped"`. Bulunmayan `run_id` → `404 PIPELINE_RUN_NOT_FOUND`.
+
+### POST /api/v1/pipeline/runs/{run_id}/cancel _(Admin only)_
+
+Koşan veya bekleyen bir run'ı iptal eder. Yalnızca `pending`/`running` iptal edilebilir; aksi halde `409 PIPELINE_NOT_CANCELLABLE`.
+
+**Response (200):**
+```json
+{ "id": "pp0e8400-...", "status": "cancelled" }
+```
+
+---
+
+## 11.6 İçerik Arşivi Endpoint'leri (Faz 6.2)
+
+Admin'in processor çıktısını (`processed_items`) listeleyip filtrelediği arşiv endpoint'leri (S-ADMIN-CONTENT-ARCHIVE). **Admin only.** Viewer → `403 FORBIDDEN`.
+
+### GET /api/v1/admin/processed-items _(Admin only)_
+
+İşlenmiş haber içeriklerini listeler (cursor pagination). Yanıtta **`clean_content` dönmez** — tam metin için detay endpoint.
+
+**Query parametreleri:**
+
+| Parametre | Tip | Zorunlu | Açıklama |
+|-----------|-----|---------|----------|
+| `cursor` | string | Hayır | Önceki sayfa `next_cursor` (`{schema}:{uuid}` formatı) |
+| `limit` | integer | Hayır | Varsayılan 20, max 100 |
+| `source_id` | uuid | Hayır | Kaynak filtresi |
+| `schema_category` | string | Hayır | `news` \| `market` \| `geo` \| `transport` \| `fmcg` |
+| `content_category` | string | Hayır | `macro` \| `fmcg` \| `finance` \| `geopolitical` \| `strategy` \| `regulatory` |
+| `published_from` | date | Hayır | `published_at` alt sınır (dahil) |
+| `published_to` | date | Hayır | `published_at` üst sınır (dahil) |
+| `min_score` | float | Hayır | Min `relevance_score` (0–1) |
+| `topic` | string | Hayır | `topics` JSONB contains (tek keyword) |
+| `q` | string | Hayır | Başlık arama (case-insensitive ILIKE, min 2 karakter) |
+| `has_digest` | boolean | Hayır | `true`: en az bir bülten referansı olan; `false`: hiç kullanılmamış |
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "aa0e8400-e29b-41d4-a716-446655440001",
+      "schema_category": "news",
+      "content_category": "macro",
+      "source_id": "bb0e8400-e29b-41d4-a716-446655440002",
+      "source_name": "Bloomberg HT RSS",
+      "title": "TCMB faiz kararı piyasaları hareketlendirdi",
+      "language": "tr",
+      "relevance_score": 0.82,
+      "topics": ["tcmb", "faiz", "enflasyon"],
+      "published_at": "2026-06-18T09:30:00Z",
+      "processed_at": "2026-06-18T09:31:12Z",
+      "digest_usages": [
+        {
+          "digest_id": "cc0e8400-e29b-41d4-a716-446655440003",
+          "digest_type": "strategy_weekly",
+          "digest_title": "Strateji Haftalık — 9–15 Haziran 2026",
+          "period_start": "2026-06-09",
+          "period_end": "2026-06-15"
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "next_cursor": "news:dd0e8400-e29b-41d4-a716-446655440004",
+    "has_more": true
+  }
+}
+```
+
+Geçersiz `schema_category` / `content_category` → `422 VALIDATION_ERROR`. `q` 1 karakter → `422 VALIDATION_ERROR`.
+
+### GET /api/v1/admin/processed-items/{processed_item_id} _(Admin only)_
+
+Tek işlenmiş içeriğin detayı. **`schema_category` query zorunlu** (cross-schema PK çakışması riski yoktur ancak hangi tabloda aranacağını belirtir).
+
+**Query parametreleri:**
+
+| Parametre | Tip | Zorunlu | Açıklama |
+|-----------|-----|---------|----------|
+| `schema_category` | string | Evet | `news` \| `market` \| `geo` \| `transport` \| `fmcg` |
+
+**Response (200):**
+```json
+{
+  "id": "aa0e8400-e29b-41d4-a716-446655440001",
+  "schema_category": "news",
+  "content_category": "macro",
+  "source_id": "bb0e8400-e29b-41d4-a716-446655440002",
+  "source_name": "Bloomberg HT RSS",
+  "title": "TCMB faiz kararı piyasaları hareketlendirdi",
+  "clean_content": "… tam normalize edilmiş metin …",
+  "language": "tr",
+  "relevance_score": 0.82,
+  "topics": ["tcmb", "faiz", "enflasyon"],
+  "entities": [],
+  "published_at": "2026-06-18T09:30:00Z",
+  "processed_at": "2026-06-18T09:31:12Z",
+  "chunk_count": 3,
+  "digest_usages": [
+    {
+      "digest_id": "cc0e8400-e29b-41d4-a716-446655440003",
+      "digest_type": "strategy_weekly",
+      "digest_title": "Strateji Haftalık — 9–15 Haziran 2026",
+      "period_start": "2026-06-09",
+      "period_end": "2026-06-15",
+      "section_title": "Makroekonomik Gelişmeler"
+    }
+  ]
+}
+```
+
+Bulunamaz → `404 PROCESSED_ITEM_NOT_FOUND`.
 
 ---
 
@@ -926,9 +1271,18 @@ Tüm endpoint'lerin rol bazlı erişim tablosu. ✅ = erişim var, ❌ = erişim
 | `/notifications/preferences` | GET | ✅ | ❌ | Evet |
 | `/notifications/preferences/{uid}` | PUT | ✅ | ❌ | Evet |
 | `/notifications/fcm-token` | POST | ✅ | ✅ | Evet |
+| `/notifications/recipients` | GET | ✅ | ❌ | Evet |
+| `/notifications/recipients` | POST | ✅ | ❌ | Evet |
+| `/notifications/recipients/{id}` | DELETE | ✅ | ❌ | Evet |
 | `/audit-logs` | GET | ✅ | ❌ | Evet |
 | `/settings` | GET | ✅ | ❌ | Evet |
 | `/settings/{key}` | PUT | ✅ | ❌ | Evet |
+| `/pipeline/runs` | POST | ✅ | ❌ | Evet |
+| `/pipeline/runs` | GET | ✅ | ❌ | Evet |
+| `/pipeline/runs/{id}` | GET | ✅ | ❌ | Evet |
+| `/pipeline/runs/{id}/cancel` | POST | ✅ | ❌ | Evet |
+| `/admin/processed-items` | GET | ✅ | ❌ | Evet |
+| `/admin/processed-items/{id}` | GET | ✅ | ❌ | Evet |
 
 Guard implementasyonu: FastAPI dependency injection ile `get_current_user` ve `require_admin` dependency'leri kullanılır. Her endpoint fonksiyonunda `Depends(require_admin)` veya `Depends(get_current_user)` belirtilir.
 
@@ -1021,8 +1375,13 @@ Tüm API hataları aşağıdaki formatta döner:
 | Kod | Status | Açıklama |
 |-----|--------|----------|
 | `RESOURCE_NOT_FOUND` | 404 | İstenen kaynak bulunamadı |
+| `BRIEF_NOT_READY` | 404 | Günün özeti (Executive Brief) henüz üretilmedi |
+| `PIPELINE_RUN_NOT_FOUND` | 404 | İstenen pipeline çalıştırması bulunamadı |
 | `USER_EMAIL_EXISTS` | 409 | E-posta adresi zaten kayıtlı |
 | `SOURCE_DUPLICATE_URL` | 409 | Aynı URL'li kaynak zaten var |
+| `PIPELINE_ALREADY_RUNNING` | 409 | Aynı tipte koşan/bekleyen bir pipeline çalıştırması var |
+| `PIPELINE_NOT_CANCELLABLE` | 409 | Run terminal durumda — iptal edilemez |
+| `INVALID_SOURCE_TYPE` | 422 | Geçersiz kaynak tipi (`rss`/`email`/`gov`/`all` dışı) |
 
 **Rate limit hataları:**
 
@@ -1135,6 +1494,7 @@ Digest listesi istisnası: `completed_at DESC, id DESC` sıralaması kullanılı
 | `/digests` | 10 | 50 |
 | `/chat/history` | 20 | 50 |
 | `/audit-logs` | 20 | 100 |
+| `/admin/processed-items` | 20 | 100 |
 
 ---
 
@@ -1151,6 +1511,7 @@ Redis sliding window counter ile uygulanır. Limit aşıldığında 429 döner.
 | Auth (refresh) | 20 req/dk | Per IP | Token refresh flood koruması |
 | Chatbot | 20 req/dk | Per user | LLM API maliyetini kontrol altında tutma |
 | Password reset | 3 req/saat | Per IP | Reset link flood koruması |
+| Pipeline trigger | 5 req/dk | Per user | `POST /pipeline/runs` — maliyetli orkestrasyonu sınırlama (eşzamanlılık guard'a ek) |
 
 ### 429 Response Formatı
 

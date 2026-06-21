@@ -21,6 +21,8 @@ class CollectorSettings(BaseSettings):
     SQS_QUEUE_EMAIL_URL: str = ""
     SQS_QUEUE_GOV_URL: str = ""
 
+    IMAP_HOST: str = ""
+    IMAP_USER: str = ""
     IMAP_PASSWORD: str = ""
 
     @property

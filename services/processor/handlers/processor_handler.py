@@ -120,7 +120,7 @@ async def process_sqs_record(
     item = ProcessorInput.from_sqs_body(body, sqs_message_id=message_id or None)
 
     if orchestrator is not None:
-        return await orchestrator.process(item)
+        return await orchestrator.process(item, sqs_body=body)
 
     return await process_message(item, chain=chain, lifecycle=lifecycle)
 

@@ -12,6 +12,7 @@ from typing import Any
 
 from packages.shared.enums import RawItemStatus
 from packages.shared.models.raw_item import RawItem
+from packages.shared.utils.hashing import storage_content_hash
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -132,10 +133,13 @@ async def ingest_message(
         )
         return IngestResult(status=IngestStatus.DUPLICATE)
 
+    # DB `raw_items.content_hash` prefix'siz hex saklar (VARCHAR(64)); Redis dedup
+    # seti collector ile uyum için `sha256:` prefix'li tutulur.
+    db_content_hash = storage_content_hash(message.content_hash)
     existing = await session.execute(
         select(RawItem.id).where(
             RawItem.source_id == message.source_id,
-            RawItem.content_hash == message.content_hash,
+            RawItem.content_hash == db_content_hash,
         )
     )
     if existing.scalar_one_or_none() is not None:
@@ -158,7 +162,7 @@ async def ingest_message(
     raw_item = RawItem(
         source_id=message.source_id,
         external_id=external_id[:512],
-        content_hash=message.content_hash,
+        content_hash=db_content_hash,
         title=message.title,
         raw_content=message.content,
         raw_metadata=metadata,

@@ -8,9 +8,9 @@ Fix `.mdc` iskeleti (varsayılan tek çıktı). Spec detayı **kopyalanmaz** —
 
 ## Dosya adlandırma
 
-| Artefakt               | Path                                           | Örnek                                         | Varsayılan                    |
-| ---------------------- | ---------------------------------------------- | --------------------------------------------- | ----------------------------- |
-| Fix planı              | `.cursor/rules/NN-phase-XX-<slug>-fix.mdc`     | `.cursor/rules/59-phase-09-admin-fix.mdc`     | ✅ Evet                       |
+| Artefakt | Path | Örnek | Varsayılan |
+| -------- | ---- | ----- | ---------- |
+| Fix planı | `.cursor/rules/NN-phase-XX-<slug>-fix.mdc` | `.cursor/rules/59-phase-09-admin-fix.mdc` | ✅ Evet |
 | Fix raporu (opsiyonel) | `Docs/fix-reports/Faz-XX-<slug>-fix-report.md` | `Docs/fix-reports/Faz-09-admin-fix-report.md` | ❌ Hayır — açık istek gerekir |
 
 - `XX`: roadmap faz numarası (sıfır dolgulu: `09`)
@@ -36,13 +36,13 @@ Aşağıdaki şablon yalnızca kullanıcı `Docs/fix-reports/` çıktısı isted
 
 ## 1. Executive Summary
 
-| Metrik                            | Değer |
-| --------------------------------- | ----- |
-| BLOCKER                           | 0     |
-| HIGH                              | 0     |
-| MEDIUM                            | 0     |
-| LOW                               | 0     |
-| INFO                              | 0     |
+| Metrik | Değer |
+| ------ | ----- |
+| BLOCKER | 0 |
+| HIGH | 0 |
+| MEDIUM | 0 |
+| LOW | 0 |
+| INFO | 0 |
 | Done Definition (uyumlu / toplam) | 0 / 0 |
 
 **Özet:** … (2–4 cümle — en kritik gap'ler)
@@ -68,19 +68,19 @@ Aşağıdaki şablon yalnızca kullanıcı `Docs/fix-reports/` çıktısı isted
 
 ### Read-only komutlar
 
-| Komut            | Sonuç   |
-| ---------------- | ------- |
-| `pnpm lint`      | ✅ / ❌ |
+| Komut | Sonuç |
+| ----- | ----- |
+| `pnpm lint` | ✅ / ❌ |
 | `pnpm typecheck` | ✅ / ❌ |
-| `pnpm …`         | ✅ / ❌ |
+| `pnpm …` | ✅ / ❌ |
 
 ---
 
 ## 3. Done Definition Matrisi
 
-| #   | Madde (kaynak) | Durum        | Bulgu ID |
-| --- | -------------- | ------------ | -------- |
-| 1   | …              | ✅ / ❌ / ➖ | F-XX-001 |
+| # | Madde (kaynak) | Durum | Bulgu ID |
+| --- | -------------- | ----- | -------- |
+| 1 | … | ✅ / ❌ / ➖ | F-XX-001 |
 
 ---
 
@@ -107,15 +107,15 @@ Aşağıdaki şablon yalnızca kullanıcı `Docs/fix-reports/` çıktısı isted
 
 | Don't (kaynak faz .mdc) | Durum | Bulgu ID |
 | ----------------------- | ----- | -------- |
-| Maker-checker UI-only   | ✅    | —        |
+| Maker-checker UI-only | ✅ | — |
 
 ---
 
 ## 6. Scope Creep (EXTRA)
 
-| Dosya / alan | Neden faz dışı           | Bulgu ID |
-| ------------ | ------------------------ | -------- |
-| …            | Files NOT touched ihlali | F-XX-00N |
+| Dosya / alan | Neden faz dışı | Bulgu ID |
+| ------------ | -------------- | -------- |
+| … | Files NOT touched ihlali | F-XX-00N |
 
 ---
 
@@ -125,7 +125,7 @@ Aşağıdaki şablon yalnızca kullanıcı `Docs/fix-reports/` çıktısı isted
 
 | UAT ID | İlgili bulgu | Not |
 | ------ | ------------ | --- |
-| F9-01  | F-09-003     | …   |
+| F9-01 | F-09-003 | … |
 
 ---
 
@@ -146,7 +146,7 @@ _Rapor phase-controller skill ile üretilmiştir; uygulama kodu değiştirilmemi
 
 Kaynak: `phase-creator/reference.md` iskeleti — remediation odaklı adaptasyon.
 
-```markdown
+````markdown
 ---
 description: '[Faz N Fix] <Başlık> gap remediation — <K> fix iterasyon/chat (<grup1> → <grup2>). Mesajda "Faz N — Fix İterasyon M" belirt. Audit: phase-controller YYYY-MM-DD.'
 ---
@@ -176,9 +176,9 @@ Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@NN-phase-XX-<slug>-f
 
 ## Audit bulguları (tek kaynak)
 
-| ID       | Severity | Tip | Başlık | Kanıt                    |
-| -------- | -------- | --- | ------ | ------------------------ |
-| F-XX-001 | BLOCKER  | …   | …      | `path:satır` veya spec § |
+| ID | Severity | Tip | Başlık | Kanıt |
+| --- | --- | --- | --- | --- |
+| F-XX-001 | BLOCKER | … | … | `path:satır` veya spec § |
 
 **Explicit Don'ts:** ✅/❌ özet
 
@@ -223,8 +223,8 @@ Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@NN-phase-XX-<slug>-f
 
 | Bulgu ID | Severity | Kapatıldı |
 | -------- | -------- | --------- |
-| F-XX-001 | BLOCKER  | [ ]       |
-| F-XX-002 | HIGH     | [ ]       |
+| F-XX-001 | BLOCKER | [ ] |
+| F-XX-002 | HIGH | [ ] |
 
 ### Kalite kapıları
 
@@ -242,14 +242,14 @@ Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@NN-phase-XX-<slug>-f
 
 ## Deferred (bilinçli erteleme)
 
-| Bulgu ID | Gerekçe            | Hedef  |
-| -------- | ------------------ | ------ |
+| Bulgu ID | Gerekçe | Hedef |
+| -------- | ------- | ----- |
 | F-XX-010 | LOW — Faz 10 scope | Faz 10 |
 
 ---
 
 Fix done → `@phase-controller` regression audit → Human Gate.
-```
+````
 
 ---
 

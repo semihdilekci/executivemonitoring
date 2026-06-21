@@ -14,7 +14,7 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → **gate** →
 
 **Gate** (`GateProcessor`, `Docs/04` §8.3): `sources.config.ingest_mode` — `"all"` otomatik kabul; `"filtered"` master keyword havuzunda ≥1 eşleşme. DROP → `processed_items` / `content_chunks` yazılmaz.
 
-**Scoring:** `relevance_score = keyword_intensity * 0.6 + freshness * 0.4` (`Docs/04` §8.4). Source reliability weight yok. `transport` schema MVP-0'da kullanılmaz.
+**Scoring:** `relevance_score = 0.7 * coverage + 0.3 * freq` saf keyword ilgisi (`Docs/04` §8.4). Freshness skora dahil değil (K4). Source reliability weight yok. `transport` schema MVP-0'da kullanılmaz.
 
 ## Feature branch (zorunlu)
 
@@ -292,8 +292,8 @@ SQS'ten ham veriyi tüketen Lambda zinciri: dedup → normalize → **gate** →
 1. `enricher.py` — `CATEGORY_RULES` (`Docs/04` §8.4); en çok eşleşme → `default_category` tie-break → `ingest_mode: "all"` → `default_category`
 2. Schema map: macro/strategy/regulatory→`news`, fmcg→`fmcg`, finance→`market`, geopolitical→`geo`
 3. Eşleşen keyword'ler → `topics` (dedupe)
-4. `scorer.py` — `keyword_intensity * 0.6 + freshness * 0.4` (`Docs/04` §8.4); reliability weight yok
-5. Freshness: <24h=1.0, <72h=0.5, else 0.2
+4. `scorer.py` — `0.7 * coverage + 0.3 * freq` saf keyword ilgisi (`Docs/04` §8.4); freshness/reliability weight yok
+5. coverage `min(distinct/5,1)`, freq `min(avg_hits/3,1)`; eşleşme kelime-sınırı (`\b`)
 6. Unit: routing, ingest_mode all→default_category, skor edge cases
 
 **Dosya kapsamı:**

@@ -34,7 +34,7 @@ PostgreSQL schema'ları veri kategorisine göre ayrılır. Ortak tablolar `publi
 
 | Schema | İçerik | Tablolar |
 |--------|--------|---------|
-| `public` | Ortak sistem tabloları | `users`, `sources`, `raw_items`, `content_chunks`, `digests`, `digest_sections`, `prompt_templates`, `api_keys`, `api_usage_logs`, `chat_history`, `audit_logs`, `notification_preferences`, `password_reset_tokens`, `system_settings`, `alarms`, `alarm_events` |
+| `public` | Ortak sistem tabloları | `users`, `sources`, `raw_items`, `content_chunks`, `digests`, `digest_sections`, `prompt_templates`, `api_keys`, `api_usage_logs`, `chat_history`, `audit_logs`, `notification_preferences`, `password_reset_tokens`, `system_settings`, `pipeline_runs`, `pipeline_run_steps`, `alarms`, `alarm_events` |
 | `news` | Haber ve medya verisi | `news.processed_items` |
 | `market` | Piyasa ve finansal veri | `market.processed_items` |
 | `geo` | Jeopolitik veri | `geo.processed_items` |
@@ -68,6 +68,10 @@ CREATE TYPE raw_item_status_enum AS ENUM ('pending', 'processing', 'processed', 
 CREATE TYPE digest_type_enum AS ENUM ('turkish_media_weekly', 'fmcg_weekly', 'strategy_weekly');
 CREATE TYPE digest_status_enum AS ENUM ('generating', 'ready', 'failed');
 CREATE TYPE api_provider_enum AS ENUM ('groq', 'gemini');
+CREATE TYPE pipeline_run_type_enum AS ENUM ('collect_pipeline', 'digest_update');
+CREATE TYPE pipeline_run_status_enum AS ENUM ('pending', 'running', 'completed', 'partial', 'failed', 'cancelled');
+CREATE TYPE pipeline_stage_enum AS ENUM ('collect', 'ingest', 'process', 'digest');
+CREATE TYPE pipeline_step_status_enum AS ENUM ('pending', 'running', 'completed', 'failed', 'skipped');
 ```
 
 ---
@@ -189,6 +193,7 @@ CREATE TABLE {schema}.processed_items (
     published_at      TIMESTAMPTZ,
     processed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     schema_category   VARCHAR(50) NOT NULL,
+    content_category  VARCHAR(50),
 
     CONSTRAINT uq_{schema}_processed_items_raw_item_id UNIQUE (raw_item_id),
     CONSTRAINT ck_{schema}_processed_items_relevance_range CHECK (relevance_score >= 0 AND relevance_score <= 1)
@@ -200,9 +205,12 @@ CREATE INDEX idx_{schema}_processed_items_relevance_score ON {schema}.processed_
 CREATE INDEX idx_{schema}_processed_items_published_at ON {schema}.processed_items (published_at);
 CREATE INDEX idx_{schema}_processed_items_topics ON {schema}.processed_items USING GIN (topics);
 CREATE INDEX idx_{schema}_processed_items_entities ON {schema}.processed_items USING GIN (entities);
+CREATE INDEX idx_{schema}_processed_items_content_category ON {schema}.processed_items (content_category);
 ```
 
 `{schema}` yerine `news`, `market`, `geo`, `transport`, `fmcg` gelir. Migration bu 5 tabloyu döngüyle oluşturur.
+
+**`content_category` (Faz 6.2):** Enricher'ın keyword kural kategorisi (`macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`; `CATEGORY_RULES` anahtarları). `schema_category`'den farklıdır (DB schema bölümleme vs. iş kuralı kategorisi). Faz 6.2 öncesi kayıtlar için `NULL` kabul edilir; yeni processor persist zorunlu doldurur. Migration: `006_content_category.py` (`down_revision`: `005_pipeline_tables`).
 
 ### 4.5 content_chunks
 
@@ -488,6 +496,71 @@ CREATE INDEX idx_alarm_events_created_at ON alarm_events (created_at DESC);
 CREATE INDEX idx_alarm_events_notified ON alarm_events (notified);
 ```
 
+### 4.18 pipeline_runs (Faz 6.1)
+
+Manuel tetiklenen pipeline çalıştırmasının (collect→ingest→process→digest veya yalnızca digest_update) tarihsel kaydı. Orkestratör servis tarafından yazılır/güncellenir.
+
+```sql
+CREATE TABLE pipeline_runs (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_type       pipeline_run_type_enum NOT NULL,
+    status         pipeline_run_status_enum NOT NULL DEFAULT 'pending',
+    source_types   JSONB NOT NULL DEFAULT '[]'::jsonb,
+    params         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    stats          JSONB NOT NULL DEFAULT '{}'::jsonb,
+    triggered_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    error_summary  TEXT,
+    started_at     TIMESTAMPTZ,
+    finished_at    TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_pipeline_runs_status ON pipeline_runs (status);
+CREATE INDEX idx_pipeline_runs_run_type ON pipeline_runs (run_type);
+CREATE INDEX idx_pipeline_runs_created_at ON pipeline_runs (created_at DESC);
+CREATE INDEX idx_pipeline_runs_triggered_by ON pipeline_runs (triggered_by);
+```
+
+**Alan notları:**
+- `source_types`: `collect_pipeline` için seçilen kaynak tipleri (`["rss","email","gov"]`); `["all"]` veya boş → tüm aktif tipler. `digest_update` için `[]`.
+- `params`: run tipine bağlı parametreler — `digest_update` için `{"digest_type": "...", "period_start": "...", "period_end": "...", "send_notification": true}`.
+- `stats`: tamamlanınca toplulaştırılmış sayaçlar — `{"collected": 120, "ingested": 118, "processed": 95, "digest_id": "..."}`.
+- `status = partial`: bazı aşamalar/kaynaklar başarısız ama run ilerledi (örn. RSS toplandı, email kaynağı hata verdi).
+- `triggered_by`: kullanıcı silinince `SET NULL` (kayıt korunur).
+
+### 4.19 pipeline_run_steps (Faz 6.1)
+
+Bir run'ın aşama bazlı (stage) adım kaydı. Orkestratör her aşama geçişinde durum/sayaç günceller; FE bu tabloyu polling ile okur.
+
+```sql
+CREATE TABLE pipeline_run_steps (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id         UUID NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
+    stage          pipeline_stage_enum NOT NULL,
+    status         pipeline_step_status_enum NOT NULL DEFAULT 'pending',
+    sequence       SMALLINT NOT NULL,
+    items_in       INTEGER NOT NULL DEFAULT 0,
+    items_out      INTEGER NOT NULL DEFAULT 0,
+    items_failed   INTEGER NOT NULL DEFAULT 0,
+    detail         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error_message  TEXT,
+    started_at     TIMESTAMPTZ,
+    finished_at    TIMESTAMPTZ,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_pipeline_run_steps_run_id_stage UNIQUE (run_id, stage)
+);
+
+CREATE INDEX idx_pipeline_run_steps_run_id ON pipeline_run_steps (run_id);
+CREATE INDEX idx_pipeline_run_steps_status ON pipeline_run_steps (status);
+```
+
+**Alan notları:**
+- `sequence`: aşama sırası (`collect`=1, `ingest`=2, `process`=3, `digest`=4) — FE timeline sıralaması.
+- `detail`: aşamaya özel kırılım — collect: kaynak bazlı `{source_type: {ok, failed}}` + Lambda request id; process: SQS drain gözlem turları; digest: `digest_id`, section sayısı.
+- `digest_update` run'ında `collect/ingest/process` step'leri `skipped`; yalnızca `digest` koşar.
+- Her run için aşama başına en fazla 1 step (`uq_pipeline_run_steps_run_id_stage`).
+
 ---
 
 ## 5. Index Stratejisi
@@ -758,6 +831,8 @@ Migration dosyaları `NNN_kısa_açıklama.py` formatında adlandırılır. Sır
 16. `password_reset_tokens`
 17. `system_settings` + seed data
 18. pgvector HNSW index
+
+**Faz 6.1 eki:** `pipeline_runs` + `pipeline_run_steps` tabloları ve ilgili enum'lar ayrı migration ile eklenir (`005_pipeline_tables.py`, down_revision `004_notification_logs`) — Faz 0 çekirdek sırasının parçası değildir.
 
 ---
 

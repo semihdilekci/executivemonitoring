@@ -11,9 +11,10 @@ YGIP dev ortamı kaynakları AWS CDK (Python) ile tanımlanır. Kaynak adlandır
 | S3 | `dev-ygip-archive-{account}` — ham arşiv + digest HTML |
 | SQS + DLQ | `dev-ygip-sqs-{rss,email,gov,api}` + `-dlq` |
 | EventBridge | `dev-ygip-collector-schedule-{rss,email,gov}` — 15/60/30 dk |
-| Lambda | `dev-ygip-collector-{rss,email,gov}` — collector worker'lar |
+| Lambda | `dev-ygip-collector-{rss,email,gov}` — collector worker'lar (bundle artifact, VPC-internal) |
 | CloudWatch | `/aws/lambda/dev-ygip-collector-*` log grupları |
 | IAM | `dev-ygip-lambda-execution` — dev kaynakları + prod deny |
+| Security Group | `dev-ygip-lambda-sg` — collector Lambda VPC-internal RDS erişimi |
 
 **E-posta (SMTP):** AWS SES kullanılmaz. Dev'de Gmail SMTP (`smtp.gmail.com:587`, uygulama şifresi); production'da kurumsal SMTP relay. Kimlik bilgileri `.env` / Secrets Manager'da — IaC dışı.
 
@@ -49,9 +50,20 @@ pytest tests/unit/infra/test_stack_synth.py -v
 
 ## Deploy (dev)
 
-> **Uyarı:** Gerçek AWS kaynakları oluşturur; maliyet doğar. Production deploy Faz 8'de.
+> **Uyarı:** Gerçek AWS kaynakları oluşturur; maliyet doğar. Production deploy MVP-1'de.
+
+**Önkoşul (Faz 8.3):** Collector Lambda gerçek bundle artifact kullanır — `cdk deploy`
+öncesi bundle build edilmeli ve secret'lar deploy-time export edilmeli. Bundle dizini
+(`dist/lambda/collector/`) yoksa CDK synth placeholder stub'a düşer (501 döner).
 
 ```bash
+# 1) Collector bundle artifact (linux wheel için CI runner veya cross-compile flag)
+LAMBDA_TARGET_PLATFORM=1 ./scripts/build_lambda.sh collector
+
+# 2) Deploy-time secret/param (commit edilmez — `.env` veya CI secret'tan)
+export DATABASE_URL="postgresql+asyncpg://..."   # RdsSecretArn'dan türetilir
+export REDIS_URL="rediss://..."                  # Upstash
+
 cd infra
 cdk bootstrap aws://ACCOUNT_ID/eu-west-1   # hesapta bir kez
 cdk deploy
@@ -77,7 +89,124 @@ aws lambda invoke \
 cat /tmp/collector-out.json
 ```
 
-> **Not:** CDK'daki `infra/collectors/lambda_stub/` yalnızca IaC synth içindir. Gerçek deploy'da monorepo paketi (`services/`, `packages/`) bundle edilmelidir. Lambda ortam değişkenleri: `DATABASE_URL`, `REDIS_URL`, `SQS_QUEUE_*_URL` (CDK queue URL'leri otomatik enjekte eder).
+> **Not:** CDK `Code.from_asset` öncelikle bundle dizinini (`dist/lambda/collector/`,
+> `scripts/build_lambda.sh` çıktısı) kullanır; yalnızca bundle build edilmemişse (CI synth)
+> `infra/collectors/lambda_stub/` placeholder'ına düşer. Handler her durumda
+> `services.collectors.handler.lambda_handler` — per-tip legacy handler'lar kaldırıldı
+> (Faz 8.3).
+
+### Processor Lambda (SQS triggered)
+
+`dev-ygip-processor-{rss,email,gov}` Lambda'ları ilgili `dev-ygip-sqs-{type}`
+kuyruğunu **SQS event source mapping** ile otomatik tüketir (Faz 8.4) — manuel
+invoke gerekmez; collector mesaj yazınca processor tetiklenir. Handler
+`services.processor.handlers.processor_handler.lambda_handler`, bundle
+`dist/lambda/processor/` (`scripts/build_lambda.sh processor`); bundle yoksa
+`infra/processor/lambda_stub/` placeholder'ına düşer.
+
+- **Partial batch failure:** event source mapping `ReportBatchItemFailures`
+  açık; handler yalnızca başarısız mesajları `batchItemFailures` ile geri verir,
+  kalanlar silinir.
+- **DLQ redrive:** ana kuyruğun `max_receive_count=3` redrive policy'si 3.
+  denemeden sonra mesajı `dev-ygip-sqs-{type}-dlq`'ya taşır (`Docs/04` §8.7).
+- **Profil:** `memory=512 MB`, `timeout=120 s` (embedding CPU/I/O); queue
+  visibility timeout (5 dk) > Lambda timeout.
+- **Env:** `DATABASE_URL`, `REDIS_URL`, `OPENAI_API_KEY` (boşsa deterministic
+  embedding fallback), `ENVIRONMENT` — collector ile aynı VPC/SG/role.
+
+## Dev deploy workflow (Faz 8.5)
+
+`.github/workflows/deploy-dev.yml` dev stack'i (`YgipDevStack`) **manuel** deploy
+eder — maliyet kontrolü için yalnızca `workflow_dispatch`, otomatik push tetikleme
+yok. Production (`prod-ygip-*`) deploy MVP-1'e ertelendi.
+
+GitHub → **Actions** → **Deploy Dev** → **Run workflow**:
+
+| Input | Etki |
+|-------|------|
+| `run_smoke` | Deploy sonrası `smoke_pipeline_dev.sh` çalıştırır (rss) |
+| `bootstrap` | İlk deploy için `cdk bootstrap` (hesapta bir kez) |
+
+Workflow adımları: checkout → `build_lambda.sh collector|processor` (linux runner,
+cross-compile gerekmez) → `cdk deploy YgipDevStack --require-approval never`.
+
+Gerekli repo secret'ları (Settings → Secrets → Actions, `dev` environment):
+
+| Secret | Kullanım |
+|--------|----------|
+| `AWS_DEV_DEPLOY_ROLE_ARN` | OIDC ile üstlenilen dev deploy rolü (statik anahtar yok) |
+| `DEV_DATABASE_URL` | Lambda runtime `DATABASE_URL` (CDK synth-time enjekte) |
+| `DEV_REDIS_URL` | Lambda runtime `REDIS_URL` |
+
+> **VPC egress dikkat:** Dev VPC NAT'sız izole subnet. Collector Lambda harici
+> RSS/SMTP fetch ve SQS publish için internet/VPC endpoint ister; smoke öncesi
+> SQS/Secrets Manager interface endpoint veya geçici NAT değerlendirilir.
+
+## Pipeline smoke (Faz 8.5)
+
+`scripts/smoke_pipeline_dev.sh` deploy sonrası `collector → SQS → processor → DB`
+akışını doğrular: collector Lambda invoke → SQS depth gözlem → processor
+(SQS-triggered) tüketimi → DLQ kontrolü → `raw_items`/`processed_items` satır artışı.
+
+```bash
+./scripts/smoke_pipeline_dev.sh                    # rss, tam akış (AWS gerekir)
+./scripts/smoke_pipeline_dev.sh --source-type gov
+./scripts/smoke_pipeline_dev.sh --skip-db          # RDS VPC-internal erişilemez ise
+./scripts/smoke_pipeline_dev.sh --dry-run          # AWS yok — komut akışını yazdır
+```
+
+| Flag | Etki |
+|------|------|
+| `--source-type rss\|email\|gov` | Hangi collector/queue (varsayılan `rss`) |
+| `--wait <sn>` | Processor tüketim bekleme süresi (varsayılan 45 s) |
+| `--skip-db` | DB doğrulamasını atla (`DATABASE_URL` yoksa otomatik) |
+| `--dry-run` | Gerçek AWS çağrısı yapmadan komutları yazdır |
+
+DB doğrulaması için `DATABASE_URL` + `psql` gerekir; RDS VPC-internal olduğundan
+CI/yerelden erişilemezse `--skip-db` ile SQS/DLQ gözlemi yeterlidir (DB artışı
+bastion/SSM tüneli ile manuel doğrulanır). Çıkış kodu: 0 başarı, 1 başarısızlık
+(DLQ'ya mesaj düşmesi veya satır artmaması).
+
+## Lambda Bundle (Faz 8.2)
+
+`scripts/build_lambda.sh`, `services/` + `packages/` + runtime bağımlılıklarını tek bir deploy artifact'ına paketler.
+
+```bash
+./scripts/build_lambda.sh collector    # → dist/lambda/collector.zip
+./scripts/build_lambda.sh processor    # → dist/lambda/processor.zip
+```
+
+Handler giriş noktaları (CDK `handler` parametresi):
+
+| Target | Handler |
+|--------|---------|
+| collector | `services.collectors.handler.lambda_handler` |
+| processor | `services.processor.handlers.processor_handler.lambda_handler` |
+
+Bundle değişkenleri:
+
+| Değişken | Etki |
+|----------|------|
+| `BUNDLE_SKIP_DEPS=1` | pip vendoring atlanır — offline smoke / hızlı test (CI unit) |
+| `LAMBDA_TARGET_PLATFORM=1` | macOS host → Lambda linux `manylinux2014_x86_64` cross-compile (asyncpg, cryptography wheel'leri) |
+
+> **Cross-compile:** macOS'ta yerel `pip install -t` Lambda linux runtime ile uyumsuz binary wheel üretebilir. Deploy bundle'ı **linux runner'da** (CI) veya `LAMBDA_TARGET_PLATFORM=1` ile üretin. Bundle boyutu 250 MB unzipped limitine tabi — `fastapi`/`uvicorn`/`alembic` artifact'tan hariç tutulur.
+
+Artifact (`dist/lambda/`) git-ignore'lu (`.gitignore` → `dist/`).
+
+### Lambda runtime ortam değişkenleri
+
+CDK deploy-time enjekte eder (`Docs/09` §7); secret'lar Secrets Manager / `.env` üzerinden:
+
+| Değişken | Kullanım |
+|----------|----------|
+| `DATABASE_URL` | RDS PostgreSQL (asyncpg) |
+| `REDIS_URL` | Upstash dedup / idempotency |
+| `SQS_QUEUE_{RSS,EMAIL,GOV,API}_URL` | collector publish / processor trigger |
+| `S3_ARCHIVE_BUCKET` | ham arşiv |
+| `AWS_REGION` | `eu-west-1` |
+| `ENCRYPTION_KEY` | collector secret çözme |
+| `OPENAI_API_KEY` | processor embedding (yoksa deterministic fallback) |
 
 ### SQS → raw_items (Faz 2.6)
 
@@ -99,7 +228,13 @@ SMTP_USE_TLS=true
 - [x] Lambda role yalnızca `dev-ygip-*` SQS/S3 ve `ygip/dev/*` secret'lara izin
 - [x] IAM deny: `prod-ygip-*`, `ygip-prod-*`, `ygip/prod/*`
 - [x] RDS `publicly_accessible=false`
+- [x] Collector Lambda VPC-internal (`dev-ygip-lambda-sg`) — RDS'e VPC CIDR üzerinden erişir
 - [ ] Dev'den prod RDS — network + IAM ile ayrı hesap/VPC önerilir (manuel checklist)
+
+> **VPC egress (Faz 8.5 dikkat):** Dev VPC NAT'sız izole subnet (maliyet). Collector
+> Lambda VPC-internal RDS'e erişir, ancak harici RSS/SMTP fetch ve SQS publish için
+> internet/VPC endpoint gerekir. Dev smoke'ta SQS/Secrets Manager interface endpoint
+> veya NAT eklenmesi Faz 8.5 deploy adımında değerlendirilir.
 
 ## Agent kısıtı
 

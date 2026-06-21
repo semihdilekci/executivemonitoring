@@ -28,9 +28,11 @@ from apps.api.routers import (
     audit_logs,
     auth,
     chat,
+    content_archive,
     digests,
     health,
     notifications,
+    pipeline,
     prompt_templates,
     sources,
     users,
@@ -198,6 +200,8 @@ def create_app(
     app.include_router(digests.router)
     app.include_router(chat.router)
     app.include_router(notifications.router)
+    app.include_router(pipeline.router)
+    app.include_router(content_archive.router)
 
     return app
 

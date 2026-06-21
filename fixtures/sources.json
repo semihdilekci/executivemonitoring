@@ -1,13 +1,13 @@
 [
   {
     "id": "b0000001-0000-4000-8000-000000000001",
-    "name": "Bloomberg HT RSS",
+    "name": "Dünya Gazetesi",
     "source_type": "rss",
     "config": {
-      "feed_url": "https://www.bloomberght.com/rss",
+      "feed_url": "https://www.dunya.com/rss",
       "language": "tr",
       "ingest_mode": "filtered",
-      "default_category": "turkish_media"
+      "default_category": "finance"
     },
     "polling_interval_minutes": 15,
     "status": "active",
@@ -16,13 +16,13 @@
   },
   {
     "id": "b0000002-0000-4000-8000-000000000002",
-    "name": "Hürriyet Ekonomi RSS",
+    "name": "Bloomberg HT",
     "source_type": "rss",
     "config": {
-      "feed_url": "https://www.hurriyet.com.tr/rss/ekonomi",
+      "feed_url": "https://www.bloomberght.com/rss",
       "language": "tr",
       "ingest_mode": "filtered",
-      "default_category": "turkish_media"
+      "default_category": "finance"
     },
     "polling_interval_minutes": 15,
     "status": "active",
@@ -31,37 +31,187 @@
   },
   {
     "id": "b0000003-0000-4000-8000-000000000003",
-    "name": "Food Navigator RSS",
+    "name": "Gazete Oksijen",
     "source_type": "rss",
     "config": {
-      "feed_url": "https://www.foodnavigator.com/rss",
-      "language": "en",
+      "feed_url": "https://www.gazeteoksijen.com/rss",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "turkish_media",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000004-0000-4000-8000-000000000004",
+    "name": "Perakende.org",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.perakende.org/feed",
+      "language": "tr",
       "ingest_mode": "all",
       "default_category": "fmcg"
     },
-    "polling_interval_minutes": 30,
+    "polling_interval_minutes": 15,
     "status": "active",
     "category": "fmcg",
     "target_phase": "mvp-0"
   },
   {
-    "id": "b0000004-0000-4000-8000-000000000004",
-    "name": "Harvard Business Review RSS",
+    "id": "b0000005-0000-4000-8000-000000000005",
+    "name": "Fortune Turkey",
     "source_type": "rss",
     "config": {
-      "feed_url": "https://hbr.org/feed",
-      "language": "en",
+      "feed_url": "https://www.fortuneturkey.com/rss.xml",
+      "language": "tr",
       "ingest_mode": "filtered",
       "default_category": "strategy"
     },
-    "polling_interval_minutes": 60,
+    "polling_interval_minutes": 15,
     "status": "active",
-    "category": "strategy",
+    "category": "turkish_media",
     "target_phase": "mvp-0"
   },
   {
-    "id": "b0000005-0000-4000-8000-000000000005",
-    "name": "Grocery Dive RSS",
+    "id": "b0000006-0000-4000-8000-000000000006",
+    "name": "Ekonomim",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.ekonomim.com/feed",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "turkish_media",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000007-0000-4000-8000-000000000007",
+    "name": "FoodNavigator (EU)",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.foodnavigator.com/Info/FoodNavigator-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000008-0000-4000-8000-000000000008",
+    "name": "FoodNavigator-USA",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.foodnavigator-usa.com/Info/FoodNavigator-USA-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000009-0000-4000-8000-000000000009",
+    "name": "BakeryAndSnacks",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.bakeryandsnacks.com/Info/BakeryAndSnacks-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000010-0000-4000-8000-000000000010",
+    "name": "ConfectioneryNews",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.confectionerynews.com/Info/ConfectioneryNews-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000011-0000-4000-8000-000000000011",
+    "name": "DairyReporter",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.dairyreporter.com/Info/DairyReporter-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000012-0000-4000-8000-000000000012",
+    "name": "FoodManufacture (UK)",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.foodmanufacture.co.uk/Info/FoodManufacture-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000013-0000-4000-8000-000000000013",
+    "name": "FoodIngredientsFirst",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.foodingredientsfirst.com/Info/FoodIngredientsFirst-RSS",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000014-0000-4000-8000-000000000014",
+    "name": "Food Dive",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.fooddive.com/feeds/news/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000015-0000-4000-8000-000000000015",
+    "name": "Grocery Dive",
     "source_type": "rss",
     "config": {
       "feed_url": "https://www.grocerydive.com/feeds/news/",
@@ -69,37 +219,211 @@
       "ingest_mode": "all",
       "default_category": "fmcg"
     },
-    "polling_interval_minutes": 30,
+    "polling_interval_minutes": 15,
     "status": "active",
     "category": "fmcg",
     "target_phase": "mvp-0"
   },
   {
-    "id": "b0000006-0000-4000-8000-000000000006",
-    "name": "FMCG Newsletter Inbox",
-    "source_type": "email",
+    "id": "b0000016-0000-4000-8000-000000000016",
+    "name": "Retail Dive",
+    "source_type": "rss",
     "config": {
-      "imap_host": "imap.ygip.test",
-      "imap_user": "fmcg-inbox@ygip.test",
-      "mailbox": "INBOX",
-      "sender_allowlist": ["newsletter@ygip.test"],
+      "feed_url": "https://www.retaildive.com/feeds/news/",
+      "language": "en",
       "ingest_mode": "all",
       "default_category": "fmcg"
     },
-    "polling_interval_minutes": 60,
+    "polling_interval_minutes": 15,
     "status": "active",
     "category": "fmcg",
     "target_phase": "mvp-0"
   },
   {
-    "id": "b0000007-0000-4000-8000-000000000007",
-    "name": "Strategy Newsletter Inbox",
+    "id": "b0000017-0000-4000-8000-000000000017",
+    "name": "Packaging Dive",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.packagingdive.com/feeds/news/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000018-0000-4000-8000-000000000018",
+    "name": "Food Business News",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.foodbusinessnews.net/rss/articles",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000019-0000-4000-8000-000000000019",
+    "name": "Baking Business",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.bakingbusiness.com/rss/articles",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000020-0000-4000-8000-000000000020",
+    "name": "Food Processing",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.foodprocessing.com/rss/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000021-0000-4000-8000-000000000021",
+    "name": "Harvard Business Review",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "http://feeds.hbr.org/harvardbusiness",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000022-0000-4000-8000-000000000022",
+    "name": "McKinsey Insights",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.mckinsey.com/insights/rss",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000023-0000-4000-8000-000000000023",
+    "name": "MIT Sloan Management Review",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://sloanreview.mit.edu/feed/",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000024-0000-4000-8000-000000000024",
+    "name": "MIT Technology Review",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.technologyreview.com/feed/",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000025-0000-4000-8000-000000000025",
+    "name": "TCMB Duyurular",
+    "source_type": "gov",
+    "config": {
+      "feed_url": "https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Bottom+Menu/Diger/RSS/Basin+Duyurulari",
+      "endpoint_url": "https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Bottom+Menu/Diger/RSS/Basin+Duyurulari",
+      "parser": "tcmb",
+      "parser_type": "rss",
+      "ingest_mode": "all",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "official",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000026-0000-4000-8000-000000000026",
+    "name": "KAP Bildirimler",
+    "source_type": "gov",
+    "config": {
+      "api_url": "https://www.kap.org.tr/tr/api/memberDisclosureQuery",
+      "endpoint_url": "https://www.kap.org.tr/tr/api/memberDisclosureQuery",
+      "parser": "kap",
+      "parser_type": "api",
+      "company_codes": ["ULKER", "YGYO", "YFAS"],
+      "ingest_mode": "all",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "official",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000027-0000-4000-8000-000000000027",
+    "name": "Resmi Gazete",
+    "source_type": "gov",
+    "config": {
+      "feed_url": "https://www.resmigazete.gov.tr/default.aspx",
+      "endpoint_url": "https://www.resmigazete.gov.tr/default.aspx",
+      "parser": "resmi_gazete",
+      "parser_type": "scraper",
+      "ingest_mode": "filtered",
+      "default_category": "regulatory"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "official",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000028-0000-4000-8000-000000000028",
+    "name": "The Economist — Daily Briefing",
     "source_type": "email",
     "config": {
-      "imap_host": "imap.ygip.test",
-      "imap_user": "strategy-inbox@ygip.test",
       "mailbox": "INBOX",
-      "sender_allowlist": ["strategy-digest@ygip.test"],
+      "sender_filter": "newsletters@economist.com",
+      "sender_alt_filters": ["no-reply@economist.com", "mail@e.economist.com"],
+      "sender_allowlist": [
+        "newsletters@economist.com",
+        "no-reply@economist.com",
+        "mail@e.economist.com"
+      ],
       "ingest_mode": "filtered",
       "default_category": "strategy"
     },
@@ -109,17 +433,166 @@
     "target_phase": "mvp-0"
   },
   {
-    "id": "b0000008-0000-4000-8000-000000000008",
-    "name": "TCMB Duyurular",
-    "source_type": "gov",
+    "id": "b0000029-0000-4000-8000-000000000029",
+    "name": "Apollo / CB Insights",
+    "source_type": "email",
     "config": {
-      "endpoint_url": "https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Duyurular",
-      "ingest_mode": "all",
-      "default_category": "official"
+      "mailbox": "INBOX",
+      "sender_filter": "newsletter@cbinsights.com",
+      "sender_alt_filters": ["info@cbinsights.com"],
+      "sender_allowlist": ["newsletter@cbinsights.com", "info@cbinsights.com"],
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
     },
-    "polling_interval_minutes": 120,
+    "polling_interval_minutes": 60,
     "status": "active",
-    "category": "official",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000030-0000-4000-8000-000000000030",
+    "name": "Morgan Stanley Research",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "research@morganstanley.com",
+      "sender_alt_filters": [
+        "noreply@morganstanley.com",
+        "insightsnews@email.morganstanley.com"
+      ],
+      "sender_allowlist": [
+        "research@morganstanley.com",
+        "noreply@morganstanley.com",
+        "insightsnews@email.morganstanley.com"
+      ],
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000031-0000-4000-8000-000000000031",
+    "name": "BCG Henderson Institute",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "bcg@bcg.com",
+      "sender_alt_filters": ["noreply@bcg.com", "hello@email.bcg.com"],
+      "sender_allowlist": ["bcg@bcg.com", "noreply@bcg.com", "hello@email.bcg.com"],
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000032-0000-4000-8000-000000000032",
+    "name": "eMarketer / Insider Intelligence",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "newsletter@emarketer.com",
+      "sender_alt_filters": ["noreply@emarketer.com", "insider@insiderintelligence.com"],
+      "sender_allowlist": [
+        "newsletter@emarketer.com",
+        "noreply@emarketer.com",
+        "insider@insiderintelligence.com"
+      ],
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000033-0000-4000-8000-000000000033",
+    "name": "Caixin Global",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "newsletter@caixin.com",
+      "sender_alt_filters": ["noreply@caixinglobal.com", "newsletter@caixinglobal.com"],
+      "sender_allowlist": [
+        "newsletter@caixin.com",
+        "noreply@caixinglobal.com",
+        "newsletter@caixinglobal.com"
+      ],
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "turkish_media",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000034-0000-4000-8000-000000000034",
+    "name": "HBR Management Alert",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "harvardbusiness@e.hbr.org",
+      "sender_alt_filters": ["noreply@e.hbr.org", "hbr@email.hbr.org"],
+      "sender_allowlist": [
+        "harvardbusiness@e.hbr.org",
+        "noreply@e.hbr.org",
+        "hbr@email.hbr.org"
+      ],
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000035-0000-4000-8000-000000000035",
+    "name": "NielsenIQ Brief",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "noreply@nielseniq.com",
+      "sender_alt_filters": ["insights@nielseniq.com", "newsletter@nielseniq.com"],
+      "sender_allowlist": [
+        "noreply@nielseniq.com",
+        "insights@nielseniq.com",
+        "newsletter@nielseniq.com"
+      ],
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000036-0000-4000-8000-000000000036",
+    "name": "Baking Business Newsletter",
+    "source_type": "email",
+    "config": {
+      "mailbox": "INBOX",
+      "sender_filter": "news@bakingbusiness.com",
+      "sender_alt_filters": ["newsletter@sosland.com", "alerts@bakingbusiness.com"],
+      "sender_allowlist": [
+        "news@bakingbusiness.com",
+        "newsletter@sosland.com",
+        "alerts@bakingbusiness.com"
+      ],
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 60,
+    "status": "active",
+    "category": "fmcg",
     "target_phase": "mvp-0"
   }
 ]

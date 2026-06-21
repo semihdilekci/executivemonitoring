@@ -14,6 +14,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm.attributes import flag_modified
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -67,6 +68,23 @@ class SeedResult:
             "prompt_templates": self.prompt_templates.as_dict(),
             "sources": self.sources.as_dict(),
         }
+
+
+def _resolve_source_config(item: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    """Email kaynaklarında IMAP host/kullanıcı `.env` değerlerinden gelir."""
+    config = dict(item["config"])
+    if item.get("source_type") != "email":
+        return config
+
+    imap_host = settings.IMAP_HOST.strip() if settings.IMAP_HOST else ""
+    imap_user = settings.IMAP_USER.strip() if settings.IMAP_USER else ""
+    if imap_host:
+        config["imap_host"] = imap_host
+    if imap_user:
+        config["imap_user"] = imap_user
+    config.setdefault("imap_host", "imap.gmail.com")
+    config.setdefault("imap_user", "newsletters@ygip.test")
+    return config
 
 
 def _load_fixture(name: str) -> list[dict[str, Any]]:
@@ -179,12 +197,20 @@ async def seed_prompt_templates(db: AsyncSession) -> SeedStats:
     return stats
 
 
-async def seed_sources(db: AsyncSession) -> SeedStats:
+async def seed_sources(db: AsyncSession, *, settings: Settings | None = None) -> SeedStats:
+    resolved_settings = settings or get_settings()
     stats = SeedStats()
     for item in _load_fixture("sources.json"):
         source_id = uuid.UUID(item["id"])
+        config = _resolve_source_config(item, resolved_settings)
         existing = await db.get(Source, source_id)
         if existing is not None:
+            if item.get("source_type") == "email":
+                merged = dict(existing.config)
+                merged["imap_host"] = config["imap_host"]
+                merged["imap_user"] = config["imap_user"]
+                existing.config = merged
+                flag_modified(existing, "config")
             stats = SeedStats(created=stats.created, skipped=stats.skipped + 1)
             continue
         db.add(
@@ -192,7 +218,7 @@ async def seed_sources(db: AsyncSession) -> SeedStats:
                 id=source_id,
                 name=item["name"],
                 source_type=SourceType(item["source_type"]),
-                config=item["config"],
+                config=config,
                 polling_interval_minutes=item["polling_interval_minutes"],
                 status=SourceStatus(item.get("status", "active")),
                 category=SourceCategory(item["category"]),
@@ -203,12 +229,13 @@ async def seed_sources(db: AsyncSession) -> SeedStats:
     return stats
 
 
-async def run_seed(db: AsyncSession) -> SeedResult:
+async def run_seed(db: AsyncSession, *, settings: Settings | None = None) -> SeedResult:
     """Tüm fixture'ları idempotent şekilde yükler."""
+    resolved_settings = settings or get_settings()
     user_stats, pref_stats = await seed_users(db)
     settings_stats = await seed_system_settings(db)
     template_stats = await seed_prompt_templates(db)
-    source_stats = await seed_sources(db)
+    source_stats = await seed_sources(db, settings=resolved_settings)
     return SeedResult(
         users=user_stats,
         notification_preferences=pref_stats,
@@ -232,7 +259,7 @@ async def _run_cli(*, database_url: str | None = None) -> SeedResult:
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
         async with session_factory() as session:
-            result = await run_seed(session)
+            result = await run_seed(session, settings=settings)
             await session.commit()
             return result
     finally:

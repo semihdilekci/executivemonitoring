@@ -1,0 +1,79 @@
+name: Deploy Dev
+
+# Faz 8.5 — Dev stack (`YgipDevStack` / `dev-ygip-*`) manuel deploy.
+# YALNIZCA dev: production (`prod-ygip-*`) deploy MVP-1 Production Launch sprint'inde.
+# Maliyet kontrolü için yalnızca `workflow_dispatch` (manuel) — otomatik push tetikleme yok.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_smoke:
+        description: "Deploy sonrası pipeline smoke (collector invoke → SQS → DB) çalıştır"
+        type: boolean
+        default: false
+      bootstrap:
+        description: "İlk deploy için `cdk bootstrap` çalıştır (hesapta bir kez)"
+        type: boolean
+        default: false
+
+concurrency:
+  # Aynı anda tek dev deploy — çakışan CloudFormation update'i önle.
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # OIDC ile AWS rolü üstlenmek için (statik anahtar yok)
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    environment: dev # GitHub environment guard (manuel onay/secret scope için)
+    env:
+      AWS_REGION: eu-west-1
+      CDK_STACK: YgipDevStack
+      # Lambda runtime'a CDK synth-time enjekte edilen secret/param (`Docs/09` §7).
+      DATABASE_URL: ${{ secrets.DEV_DATABASE_URL }}
+      REDIS_URL: ${{ secrets.DEV_REDIS_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure AWS credentials (dev, OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEV_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install CDK + infra deps
+        run: |
+          npm install -g aws-cdk
+          pip install -r infra/requirements.txt
+
+      - name: Build Lambda bundles (collector + processor)
+        # Linux runner → Lambda linux x86_64 ile uyumlu; cross-compile gerekmez.
+        run: |
+          ./scripts/build_lambda.sh collector
+          ./scripts/build_lambda.sh processor
+
+      - name: CDK bootstrap (opsiyonel, ilk deploy)
+        if: ${{ inputs.bootstrap }}
+        working-directory: infra
+        run: cdk bootstrap
+
+      - name: CDK deploy (dev stack only)
+        working-directory: infra
+        # `--require-approval never`: IAM değişiklik onayı CI'da interaktif sorulamaz.
+        # Yalnızca dev stack adı verilir — prod stack mevcut olsa bile dokunulmaz.
+        run: cdk deploy "$CDK_STACK" --require-approval never
+
+      - name: Pipeline smoke (opsiyonel)
+        if: ${{ inputs.run_smoke }}
+        run: ./scripts/smoke_pipeline_dev.sh --source-type rss

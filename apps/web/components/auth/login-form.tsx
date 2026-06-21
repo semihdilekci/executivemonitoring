@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import type { ApiError } from "@/types/api";
 import {
   getAuthErrorMessage,
   getRetryAfterSeconds,
 } from "@/lib/auth-errors";
+import { APP_ENV } from "@/lib/constants";
 import { AuthBrand } from "@/components/auth/auth-brand";
 import { FormErrorBanner } from "@/components/common/form-error-banner";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ function isValidEmail(value: string): boolean {
 }
 
 export function LoginForm() {
-  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const searchParams = useSearchParams();
   const { login } = useAuth();
 
@@ -52,16 +53,32 @@ export function LoginForm() {
     return () => window.clearInterval(timer);
   }, [retryAfter]);
 
-  const validate = (): boolean => {
+  const resolveCredentials = () => {
+    const form = formRef.current;
+    if (!form) {
+      return { email: email.trim(), password };
+    }
+
+    const formData = new FormData(form);
+    return {
+      email: String(formData.get("email") ?? "").trim(),
+      password: String(formData.get("password") ?? ""),
+    };
+  };
+
+  const validate = (
+    emailValue: string,
+    passwordValue: string,
+  ): boolean => {
     const errors: { email?: string; password?: string } = {};
 
-    if (!email.trim()) {
+    if (!emailValue) {
       errors.email = "Geçerli bir e-posta adresi girin.";
-    } else if (!isValidEmail(email.trim())) {
+    } else if (!isValidEmail(emailValue)) {
       errors.email = "Geçerli bir e-posta adresi girin.";
     }
 
-    if (!password) {
+    if (!passwordValue) {
       errors.password = "Şifre alanı boş bırakılamaz.";
     }
 
@@ -69,21 +86,29 @@ export function LoginForm() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError(null);
+  const handleSubmit = async () => {
+    const credentials = resolveCredentials();
 
-    if (!validate() || retryAfter !== null) {
+    setFormError(null);
+    setEmail(credentials.email);
+    setPassword(credentials.password);
+
+    if (retryAfter !== null) {
+      return;
+    }
+
+    if (!validate(credentials.email, credentials.password)) {
+      setFormError("Lütfen e-posta ve şifrenizi kontrol edin.");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await login(email.trim(), password);
+      await login(credentials.email, credentials.password);
       const redirectTo = searchParams.get("from") || "/";
-      router.replace(redirectTo);
-      router.refresh();
+      window.location.assign(redirectTo);
+      return;
     } catch (error) {
       const apiError = error as ApiError;
       const retrySeconds = getRetryAfterSeconds(apiError);
@@ -105,7 +130,15 @@ export function LoginForm() {
     <Card padding="lg" className="shadow-lg">
       <AuthBrand />
 
-      <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4" noValidate>
+      <form
+        ref={formRef}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}
+        className="space-y-4"
+        noValidate
+      >
         {formError ? (
           <FormErrorBanner
             message={
@@ -185,6 +218,12 @@ export function LoginForm() {
       <p className="mt-6 text-center text-xs text-gray-500">
         Şifre sıfırlama talebiniz için yöneticinize başvurun.
       </p>
+
+      {APP_ENV === "development" ? (
+        <p className="mt-3 text-center text-xs text-gray-400">
+          Geliştirme: admin@ygip.test / DevPass1
+        </p>
+      ) : null}
     </Card>
   );
 }

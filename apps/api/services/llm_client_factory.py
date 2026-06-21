@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import os
+
 from packages.shared.enums import ApiProvider, LlmRequestType
 from services.ai_engine.llm_client import LLMClient, UsageLogHook
 from services.ai_engine.models import LLMResponse
 from services.ai_engine.providers.base import LLMProvider
-from services.ai_engine.providers.gemini_provider import GeminiProvider
+from services.ai_engine.providers.gemini_provider import DEFAULT_GEMINI_MODEL, GeminiProvider
 from services.ai_engine.providers.groq_provider import GroqProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.api_key_service import ApiKeyService
 from apps.api.services.api_usage_service import ApiUsageService
+
+
+def _gemini_model() -> str:
+    """Aktif Gemini modeli — `GEMINI_MODEL` env override'ı, yoksa güncel GA varsayılan."""
+    return os.environ.get("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
 
 
 async def list_llm_providers(
@@ -25,7 +32,11 @@ async def list_llm_providers(
         if api_key.provider == ApiProvider.GROQ:
             providers.append(GroqProvider(api_key=plaintext, key_id=api_key.id))
         elif api_key.provider == ApiProvider.GEMINI:
-            providers.append(GeminiProvider(api_key=plaintext, key_id=api_key.id))
+            providers.append(
+                GeminiProvider(
+                    api_key=plaintext, key_id=api_key.id, model=_gemini_model()
+                )
+            )
     return providers
 
 

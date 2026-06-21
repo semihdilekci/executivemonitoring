@@ -1,21 +1,12 @@
-function isDevLocalhost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1";
-}
+// Docs/05 §13.3 (XSS Koruması): `<a href>` protokol whitelist'i = `https:` veya
+// `http:`. `javascript:`, `data:`, `file:` vb. yasak. Haber kaynak linkleri
+// gerçek dünyada `http://` olabilir; bunları düşürmek kaynak referansını bozar.
+const ALLOWED_PROTOCOLS = new Set(["https:", "http:"]);
 
 export function isSafeExternalUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === "https:") {
-      return true;
-    }
-    if (
-      parsed.protocol === "http:" &&
-      process.env.NODE_ENV === "development" &&
-      isDevLocalhost(parsed.hostname)
-    ) {
-      return true;
-    }
-    return false;
+    return ALLOWED_PROTOCOLS.has(parsed.protocol);
   } catch {
     return false;
   }

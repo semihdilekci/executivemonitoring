@@ -61,10 +61,15 @@ export function DataTableBody({ children }: DataTableBodyProps) {
 interface DataTableRowProps {
   children: ReactNode;
   className?: string;
+  onClick?: () => void;
 }
 
-export function DataTableRow({ children, className }: DataTableRowProps) {
-  return <tr className={cn("hover:bg-gray-50/60", className)}>{children}</tr>;
+export function DataTableRow({ children, className, onClick }: DataTableRowProps) {
+  return (
+    <tr className={cn("hover:bg-gray-50/60", className)} onClick={onClick}>
+      {children}
+    </tr>
+  );
 }
 
 interface DataTableCellProps {

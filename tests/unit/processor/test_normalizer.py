@@ -16,6 +16,7 @@ from services.processor.normalizer import (
     detect_language,
     normalize_published_at,
     normalize_text,
+    unescape_entities,
     word_count,
 )
 
@@ -156,6 +157,29 @@ async def test_normalizer_naive_datetime_assumes_utc() -> None:
 def test_strip_html_malformed_graceful() -> None:
     raw = "<p>metin<p>devam <span>açık"
     assert normalize_text(raw) == "metin devam açık"
+
+
+def test_unescape_double_encoded_entities() -> None:
+    raw = "TÜİK&amp;#039;ten gelecek veri &amp;quot;zam&amp;quot; bekleniyor."
+    assert unescape_entities(raw) == 'TÜİK\'ten gelecek veri "zam" bekleniyor.'
+
+
+def test_unescape_single_encoded_entities() -> None:
+    assert unescape_entities("emekli &#039;maaş&#039; &quot;zam&quot;") == (
+        "emekli 'maaş' \"zam\""
+    )
+
+
+def test_normalize_text_decodes_double_encoded_entities() -> None:
+    raw = "Milyonlar TÜİK&amp;#039;ten gelecek veriyi &amp;quot;zam&amp;quot; diye bekliyor."
+    assert normalize_text(raw) == (
+        'Milyonlar TÜİK\'ten gelecek veriyi "zam" diye bekliyor.'
+    )
+
+
+def test_normalize_text_decodes_entities_inside_html() -> None:
+    raw = "<p>TÜİK&amp;#039;ten &amp;quot;veri&amp;quot;</p>"
+    assert normalize_text(raw) == 'TÜİK\'ten "veri"'
 
 
 def test_collapse_whitespace() -> None:

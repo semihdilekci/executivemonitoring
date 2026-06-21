@@ -25,7 +25,7 @@ def _sample_response(*, provider: ApiProvider, text: str = "Yanıt") -> LLMRespo
     if provider == ApiProvider.GROQ:
         model = "groq/llama-3.1-70b-versatile"
     else:
-        model = "gemini/gemini-1.5-flash"
+        model = "gemini/gemini-2.5-flash-lite"
     return LLMResponse(
         text=text,
         usage=TokenUsage(prompt_tokens=5, completion_tokens=10, total_tokens=15),
@@ -234,11 +234,11 @@ async def test_gemini_provider_complete_success() -> None:
                 "candidatesTokenCount": 6,
                 "totalTokenCount": 10,
             },
-            "modelVersion": "gemini-1.5-flash",
+            "modelVersion": "gemini-2.5-flash-lite",
         },
         request=httpx.Request(
             "POST",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
         ),
     )
 
@@ -265,7 +265,7 @@ async def test_gemini_provider_maps_503_to_service_unavailable() -> None:
         503,
         request=httpx.Request(
             "POST",
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
         ),
     )
 

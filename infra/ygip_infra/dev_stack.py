@@ -28,6 +28,7 @@ from aws_cdk import (
 )
 from collectors.construct import CollectorOrchestration
 from constructs import Construct
+from processor.construct import ProcessorOrchestration
 
 from ygip_infra.config import (
     AWS_REGION,
@@ -55,14 +56,27 @@ class YgipDevStack(Stack):
         archive_bucket = self._create_archive_bucket()
         queues = self._create_sqs_queues()
         database = self._create_database(vpc)
+        lambda_security_group = self._create_lambda_security_group(vpc)
         lambda_role = self._create_lambda_execution_role(archive_bucket, queues)
         collectors = CollectorOrchestration(
             self,
             "Collectors",
             lambda_role=lambda_role,
             queues=queues,
+            vpc=vpc,
+            security_group=lambda_security_group,
         )
         self._wire_collector_outputs(collectors)
+        processors = ProcessorOrchestration(
+            self,
+            "Processors",
+            lambda_role=lambda_role,
+            queues=queues,
+            vpc=vpc,
+            security_group=lambda_security_group,
+        )
+        self._wire_processor_outputs(processors)
+        self._create_orchestrator_role(collectors, queues)
 
         CfnOutput(self, "VpcId", value=vpc.vpc_id, export_name="YgipDevVpcId")
         CfnOutput(
@@ -194,6 +208,22 @@ class YgipDevStack(Stack):
             database_name="ygip_dev",
         )
 
+    def _create_lambda_security_group(self, vpc: ec2.Vpc) -> ec2.SecurityGroup:
+        """Collector Lambda SG — VPC-internal RDS erişimi (`Docs/09` §7.3).
+
+        RDS SG, VPC CIDR'den 5432 ingress'e izin verir; bu SG ayrıca egress açık
+        (SQS/internet erişimi VPC endpoint veya NAT ile sağlanır — dev'de stub
+        smoke; üretim ağı MVP-1). Least-privilege, env-scoped (`30-infra-aws.mdc`).
+        """
+        return ec2.SecurityGroup(
+            self,
+            "LambdaSecurityGroup",
+            vpc=vpc,
+            security_group_name=resource_name("lambda-sg"),
+            description="YGIP dev collector Lambda — VPC-internal RDS access",
+            allow_all_outbound=True,
+        )
+
     def _wire_collector_outputs(self, collectors: CollectorOrchestration) -> None:
         for source_type, fn in collectors.functions.items():
             CfnOutput(
@@ -202,6 +232,99 @@ class YgipDevStack(Stack):
                 value=fn.function_arn,
                 export_name=f"YgipDevCollector{source_type.title()}Arn",
             )
+
+    def _wire_processor_outputs(self, processors: ProcessorOrchestration) -> None:
+        for source_type, fn in processors.functions.items():
+            CfnOutput(
+                self,
+                f"Processor{source_type.title()}Arn",
+                value=fn.function_arn,
+                export_name=f"YgipDevProcessor{source_type.title()}Arn",
+            )
+
+    def _create_orchestrator_role(
+        self,
+        collectors: CollectorOrchestration,
+        queues: dict[str, Queue],
+    ) -> iam.Role:
+        """Manuel pipeline orkestratör execution role'ü (Faz 6.1 — `Docs/04` §10.5).
+
+        Collector Lambda'larına `lambda:InvokeFunction` (İter 3). Process aşaması SQS
+        gözlemi için `sqs:GetQueueAttributes` + queue adı→URL çözümü `sqs:GetQueueUrl`
+        (İter 4) — yalnızca okuma, mesaj almaz/silmez. Env-scoped, least-privilege
+        (`30-infra-aws.mdc`); prod kaynaklarına explicit deny.
+        """
+        account = self.account
+        region = self.region or AWS_REGION
+
+        role = iam.Role(
+            self,
+            "OrchestratorRole",
+            role_name=resource_name("orchestrator"),
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="YGIP dev pipeline orchestrator — collector invoke (Faz 6.1)",
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole",
+                ),
+            ],
+        )
+
+        collector_arns = [fn.function_arn for fn in collectors.functions.values()]
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="InvokeCollectorsDevScoped",
+                effect=iam.Effect.ALLOW,
+                actions=["lambda:InvokeFunction"],
+                resources=collector_arns,
+            ),
+        )
+
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="DenyProdLambdaInvoke",
+                effect=iam.Effect.DENY,
+                actions=["lambda:InvokeFunction"],
+                resources=[
+                    f"arn:aws:lambda:{region}:{account}:function:prod-ygip-*",
+                    f"arn:aws:lambda:{region}:{account}:function:ygip-prod-*",
+                ],
+            ),
+        )
+
+        # Process aşaması gözlemi: ana queue + DLQ derinliğini oku (`Docs/04` §10.5).
+        # `dev-ygip-sqs-*` ana + `-dlq`'yu kapsar; env-scoped, salt-okuma.
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="ObserveSqsDevScoped",
+                effect=iam.Effect.ALLOW,
+                actions=["sqs:GetQueueAttributes", "sqs:GetQueueUrl"],
+                resources=[
+                    f"arn:aws:sqs:{region}:{account}:{resource_name('sqs')}-*",
+                ],
+            ),
+        )
+
+        role.add_to_policy(
+            iam.PolicyStatement(
+                sid="DenyProdSqsObserve",
+                effect=iam.Effect.DENY,
+                actions=["sqs:GetQueueAttributes", "sqs:GetQueueUrl"],
+                resources=[
+                    f"arn:aws:sqs:{region}:{account}:prod-ygip-*",
+                    f"arn:aws:sqs:{region}:{account}:ygip-prod-*",
+                ],
+            ),
+        )
+
+        CfnOutput(
+            self,
+            "OrchestratorRoleArn",
+            value=role.role_arn,
+            export_name="YgipDevOrchestratorRoleArn",
+        )
+
+        return role
 
     def _create_lambda_execution_role(
         self,

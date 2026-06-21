@@ -14,7 +14,7 @@ SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → gate → en
 
 **Keyword gate** (`GateProcessor`, `Docs/04` §8.3): `sources.config.ingest_mode` — `"all"` otomatik kabul; `"filtered"` master keyword havuzunda ≥1 eşleşme zorunlu. Eşleşme yoksa `processed_items` / `content_chunks` yazılmaz.
 
-**Scoring:** `relevance_score = keyword_intensity * 0.6 + freshness * 0.4`. Source reliability weight yok (K3).
+**Scoring:** `relevance_score = 0.7 * coverage + 0.3 * freq` (saf keyword ilgisi; `coverage = min(distinct/5,1)`, `freq = min(avg_hits/3,1)`). Freshness skora dahil değil (K4). Source reliability weight yok (K3).
 
 ## Aşamalar
 

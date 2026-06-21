@@ -466,3 +466,180 @@ export interface UpdateSettingRequest {
 export interface SettingUpdateResponse extends SettingItem {
   warning?: string | null;
 }
+
+// --- Pipeline Monitoring (Faz 6.1) — `Docs/03` §11.5 ---
+
+export type PipelineRunType = "collect_pipeline" | "digest_update";
+
+export type PipelineRunStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "partial"
+  | "failed"
+  | "cancelled";
+
+export type PipelineStage = "collect" | "ingest" | "process" | "digest";
+
+export type PipelineStepStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export interface PipelineStep {
+  stage: PipelineStage;
+  status: PipelineStepStatus;
+  sequence: number;
+  items_in: number;
+  items_out: number;
+  items_failed: number;
+  detail: Record<string, unknown>;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface PipelineRunSummary {
+  id: string;
+  run_type: PipelineRunType;
+  status: PipelineRunStatus;
+  source_types: string[];
+  stats: Record<string, unknown>;
+  triggered_by_name: string | null;
+  current_stage: PipelineStage | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export interface PipelineRunDetail extends PipelineRunSummary {
+  params: Record<string, unknown>;
+  error_summary: string | null;
+  steps: PipelineStep[];
+}
+
+export interface PipelineRunListParams {
+  cursor?: string;
+  limit?: number;
+  run_type?: PipelineRunType;
+  status?: PipelineRunStatus;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface TriggerCollectPipelineRequest {
+  run_type: "collect_pipeline";
+  source_types: string[];
+}
+
+export interface TriggerDigestUpdateRequest {
+  run_type: "digest_update";
+  digest_type: DigestType;
+  period_start: string;
+  period_end: string;
+  send_notification: boolean;
+}
+
+export type TriggerPipelineRequest =
+  | TriggerCollectPipelineRequest
+  | TriggerDigestUpdateRequest;
+
+export interface TriggerPipelineResponse {
+  id: string;
+  run_type: PipelineRunType;
+  status: PipelineRunStatus;
+  message: string;
+}
+
+export interface CancelPipelineResponse {
+  id: string;
+  status: PipelineRunStatus;
+}
+
+// --- İçerik Arşivi (Faz 6.2) — `Docs/03` §11.6 ---
+
+export type SchemaCategory = "news" | "market" | "geo" | "transport" | "fmcg";
+
+export type ContentCategory =
+  | "macro"
+  | "fmcg"
+  | "finance"
+  | "geopolitical"
+  | "strategy"
+  | "regulatory";
+
+export interface DigestUsageSummary {
+  digest_id: string;
+  digest_type: DigestType;
+  digest_title: string;
+  period_start: string;
+  period_end: string;
+}
+
+export interface DigestUsageDetail extends DigestUsageSummary {
+  section_title: string;
+}
+
+export interface ProcessedItemListItem {
+  id: string;
+  schema_category: SchemaCategory;
+  content_category: ContentCategory | null;
+  source_id: string;
+  source_name: string;
+  source_type: SourceType;
+  title: string;
+  url: string | null;
+  language: string;
+  relevance_score: number;
+  topics: string[];
+  published_at: string | null;
+  processed_at: string;
+  digest_usages: DigestUsageSummary[];
+}
+
+export interface ProcessedItemDetail {
+  id: string;
+  schema_category: SchemaCategory;
+  content_category: ContentCategory | null;
+  source_id: string;
+  source_name: string;
+  source_type: SourceType;
+  title: string;
+  url: string | null;
+  clean_content: string;
+  summary: string | null;
+  language: string;
+  relevance_score: number;
+  topics: string[];
+  entities: unknown[];
+  published_at: string | null;
+  processed_at: string;
+  chunk_count: number;
+  digest_usages: DigestUsageDetail[];
+}
+
+export type ProcessedItemSortField =
+  | "processed_at"
+  | "published_at"
+  | "relevance_score"
+  | "title";
+
+export type SortDirection = "asc" | "desc";
+
+export interface ProcessedItemListParams {
+  cursor?: string;
+  limit?: number;
+  source_id?: string;
+  schema_category?: SchemaCategory;
+  content_category?: ContentCategory;
+  published_from?: string;
+  published_to?: string;
+  min_score?: number;
+  topic?: string;
+  q?: string;
+  has_digest?: boolean;
+  sort_by?: ProcessedItemSortField;
+  sort_dir?: SortDirection;
+}

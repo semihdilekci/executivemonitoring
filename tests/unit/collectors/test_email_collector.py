@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from packages.shared.enums import SourceCategory, SourceStatus, SourceType
 from packages.shared.models.source import Source
+from services.collectors.config import CollectorSettings
 from services.collectors.email_collector import EmailCollector
 from services.collectors.handler import COLLECTOR_MAP
 
@@ -114,7 +115,11 @@ async def test_email_collector_missing_imap_host_returns_empty() -> None:
         "default_category": "fmcg",
     }
 
-    articles = await collector.collect(source)
+    with patch(
+        "services.collectors.email_collector.get_collector_settings",
+        return_value=CollectorSettings(IMAP_HOST="", IMAP_USER=""),
+    ):
+        articles = await collector.collect(source)
 
     assert articles == []
 

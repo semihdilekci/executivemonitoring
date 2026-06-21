@@ -1,0 +1,429 @@
+---
+description: "[Faz 8] Pipeline runtime tamamlama — 6 iterasyon/chat (ingest wire → Lambda bundle → collector CDK → processor CDK → deploy-dev → E2E smoke). Mesajda \"Faz 8 — İterasyon M\" belirt."
+---
+
+# Faz 8: Pipeline Runtime Tamamlama
+
+## Goal
+
+Collector → SQS → Processor → PostgreSQL akışının **AWS dev ortamında gerçek Lambda'larla** uçtan uca çalışması. Uygulama iş mantığı değişmez; ingest wire, Lambda bundle, CDK deploy ve dev smoke tamamlanır. Faz 6.1 kokpitinin gözlem ettiği `collect → ingest → process` aşamaları production-parity runtime ile hizalanır. Detay `Docs/10` Faz 8.
+
+## Feature branch (zorunlu)
+
+`feature/mvp-0` (`48-git-phase-branch.mdc`). Production deploy MVP-1'e ertelendi.
+
+**Öncül:** Faz 0 (dev CDK), Faz 2–3 (collector + processor kodu), Faz 6.1 (tercihen tamam — manuel kokpit smoke).
+
+**Stop (İterasyon 1, kod öncesi):** [ ] `feature/mvp-0` branch; [ ] Faz 2–3 unit testleri yeşil; [ ] dev CDK synth geçer (`cd infra && cdk synth`).
+
+## Bu fazın çalışma modeli
+
+- Her chat: `@58-phase-08-pipeline-runtime` + **「Faz 8 — İterasyon M」**.
+- Katman sırası: **backend wiring → bundle tooling → infra collector → infra processor → DevOps deploy → integration smoke** — karıştırma.
+- Agent yalnızca o iterasyonun Docs okuma sırasını okur; plan moduna geçme — iterasyon blueprint yeterli.
+- **Collector/processor/ai-engine iş mantığı değişmez** — yalnızca ingest wire + deploy + handler unify.
+
+---
+
+### İterasyon 1 — Ingest Wire + ADR (8.1)
+
+**Hedef:** Processor `PipelineOrchestrator.process()` girişinde idempotent `ingest_message` çalışır; ADR onaylı; orchestrator unit testleri yeşil.
+
+**Teslim çıktısı:**
+- `docs/adr/0001-processor-ingest-at-entry.md` (Docs güncellemesinde oluşturuldu — kod iterasyonunda referans)
+- `services/processor/pipeline_orchestrator.py` — ingest adımı pipeline öncesi
+- `tests/unit/processor/test_orchestrator.py` — ingest happy path, duplicate skip, invalid body
+
+**Önkoşullar:**
+- [ ] Feature branch Stop tamam
+- [ ] `services/collectors/persistence.py` mevcut (`ingest_message`, `IngestStatus`)
+
+**Docs okuma sırası:** (yalnızca bunları — sırayla)
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §8.1 — iterasyon kapsamı
+2. `Docs/04_BACKEND_SPEC.md` §8.0 — runtime ingest modeli
+3. `docs/adr/0001-processor-ingest-at-entry.md` — karar gerekçesi
+4. `Docs/01_DOMAIN_MODEL.md` — `raw_items` lifecycle (pending → processing → processed)
+5. `Docs/08_TESTING_STRATEGY.md` §3.7 — runtime integration hedefleri (unit öncül)
+
+**Uygulama planı:**
+1. `PipelineOrchestrator.process()` — `mark_processing` öncesi SQS body'den `ingest_message(session, body, redis)` çağır; `IngestStatus.DUPLICATE` → skip result; `INVALID` → failed + DLQ path (`Docs/04` §8.0)
+2. `processor_handler.process_sqs_record` — orchestrator path'te body string'i orchestrator'a ilet (gerekirse `process()` imzasına `sqs_body: str` ekle)
+3. `DbRawItemLifecycle` — ingest sonrası `mark_processing` raw_item bulabilmeli; hash format `storage_content_hash` uyumu koru
+4. Unit test — happy: ingest + chain + persist; duplicate: ikinci çağrı idempotent; invalid JSON: `MessageParseError` veya failed result
+5. Regresyon: mevcut `test_orchestrator.py` + `test_pipeline_e2e.py` (seed hâlâ geçer — İter 6'da kaldırılır)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `services/processor/pipeline_orchestrator.py`, `services/processor/handlers/processor_handler.py` (gerekirse) |
+| Güncelle | `tests/unit/processor/test_orchestrator.py` |
+| Dokunma | CDK/infra (İter 3–4), collector iş mantığı |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Ingest processor girişinde | `Docs/04` §8.0, ADR-0001 | `ingest_message` reuse |
+| Idempotent duplicate | `Docs/04` §8.6 | Redis + DB unique |
+| raw_item lifecycle | `Docs/01` raw_items | pending → processing |
+| Invalid mesaj DLQ | `Docs/04` §8.7 | partial batch failure |
+
+**Kalite kapıları:**
+- [ ] Pozitif: ingest + pipeline persist
+- [ ] Negatif: duplicate skip, malformed body
+- [ ] `pytest tests/unit/processor/test_orchestrator.py -v`
+- [ ] `ruff` + `mypy` services/processor yeşil
+
+**Bu iterasyonda yok:**
+- Lambda CDK, bundle script, deploy workflow
+
+**Risk / dikkat:**
+- `content_hash` format collector SQS vs DB (`sha256:` prefix) — `storage_content_hash` tutarlı kullan
+- Ingest commit orchestrator transaction içinde — rollback persist'i de geri almalı
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/ -v --tb=short`
+- [ ] `ruff check services/processor && mypy services/processor`
+- [ ] PR/onay → İterasyon 2
+
+---
+
+### İterasyon 2 — Lambda Bundle Script (8.2)
+
+**Hedef:** Monorepo `services/` + `packages/shared/` paketini Lambda deploy artifact'ına bundle eden script çalışır; `infra/README` prosedürü güncel.
+
+**Teslim çıktısı:**
+- `scripts/build_lambda.sh` (veya `scripts/build_lambda.py`)
+- `infra/README.md` — bundle + deploy adımları
+- `tests/unit/infra/test_lambda_bundle.py` — artifact smoke
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] `pyproject.toml` workspace bağımlılıkları tanımlı
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §8.2
+2. `Docs/09_DEV_WORKFLOW.md` §7 — ortam değişkenleri, deploy notları
+3. `infra/README.md` — mevcut stub notu (`lambda_stub/`)
+4. `.cursor/rules/30-infra-aws.mdc` — Lambda adlandırma `dev-ygip-*`
+
+**Uygulama planı:**
+1. Bundle script — hedef: `dist/lambda/{collector|processor}/` zip; `services/`, `packages/shared/`, runtime deps (pip install -t)
+2. Handler entry: collector → `services.collectors.handler.lambda_handler`; processor → `services.processor.handlers.processor_handler.lambda_handler`
+3. `.gitignore` — `dist/lambda/` ekle
+4. Unit test — zip içinde handler modülü var; import path smoke (extract + ast/zipfile list)
+5. `infra/README.md` — stub yerine bundle komutu; env var listesi (`DATABASE_URL`, `REDIS_URL`, `SQS_QUEUE_*_URL`)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `scripts/build_lambda.sh`, `tests/unit/infra/test_lambda_bundle.py` |
+| Güncelle | `infra/README.md`, `.gitignore` |
+| Dokunma | CDK construct (İter 3–4) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Monorepo paket bundle | `Docs/10` §8.2 | services + packages/shared |
+| Handler giriş noktası | `Docs/04` §7, §8 | unified handler.py |
+| Dev env inject | `Docs/09` §7 | README prosedür |
+| Stub kaldırma hazırlık | `infra/README` | İter 3 CDK asset path |
+
+**Kalite kapıları:**
+- [ ] Bundle script exit 0
+- [ ] `pytest tests/unit/infra/test_lambda_bundle.py -v`
+- [ ] Collector/processor unit regresyon yeşil
+
+**Bu iterasyonda yok:**
+- CDK deploy, gerçek AWS invoke
+
+**Risk / dikkat:**
+- Python 3.12 runtime ile uyumlu wheel; macOS build → Lambda linux arch (manylinux) cross-compile gerekebilir — CI'da linux runner tercih
+- Bundle boyutu 250 MB unzipped limit — gereksiz dev dependency dahil etme
+
+**Stop:**
+- [ ] `./scripts/build_lambda.sh collector && ./scripts/build_lambda.sh processor`
+- [ ] `pytest tests/unit/infra/test_lambda_bundle.py -v`
+- [ ] PR/onay → İterasyon 3
+
+---
+
+### İterasyon 3 — Collector Lambda Gerçek Deploy (8.3)
+
+**Hedef:** CDK collector Lambda'ları `lambda_stub/` yerine bundle artifact kullanır; unified `handler.lambda_handler`; synth yeşil.
+
+**Teslim çıktısı:**
+- `infra/collectors/construct.py` — `Code.from_asset` bundle path
+- `infra/ygip_infra/dev_stack.py` — gerekli env/iam güncellemeleri
+- Legacy handler temizliği veya redirect
+
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop — bundle script çalışır
+- [ ] `cd infra && cdk synth` mevcut haliyle yeşil
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §8.3
+2. `Docs/04_BACKEND_SPEC.md` §7 — Lambda handler, EventBridge
+3. `infra/collectors/construct.py` — mevcut construct
+4. `Docs/09_DEV_WORKFLOW.md` §7.3 — IAM dev scope
+5. `.cursor/rules/30-infra-aws.mdc`
+
+**Uygulama planı:**
+1. CDK `Code.from_asset` — bundle output path (build script öncesi hook veya documented pre-step)
+2. Handler: `services.collectors.handler.lambda_handler` — `source_type` event param (EventBridge payload)
+3. Environment: `DATABASE_URL`, `REDIS_URL`, queue URL'leri; RDS erişim için VPC/subnet/security group (Faz 0 dev stack pattern)
+4. Kaldır veya deprecate: `services/collectors/handlers/rss_handler.py`, `email_handler.py`, `gov_handler.py` — unified handler'a yönlendir
+5. `tests/unit/infra/test_stack_synth.py` — collector function count, runtime python3.12, handler string
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `infra/collectors/construct.py`, `infra/ygip_infra/dev_stack.py` |
+| Güncelle/Sil | `services/collectors/handlers/*.py`, `infra/collectors/lambda_stub/` |
+| Güncelle | `tests/unit/infra/test_stack_synth.py`, `infra/README.md` |
+| Dokunma | Processor CDK (İter 4) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Collector Lambda per type | `Docs/04` §7, `Docs/10` §2.6 | rss/email/gov |
+| EventBridge cron | `Docs/04` §10 | mevcut schedules |
+| Dev IAM scope | `Docs/09` §7.3 | dev-ygip-* only |
+| Gerçek kod deploy | `infra/README` | stub kaldır |
+
+**Kalite kapıları:**
+- [ ] `cd infra && cdk synth` yeşil
+- [ ] `pytest tests/unit/infra/ -v`
+- [ ] Collector unit test regresyon
+
+**Bu iterasyonda yok:**
+- Processor Lambda, deploy-dev.yml
+
+**Risk / dikkat:**
+- RDS VPC-internal — Lambda VPC config gerekir; cold start artış kabul
+- Secret plaintext CDK'ya yazma — SSM/Secrets Manager reference veya deploy-time param
+
+**Stop:**
+- [ ] `cd infra && cdk synth`
+- [ ] `pytest tests/unit/infra/test_stack_synth.py -v`
+- [ ] PR/onay → İterasyon 4
+
+---
+
+### İterasyon 4 — Processor Lambda CDK + SQS Trigger (8.4)
+
+**Hedef:** Processor Lambda SQS event source mapping (rss/email/gov); partial batch failure; DLQ redrive; synth yeşil.
+
+**Teslim çıktısı:**
+- `infra/processor/construct.py` — ProcessorOrchestration construct
+- `infra/ygip_infra/dev_stack.py` — processor fonksiyonları + SQS trigger
+- CloudWatch log groups `/aws/lambda/dev-ygip-processor-*`
+
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop
+- [ ] İterasyon 1 ingest wire merge edilmiş
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §8.4
+2. `Docs/04_BACKEND_SPEC.md` §8.0, §8.6–8.7 — idempotency, DLQ, partial batch
+3. `services/processor/handlers/processor_handler.py` — lambda_handler
+4. `infra/ygip_infra/dev_stack.py` — SQS queue referansları
+5. `.cursor/rules/17-processor-pipeline.mdc`
+
+**Uygulama planı:**
+1. `infra/processor/construct.py` — Lambda per source_type veya tek Lambda multi-queue trigger (maliyet/scope — MVP-0 tek processor multi-event source kabul)
+2. SQS event source mapping — `batchSize`, `functionResponseTypes: ReportBatchItemFailures`
+3. IAM — sqs:ReceiveMessage, DeleteMessage, GetQueueAttributes; RDS/Redis same as collector
+4. Timeout/memory — embedding için ≥512MB, timeout 120s+ (profil `infra/collectors/schedules.py` kalıbı)
+5. `tests/unit/infra/test_stack_synth.py` — processor resources + event source count
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `infra/processor/construct.py`, `infra/processor/__init__.py` |
+| Güncelle | `infra/ygip_infra/dev_stack.py`, `tests/unit/infra/test_stack_synth.py`, `infra/README.md` |
+| Dokunma | deploy workflow (İter 5), FE |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| SQS trigger processor | `Docs/04` §8 | topic-per-type |
+| Partial batch failure | `Docs/04` §8.7 | batchItemFailures |
+| DLQ zorunlu | `30-infra-aws` | redrive policy |
+| Ingest at entry | `Docs/04` §8.0 | handler orchestrator path |
+
+**Kalite kapıları:**
+- [ ] `cdk synth` yeşil
+- [ ] Processor unit test regresyon
+- [ ] IAM prod deny korunur (`dev_stack.py`)
+
+**Bu iterasyonda yok:**
+- Production deploy, deploy-dev aktivasyon
+
+**Risk / dikkat:**
+- Aynı mesaj at-least-once — ingest idempotency zorunlu (İter 1)
+- Embedding cold start — ilk invoke yavaş; smoke timeout generous
+
+**Stop:**
+- [ ] `cd infra && cdk synth`
+- [ ] `pytest tests/unit/infra/ tests/unit/processor/ -v`
+- [ ] PR/onay → İterasyon 5
+
+---
+
+### İterasyon 5 — Dev Deploy Workflow + Smoke Script (8.5)
+
+**Hedef:** `deploy-dev.yml` dev stack deploy eder; `scripts/smoke_pipeline_dev.sh` collector→processor→DB doğrular.
+
+**Teslim çıktısı:**
+- `.github/workflows/deploy-dev.yml` — aktivasyon (manual dispatch veya `feature/mvp-0` push)
+- `scripts/smoke_pipeline_dev.sh` — aws lambda invoke + DB count
+- `Docs/09` §5 — deploy notu (Docs güncellemesinde referans)
+
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop
+- [ ] AWS credentials CI'da yapılandırılabilir (repo secret)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §8.5
+2. `Docs/09_DEV_WORKFLOW.md` §5.1–5.2 — CI/CD
+3. `infra/README.md` — manuel invoke örneği
+4. `Docs/08_TESTING_STRATEGY.md` §3.7 — smoke journey
+
+**Uygulama planı:**
+1. `deploy-dev.yml` — checkout → build_lambda → cdk deploy (dev stack); **production yok**
+2. Smoke script — `dev-ygip-collector-rss` invoke → kısa bekle → SQS depth check → processor otomatik tetik → psql/API ile raw_items/processed_items count
+3. Workflow yorum güncelle — Faz 0.2 "Faz 8'de aktifleştirilir" notu kaldır
+4. `infra/README.md` — smoke script kullanımı
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur/Güncelle | `.github/workflows/deploy-dev.yml`, `scripts/smoke_pipeline_dev.sh` |
+| Güncelle | `infra/README.md`, `.github/BRANCH_PROTECTION.md` (deploy notu) |
+| Dokunma | Production workflow, prod secrets |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Dev deploy only | `Docs/09` §7.3 | dev-ygip-* |
+| Collector invoke test | `infra/README` | aws lambda invoke |
+| Pipeline smoke | `Docs/08` §3.7 | DB row doğrulama |
+| Agent yasak | `Docs/09` §6.1 | cdk destroy onaysız yok |
+
+**Kalite kapıları:**
+- [ ] Workflow syntax valid (actionlint veya manual review)
+- [ ] Smoke script local dry-run dokümante (AWS yoksa skip notu)
+- [ ] CI test workflow regresyon yeşil
+
+**Bu iterasyonda yok:**
+- Prod deploy, Secrets Manager prod migration
+
+**Risk / dikkat:**
+- CI AWS maliyet — manual dispatch tercih; otomatik push dikkatli
+- Smoke gerçek RSS çekimi yapabilir — test source veya mock loader env flag
+
+**Stop:**
+- [ ] `cd infra && cdk synth`
+- [ ] Smoke script dry-run veya AWS dev invoke (onaylı)
+- [ ] PR/onay → İterasyon 6
+
+---
+
+### İterasyon 6 — Pipeline Runtime E2E Integration (8.6)
+
+**Hedef:** Moto SQS + PostgreSQL ile processor handler uçtan uca smoke; `_seed_raw_item` kaldırılır; **Faz 8 Done**.
+
+**Teslim çıktısı:**
+- `tests/integration/test_pipeline_runtime_flow.py`
+- `tests/integration/test_pipeline_e2e.py` — manuel seed kaldırma
+- Faz 6.1 stage executor uyum notu (docstring veya test comment)
+
+**Önkoşullar:**
+- [ ] İterasyon 1–5 Stop (en az İter 1 ingest wire zorunlu)
+- [ ] Integration test PG fixture mevcut
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §8.6
+2. `Docs/08_TESTING_STRATEGY.md` §3.7, §4
+3. `Docs/04_BACKEND_SPEC.md` §10.5 — ingest/process gözlem aşamaları
+4. `tests/integration/test_collector_sqs_flow.py` — moto pattern
+5. `tests/integration/test_pipeline_e2e.py` — mevcut E2E
+
+**Uygulama planı:**
+1. `test_pipeline_runtime_flow.py` — publish SQS → `processor_handler.handle_sqs_event` → assert raw_items + processed_items + chunks
+2. `test_pipeline_e2e.py` — `_seed_raw_item` kaldır; ingest wire ile geçmeli
+3. Idempotent duplicate journey — aynı mesaj iki kez → tek processed_item
+4. Coverage — processor modül ≥%80 koru
+5. Done checklist — dev Lambda invoke + integration yeşil
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `tests/integration/test_pipeline_runtime_flow.py` |
+| Güncelle | `tests/integration/test_pipeline_e2e.py` |
+| Dokunma | Prod deploy, mobil |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Runtime happy path | `Docs/08` §3.7 | moto + PG |
+| Ingest idempotent | `Docs/04` §8.0 | duplicate test |
+| Faz 6.1 gözlem uyumu | `Docs/04` §10.5 | raw_items artışı |
+| Processor coverage | `Docs/08` §1 | ≥%80 |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_pipeline_runtime_flow.py tests/integration/test_pipeline_e2e.py -v`
+- [ ] `pytest tests/unit/processor/ -v --cov=services/processor --cov-fail-under=80`
+- [ ] `ruff` + `mypy` yeşil
+
+**Bu iterasyonda yok:**
+- E2E Playwright, prod smoke
+
+**Risk / dikkat:**
+- Integration test süresi — embedding mock/deterministic backend kullan (mevcut `DeterministicEmbeddingBackend`)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_pipeline_runtime_flow.py tests/integration/test_pipeline_e2e.py -v`
+- [ ] `pytest tests/unit/processor/ --cov=services/processor --cov-fail-under=80`
+- [ ] Faz 8 Done Definition tamam; MVP-0 merge hazırlığı (Semih onayı)
+
+---
+
+## Required Context
+
+- `Docs/10` Faz 8; `Docs/04` §7–8, §10.5; `Docs/09` §5, §7
+- `docs/adr/0001-processor-ingest-at-entry.md`
+- `.cursor/rules/30-infra-aws.mdc`, `17-processor-pipeline.mdc`, `13-collectors.mdc`
+
+## Done Definition
+
+- [ ] Processor girişinde idempotent ingest wire (ADR-0001)
+- [ ] Bundle script + CDK collector/processor gerçek artifact
+- [ ] Dev'de collector invoke + processor SQS tüketimi → DB satırları
+- [ ] `deploy-dev.yml` + smoke script
+- [ ] Integration runtime testleri yeşil; processor coverage ≥%80
+- [ ] Faz 6.1 manuel pipeline dev AWS'de uçtan uca doğrulanabilir (opsiyonel manuel kapı)
+
+## Explicit Don'ts
+
+- Production (`prod-ygip-*`) deploy — MVP-1 Production Launch sprint
+- Agent `main` merge veya onaysız prod migration
+- AWS kaynak silme (`cdk destroy`)
+- Collector/processor/ai-engine iş mantığı refactor
+- Production'a test/fixture veri
+
+---
+
+Phase done → MVP-0 tamamlandı; `main` merge (Semih onayı) → MVP-1 (Production Launch + piyasa verisi).

@@ -17,6 +17,11 @@ from services.collectors.sqs_publisher import SQSPublisherProtocol
 logger = logging.getLogger("ygip.collectors.base")
 
 DEDUP_REDIS_KEY = "dedup:hashes"
+# Daha önce toplanan URL'ler — tam metin sayfa fetch'ini her döngüde tekrar
+# tetiklememek için. TTL ile self-clean olur ve içerik güncellenirse zamanla
+# yeniden toplanır.
+FETCHED_URL_KEY_PREFIX = "collector:url:"
+FETCHED_URL_TTL_SECONDS = 60 * 60 * 24 * 14  # 14 gün
 
 
 class BaseCollector(ABC):
@@ -24,9 +29,38 @@ class BaseCollector(ABC):
 
     source_type: SourceType
     dedup_key: str = DEDUP_REDIS_KEY
+    # URL-bazlı fetch cache yalnızca pahalı tam-metin fetch yapan collector'larda
+    # (RSS) açılır; email/gov için kapalı kalır.
+    track_fetched_urls: bool = False
 
     def __init__(self, redis_client: Redis | None = None) -> None:
         self._redis = redis_client
+
+    def bind_redis(self, redis_client: Redis | None) -> None:
+        """Paylaşılan collector singleton'ına runtime'da redis client bağlar.
+
+        Local runtime COLLECTOR_MAP'teki redis'siz singleton'ları kullandığından,
+        URL-cache'in çalışması için batch öncesi redis bağlanır.
+        """
+        self._redis = redis_client
+
+    @staticmethod
+    def _fetched_url_key(url: str) -> str:
+        return f"{FETCHED_URL_KEY_PREFIX}{compute_content_hash(url)}"
+
+    async def url_already_collected(self, url: str) -> bool:
+        """URL daha önce toplanmış mı? (tam metin fetch'ini atlamak için)."""
+        if self._redis is None or not self.track_fetched_urls or not url:
+            return False
+        return bool(await self._redis.exists(self._fetched_url_key(url)))
+
+    async def mark_url_collected(self, url: str) -> None:
+        """URL'yi TTL'li olarak toplandı diye işaretler."""
+        if self._redis is None or not self.track_fetched_urls or not url:
+            return
+        await self._redis.set(
+            self._fetched_url_key(url), "1", ex=FETCHED_URL_TTL_SECONDS
+        )
 
     @abstractmethod
     async def collect(self, source: Source) -> list[RawArticle]:

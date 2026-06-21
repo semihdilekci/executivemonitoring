@@ -79,6 +79,24 @@ class RateLimitException(AppException):
         self.retry_after_seconds = retry_after_seconds
 
 
+class PipelineAlreadyRunningException(AppException):
+    status_code = 409
+    error_code = "PIPELINE_ALREADY_RUNNING"
+    message = "Aynı tipte koşan/bekleyen bir pipeline çalıştırması var."
+
+
+class PipelineNotCancellableException(AppException):
+    status_code = 409
+    error_code = "PIPELINE_NOT_CANCELLABLE"
+    message = "Pipeline çalıştırması terminal durumda — iptal edilemez."
+
+
+class InvalidSourceTypeException(AppException):
+    status_code = 422
+    error_code = "INVALID_SOURCE_TYPE"
+    message = "Geçersiz kaynak tipi (rss/email/gov/all dışı)."
+
+
 class ExternalServiceException(AppException):
     status_code = 502
     error_code = "EXTERNAL_SERVICE_ERROR"

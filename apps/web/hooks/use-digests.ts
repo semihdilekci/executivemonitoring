@@ -138,6 +138,9 @@ export function useUnreadDigestTeasers(limit = 3) {
     staleTime: 60_000,
   });
 
+  // API `is_read=false` filtresini destekliyorsa sonuç zaten okunmamışlardır
+  // ve bu eleme no-op olur; BE henüz desteklemiyorsa (mevcut durum) oturum
+  // okuma durumuyla eleriz. Her iki halde de okunmuş bülten teaser'a sızmaz.
   const teasers = useMemo(() => {
     const items = query.data?.data ?? [];
     return items

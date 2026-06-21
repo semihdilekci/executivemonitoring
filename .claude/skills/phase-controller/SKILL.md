@@ -49,14 +49,14 @@ Detay matris: [verification-matrix.md](verification-matrix.md). Şablonlar: [ref
 
 ## Adım 1 — Araştırma
 
-| Kaynak                                 | Ne için                                               |
-| -------------------------------------- | ----------------------------------------------------- |
+| Kaynak | Ne için |
+| ------ | ------- |
 | `.cursor/rules/NN-phase-XX-<slug>.mdc` | Done Definition, iterasyonlar, Scope, Explicit Don'ts |
-| `Docs/10_IMPLEMENTATION_ROADMAP.md`    | §Faz N deliverable, Human Gate, bağımlılık            |
-| `Docs/03`, `06`, `02`, `07`, `08`      | Contract, ekran, şema, güvenlik, test                 |
-| `Docs/11_UAT.md`                       | §Faz N (varsa) — UAT maddeleri audit notu             |
-| `git log` / `git diff main...HEAD`     | Faz branch kapsamı (opsiyonel)                        |
-| `rg`, `Glob`, `SemanticSearch`         | Kod varlığı, pattern taraması                         |
+| `Docs/10_IMPLEMENTATION_ROADMAP.md` | §Faz N deliverable, Human Gate, bağımlılık |
+| `Docs/03`, `06`, `02`, `07`, `08` | Contract, ekran, şema, güvenlik, test |
+| `Docs/11_UAT.md` | §Faz N (varsa) — UAT maddeleri audit notu |
+| `git log` / `git diff main...HEAD` | Faz branch kapsamı (opsiyonel) |
+| `rg`, `Glob`, `SemanticSearch` | Kod varlığı, pattern taraması |
 
 **Faz eşleme:** `59-phase-09-admin.mdc` → fix `59-phase-09-admin-fix.mdc` (aynı `NN`).
 
@@ -105,21 +105,21 @@ Coverage script varsa çalıştır; eşik altı → `TEST_GAP`.
 
 Her bulguya benzersiz ID: `F-<XX>-<NNN>` (ör. `F-09-001`).
 
-| Severity    | Ne zaman                                                                                                 |
-| ----------- | -------------------------------------------------------------------------------------------------------- |
+| Severity | Ne zaman |
+| -------- | -------- |
 | **BLOCKER** | Güvenlik baseline ihlali; kritik API/ekran yok; Explicit Don'ts ihlali; CI kırmızı (lint/typecheck/test) |
-| **HIGH**    | Done Definition maddesi eksik/hatalı; negatif deny test yok; maker-checker backend enforced değil        |
-| **MEDIUM**  | Pattern sapması (`@RequirePolicy` eksik tek endpoint); kısmi implementasyon                              |
-| **LOW**     | İsimlendirme, doc güncellenmemiş, düşük risk test eksikliği                                              |
-| **INFO**    | Gözlem, bilinçli erteleme kanıtı ("Bu iterasyonda yok" uyumlu)                                           |
+| **HIGH** | Done Definition maddesi eksik/hatalı; negatif deny test yok; maker-checker backend enforced değil |
+| **MEDIUM** | Pattern sapması (`@RequirePolicy` eksik tek endpoint); kısmi implementasyon |
+| **LOW** | İsimlendirme, doc güncellenmemiş, düşük risk test eksikliği |
+| **INFO** | Gözlem, bilinçli erteleme kanıtı ("Bu iterasyonda yok" uyumlu) |
 
 **Genel durum:**
 
-| Durum            | Koşul                           |
-| ---------------- | ------------------------------- |
-| `PASS`           | BLOCKER=0, HIGH=0               |
+| Durum | Koşul |
+| ----- | ----- |
+| `PASS` | BLOCKER=0, HIGH=0 |
 | `PASS_WITH_GAPS` | BLOCKER=0, HIGH>0 veya MEDIUM≥3 |
-| `FAIL`           | BLOCKER≥1                       |
+| `FAIL` | BLOCKER≥1 |
 
 ---
 
@@ -142,7 +142,6 @@ Dosya **yazma**. Kullanıcıya özet (sohbet — kalıcı rapor değil):
 **Fix iterasyon özeti:** (fix.mdc'de kaç iterasyon, gruplama mantığı)
 
 **Onay sonrası yazılacak dosya:**
-
 - `.cursor/rules/NN-phase-XX-<slug>-fix.mdc` (bulgular bu dosyaya gömülür)
 
 Bu taslağı onaylıyor musun?
@@ -166,8 +165,8 @@ Bu taslağı onaylıyor musun?
 ```markdown
 ## Phase Controller tamamlandı
 
-| Çıktı     | Path                                       |
-| --------- | ------------------------------------------ |
+| Çıktı | Path |
+| ----- | ---- |
 | Fix planı | `.cursor/rules/NN-phase-XX-<slug>-fix.mdc` |
 
 **Genel durum:** …
@@ -178,12 +177,12 @@ Bu taslağı onaylıyor musun?
 
 ## Ekosistem ilişkileri
 
-| Bileşen                     | İlişki                                                                             |
-| --------------------------- | ---------------------------------------------------------------------------------- |
-| `phase-creator`             | Faz **öncesi** plan; controller **sonrası** doğrulama                              |
-| `Docs/11_UAT.md`            | Controller otomatik UAT işaretlemez; fix `.mdc` UAT maddelerine referans verebilir |
-| `48-git-phase-branch`       | Fix oturumları aynı faz branch veya `fix/F<N>-*` branch — fix `.mdc`'de belirtilir |
-| Human Gate (`Docs/10` §1.4) | Controller Human Gate'i **tamamlamaz**; girdi sağlar                               |
+| Bileşen | İlişki |
+| ------- | ------ |
+| `phase-creator` | Faz **öncesi** plan; controller **sonrası** doğrulama |
+| `Docs/11_UAT.md` | Controller otomatik UAT işaretlemez; fix `.mdc` UAT maddelerine referans verebilir |
+| `48-git-phase-branch` | Fix oturumları aynı faz branch veya `fix/F<N>-*` branch — fix `.mdc`'de belirtilir |
+| Human Gate (`Docs/10` §1.4) | Controller Human Gate'i **tamamlamaz**; girdi sağlar |
 
 **Regression:** Fix iterasyonları bittikten sonra `@phase-controller` tekrar çalıştırılabilir; fix `.mdc` güncellenir veya `_v2` suffix — kullanıcı tercihi, önce sor.
 

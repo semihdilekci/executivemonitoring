@@ -31,7 +31,8 @@ class EmailCollector(BaseCollector):
     source_type = SourceType.EMAIL
 
     async def collect(self, source: Source) -> list[RawArticle]:
-        imap_host = source.config.get("imap_host")
+        collector_settings = get_collector_settings()
+        imap_host = source.config.get("imap_host") or collector_settings.IMAP_HOST
         mailbox = source.config.get("mailbox", "INBOX")
         allowlist = source.config.get("sender_allowlist")
 
@@ -85,12 +86,13 @@ class EmailCollector(BaseCollector):
         """IMAP'ten ham e-posta baytlarını çeker — unit testlerde mock'lanır."""
 
         def _download() -> list[bytes]:
-            imap_user = source.config.get("imap_user")
+            collector_settings = get_collector_settings()
+            imap_user = source.config.get("imap_user") or collector_settings.IMAP_USER
             if not isinstance(imap_user, str) or not imap_user.strip():
-                msg = "config.imap_user zorunludur"
+                msg = "config.imap_user veya IMAP_USER ortam değişkeni zorunludur"
                 raise ValueError(msg)
 
-            password = get_collector_settings().IMAP_PASSWORD
+            password = collector_settings.IMAP_PASSWORD
             if not password:
                 msg = "IMAP_PASSWORD ortam değişkeni tanımlı değil"
                 raise ValueError(msg)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections.abc import Iterable
 from functools import lru_cache
@@ -94,6 +95,30 @@ def normalize_for_match(text: str) -> str:
     return unicodedata.normalize("NFC", text).casefold()
 
 
+@lru_cache(maxsize=512)
+def _keyword_pattern(needle: str) -> re.Pattern[str]:
+    """Keyword için kelime-sınırı (`\\b`) regex'i — substring yanlış-pozitiflerini önler.
+
+    `ai` keyword'ü `hair`/`airport` içinde eşleşmez; `kur` `kurul` içinde eşleşmez.
+    Çok kelimeli ifadeler (`merkez bankası`) için boşluk doğal sınırdır.
+    """
+    return re.compile(rf"\b{re.escape(needle)}\b")
+
+
+def _keyword_in_haystack(haystack: str, keyword: str) -> bool:
+    """Önceden normalize edilmiş haystack içinde keyword kelime-sınırı eşleşmesi."""
+    return _keyword_pattern(normalize_for_match(keyword)).search(haystack) is not None
+
+
+def count_total_keyword_hits(content: str, keywords: Iterable[str]) -> int:
+    """Verilen keyword'lerin metindeki toplam (kelime-sınırlı) geçiş sayısı."""
+    haystack = normalize_for_match(content)
+    return sum(
+        len(_keyword_pattern(normalize_for_match(keyword)).findall(haystack))
+        for keyword in keywords
+    )
+
+
 def master_keyword_pool() -> tuple[str, ...]:
     """Tüm kategori keyword'lerinin birleşimi (dedupe)."""
     seen: set[str] = set()
@@ -125,7 +150,7 @@ def find_matching_keywords(
     seen: set[str] = set()
     for keyword in pool:
         needle = normalize_for_match(keyword)
-        if needle in haystack and needle not in seen:
+        if needle not in seen and _keyword_in_haystack(haystack, keyword):
             seen.add(needle)
             matched.append(keyword)
     return matched

@@ -36,4 +36,6 @@ Detay: `Docs/09_DEV_WORKFLOW.md` §4.3 ve §5.1.
 
 ## Deploy workflow
 
-`deploy-dev.yml` / production deploy workflow'ları Faz 8'de eklenir. MVP-0 sonuna kadar yalnızca test pipeline aktiftir.
+`deploy-dev.yml` (Faz 8.5) dev stack'i (`YgipDevStack`) **manuel** (`workflow_dispatch`) deploy eder — maliyet kontrolü için otomatik push tetikleme yoktur. Gerekli secret'lar `dev` GitHub environment'ında tutulur: `AWS_DEV_DEPLOY_ROLE_ARN` (OIDC), `DEV_DATABASE_URL`, `DEV_REDIS_URL`. Detay: `infra/README.md`, `Docs/09` §5.3.
+
+Production deploy workflow'u (`prod-ygip-*`) MVP-1 Production Launch sprint'inde eklenir.

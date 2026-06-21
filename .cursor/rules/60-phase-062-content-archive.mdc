@@ -1,0 +1,324 @@
+---
+description: "[Faz 6.2] İçerik Arşivi — admin-only processor çıktısı gezgini — 4 iterasyon/chat (content_category persist → list API → detail API + test → FE liste + detay drawer). Mesajda \"Faz 6.2 — İterasyon M\" belirt."
+---
+
+# Faz 6.2: İçerik Arşivi
+
+## Goal
+
+Admin'in processor'dan geçmiş **tüm** `processed_items` kayıtlarını cursor pagination ile listeleyip filtreleyebildiği, satır detayında tam metin + bülten kullanım geçmişini görebildiği **`S-ADMIN-CONTENT-ARCHIVE`** ekranı. **Admin only** — viewer erişimi yok (`require_admin` + sidebar link yok). Detay: `Docs/10` Faz 6.2.
+
+## Feature branch (zorunlu)
+
+Bu faz **kendi feature branch'inde**: `feature/f62-content-archive` (`48-git-phase-branch.mdc`). MVP-0'a bilinçli operasyonel ekleme; `main`'de faz kodu yok.
+
+**Stop (İterasyon 1, kod öncesi):** [ ] `main` güncel; [ ] `feature/f62-content-archive` oluşturuldu; [ ] `git push -u origin HEAD`; [ ] Faz 0–6.1 migration'ları local'de `alembic upgrade head` ile uygulanmış (`005_pipeline_tables` dahil).
+
+## Bu fazın çalışma modeli
+
+- Tek sohbet fazı bitirmez. Her chat: `@60-phase-062-content-archive` + **「Faz 6.2 — İterasyon M」**.
+- Katman sırası: **migration + processor persist → list API → detail API + test → FE** — karıştırma.
+- Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil. Plan moduna geçme — iterasyon blueprint yeterli.
+- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Processor gate/enrich/score iş mantığı **değişmez** — yalnızca `content_category` persist + read API/FE eklenir.
+
+## Required Context
+
+- Cross-schema `processed_items` (`Docs/02` §4.4)
+- Cursor pagination kalıbı (`Docs/03` §14, `audit_repository.py`)
+- Admin liste UX (`Docs/06` S-ADMIN-AUDIT-LOGS, S-ADMIN-CONTENT-ARCHIVE)
+- RBAC (`Docs/07` §2 — admin-only endpoint)
+
+## Done Definition
+
+- [ ] Admin filtre + "Daha fazla yükle" ile arşivi gezebilir
+- [ ] Detay drawer'da `clean_content` + bülten linkleri görünür
+- [ ] Viewer `GET /admin/processed-items` → `403 FORBIDDEN`
+- [ ] Liste yanıtında `clean_content` yok
+- [ ] Yeni processor kayıtlarında `content_category` dolu
+- [ ] `pytest` integration + unit yeşil; `ruff` + `mypy` yeşil
+- [ ] Sidebar'da "İçerik Arşivi" yalnızca admin layout'ta
+
+## Explicit Don'ts
+
+- Viewer salt okuma erişimi
+- İçerik düzenleme / silme / yeniden işleme tetikleme
+- CSV/Excel export
+- Liste API'de `clean_content` veya full embedding
+- `raw_items` gate-drop / skipped kayıtları arşivde gösterme
+- Mobil ekran (web-only)
+- Otomatik sonsuz scroll (yalnızca explicit "Daha fazla yükle")
+
+---
+
+### İterasyon 1 — content_category Persist + Migration (6.2.1)
+
+**Hedef:** Enricher içerik kategorisi (`macro`, `fmcg`, …) 5 şemada `content_category` kolonu olarak persist edilir; yeni pipeline kayıtları kolonu doldurur; migration round-trip yeşil.
+
+**Teslim çıktısı:**
+- `alembic/versions/006_content_category.py` — 5 şemada kolon + index; `down_revision` `005_pipeline_tables`
+- `packages/shared/models/processed_item.py` — `content_category: Mapped[str | None]`
+- `services/processor/persistence.py` — `output.extras["category"]` → `content_category`
+- `tests/unit/processor/test_persistence.py` — persist assert
+- `tests/integration/test_content_category_migration.py` — upgrade/downgrade round-trip (PG yoksa skip)
+
+**Önkoşullar:**
+- [ ] Feature branch Stop tamam
+- [ ] `005_pipeline_tables` uygulanmış (`alembic current` = 005)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.2.1 — kapsam
+2. `Docs/02_DATABASE_SCHEMA.md` §4.4 — `content_category` kolonu + index adı
+3. `Docs/01_DOMAIN_MODEL.md` — ProcessedItem `content_category` + `topics` anlamı
+4. `Docs/04_BACKEND_SPEC.md` §8.4 — `CATEGORY_RULES` kategori anahtarları
+5. `Docs/09_DEV_WORKFLOW.md` §8.1–8.2 — migration downgrade zorunluluğu
+
+**Uygulama planı:**
+1. `006_content_category.py` — döngüyle 5 schema'da `ADD COLUMN content_category VARCHAR(50)` + `idx_{schema}_processed_items_content_category`; `downgrade()` ters sıra
+2. `processed_item.py` — nullable `content_category` mapped column; mevcut index tuple'a dokunma
+3. `persistence.py` — `category_raw = output.extras.get("category")`; string strip → `content_category`; enricher zaten `extras["category"]` set eder (`services/processor/enricher.py`)
+4. `test_persistence.py` — mock output `extras={"category": "macro", ...}` → flush sonrası row.content_category == "macro"
+5. `test_content_category_migration.py` — `upgrade head` kolon var; `downgrade -1` kaldırır
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `alembic/versions/006_content_category.py`, `tests/integration/test_content_category_migration.py` |
+| Güncelle | `packages/shared/models/processed_item.py`, `services/processor/persistence.py`, `tests/unit/processor/test_persistence.py` |
+| Dokunma | API router, FE, digest generator, gate/enricher logic |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Kolon tipi | `Docs/02` §4.4 | `VARCHAR(50)` nullable legacy |
+| Kategori değerleri | `Docs/04` §8.4 | `CATEGORY_RULES` anahtarları; validate processor'da değil DB'de CHECK yok (MVP) |
+| Migration zinciri | `Docs/02` §4.4 | `down_revision` = `005_pipeline_tables` |
+| Legacy kayıtlar | `Docs/01` ProcessedItem | NULL kabul; yeni insert zorunlu doldurma |
+
+**Kalite kapıları:**
+- [ ] `alembic upgrade head` + `alembic downgrade -1` + `upgrade head` yeşil
+- [ ] `pytest tests/unit/processor/test_persistence.py tests/integration/test_content_category_migration.py -v`
+- [ ] `ruff` + `mypy packages/shared services/processor/persistence.py` yeşil
+
+**Bu iterasyonda yok:**
+- List/detail API, digest cross-ref, FE, seed fixture genişletme
+
+**Risk / dikkat:**
+- 5 schema döngüsü migration'da eksik kalırsa bir tablo drift — `002`/`003` migration döngü kalıbını kopyala
+- `category` extras key enricher'a bağlı — key adını değiştirme
+
+**Stop:**
+- [ ] `alembic upgrade head` && `alembic downgrade -1` && `alembic upgrade head`
+- [ ] `pytest tests/unit/processor/test_persistence.py tests/integration/test_content_category_migration.py -v`
+- [ ] PR/onay → İterasyon 2
+
+---
+
+### İterasyon 2 — List API + Cross-Schema Repository (6.2.2)
+
+**Hedef:** `GET /api/v1/admin/processed-items` cursor pagination + filtreler çalışır; admin-only; liste yanıtında `clean_content` yok; `digest_usages` özet batch lookup.
+
+**Teslim çıktısı:**
+- `apps/api/repositories/processed_item_repository.py` — UNION ALL list + cursor
+- `apps/api/repositories/digest_usage_repository.py` — batch `find_for_processed_item_ids`
+- `apps/api/services/content_archive_service.py`
+- `apps/api/schemas/content_archive.py`
+- `apps/api/routers/content_archive.py` — prefix `/admin/processed-items`
+- `apps/api/main.py` — router include
+- `tests/unit/api/test_content_archive_repository.py` — filtre/cursor unit (mock session)
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop (`content_category` kolonu mevcut)
+- [ ] `apps/api/repositories/audit_repository.py` cursor kalıbı okunmuş
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.2.2 — kapsam
+2. `Docs/03_API_CONTRACTS.md` §11.6 — list endpoint query/response
+3. `Docs/04_BACKEND_SPEC.md` §8.8 — repository + cursor `{schema}:{uuid}`
+4. `Docs/07_SECURITY_IMPLEMENTATION.md` §2 — `require_admin`
+5. `apps/api/repositories/audit_repository.py` — cursor pagination pattern
+
+**Uygulama planı:**
+1. `ProcessedItemListFilters` dataclass — tüm query param'lar (`Docs/03` §11.6)
+2. `processed_item_repository.list` — her schema için `select` + filtre; `union_all`; `order_by(processed_at.desc(), id.desc())`; cursor decode → `(processed_at, id, schema)` tuple filter; `limit+1` has_more
+3. Source join — `sources.id = processed_items.source_id` → `source_name`
+4. `digest_usage_repository.find_for_processed_item_ids` — `DigestSection` + `Digest` join; JSONB `source_references` içinde id eşleşmesi (Python parse veya `@>` tek id fragment)
+5. `content_archive_service.list_items` — repo list → batch digest lookup → `ContentArchiveListItem` (no clean_content)
+6. `content_archive.py` schemas — `DigestUsageSummary`, `ProcessedItemListItem`, `ProcessedItemListResponse`
+7. Router — `Depends(require_admin)`, query param validation (`q` min 2 char → 422), `limit` max 100
+8. Unit test — mock rows; cursor has_more; `schema_category` invalid → 422
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/api/repositories/processed_item_repository.py`, `digest_usage_repository.py`, `services/content_archive_service.py`, `schemas/content_archive.py`, `routers/content_archive.py`, `tests/unit/api/test_content_archive_repository.py` |
+| Güncelle | `apps/api/main.py` |
+| Dokunma | FE, detail endpoint (İter 3), processor |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Admin-only list | `Docs/03` §11.6 + §12 | `Depends(require_admin)` |
+| Filtre seti | `Docs/03` §11.6 | `topic` → GIN `@>` json array string |
+| Cursor format | `Docs/04` §8.8 | `{schema}:{uuid}` encode/decode helper |
+| Liste performans | `Docs/03` §11.6 | `clean_content` response'tan exclude |
+| Pagination limit | `Docs/03` §14 | default 20, max 100 |
+
+**Kalite kapıları:**
+- [ ] Pozitif: admin list 200 + pagination envelope
+- [ ] Deny: unauthenticated 401; viewer 403
+- [ ] `pytest tests/unit/api/test_content_archive_repository.py -v`
+- [ ] `ruff` + `mypy apps/api/repositories apps/api/services/content_archive_service.py apps/api/routers/content_archive.py` yeşil
+
+**Bu iterasyonda yok:**
+- Detail endpoint (`clean_content`), integration test (İter 3), FE, `has_digest` post-filter optimizasyonu (MVP: service-layer filter kabul)
+
+**Risk / dikkat:**
+- UNION ALL 5 schema büyük tabloda yavaş — MVP kabul; `schema_category` filtresi verilirse tek tablo sorgusu (optimizasyon)
+- `has_digest=true` pahalı olabilir — sayfa boyutu max 100 ile sınırla; Docs'ta bilinçli defer notu
+
+**Stop:**
+- [ ] `pytest tests/unit/api/test_content_archive_repository.py -v`
+- [ ] Manuel smoke: admin token ile `GET /api/v1/admin/processed-items?limit=5` → 200 JSON
+- [ ] PR/onay → İterasyon 3
+
+---
+
+### İterasyon 3 — Detail API + Integration Test (6.2.3)
+
+**Hedef:** `GET /api/v1/admin/processed-items/{id}?schema_category=…` tam metin + `chunk_count` + genişletilmiş `digest_usages`; integration test admin/viewer RBAC yeşil.
+
+**Teslim çıktısı:**
+- `processed_item_repository.get_by_id(schema, id)`
+- `content_archive_service.get_item_detail`
+- Router detail handler
+- `tests/integration/test_content_archive_api.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop (list API çalışır)
+- [ ] Integration test DB fixture pattern (`tests/integration/test_pipeline_api.py`)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.2.3 — kapsam
+2. `Docs/03_API_CONTRACTS.md` §11.6 — detail endpoint + `404 PROCESSED_ITEM_NOT_FOUND`
+3. `Docs/08_TESTING_STRATEGY.md` §3.8 — integration senaryoları
+4. `packages/shared/models/digest_section.py` — `source_references` JSONB yapısı
+5. `tests/integration/conftest.py` — admin/viewer client fixture'ları
+
+**Uygulama planı:**
+1. `get_by_id` — schema → model class; `select` + `joinedload` source; yoksa `NotFoundException` code `PROCESSED_ITEM_NOT_FOUND`
+2. `chunk_count` — `select count(*) from content_chunks where processed_item_id = …`
+3. Detail schema — `ProcessedItemDetailResponse` includes `clean_content`, `entities`, `chunk_count`, `digest_usages` with `section_title`
+4. `digest_usage_repository.find_for_processed_item_id` — tek id; section title extract
+5. Router GET `/{processed_item_id}` — required query `schema_category` enum validate
+6. Integration test — seed 1 processed_item + digest_section reference; admin list/detail 200; viewer 403; wrong schema 404
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `tests/integration/test_content_archive_api.py` |
+| Güncelle | `processed_item_repository.py`, `digest_usage_repository.py`, `content_archive_service.py`, `schemas/content_archive.py`, `routers/content_archive.py` |
+| Dokunma | FE (İter 4), processor |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| schema_category zorunlu | `Docs/03` §11.6 | Query param required; cross-schema lookup |
+| Tam metin yalnızca detail | `Docs/03` §11.6 | `clean_content` detail response only |
+| Bülten reverse ref | `Docs/01` ProcessedItem | `source_references[].processed_item_id` |
+| Viewer deny | `Docs/08` §3.8 | integration assert 403 |
+| Error code | `Docs/03` §11.6 | `PROCESSED_ITEM_NOT_FOUND` |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_content_archive_api.py -v`
+- [ ] Deny: viewer 403; missing schema_category 422
+- [ ] `ruff` + `mypy apps/api` (yeni modüller) yeşil
+
+**Bu iterasyonda yok:**
+- FE sayfa, export, full-text search index
+
+**Risk / dikkat:**
+- Integration seed'de `schema_category` query ile list'ten dönen id eşleşmeli — test helper'da ikisini birlikte döndür
+- `clean_content` audit log'a yazma — read-only endpoint
+
+**Stop:**
+- [ ] `pytest tests/integration/test_content_archive_api.py -v`
+- [ ] PR/onay → İterasyon 4
+
+---
+
+### İterasyon 4 — FE: İçerik Arşivi Liste + Detay Drawer (6.2.4)
+
+**Hedef:** `S-ADMIN-CONTENT-ARCHIVE` canlı — filtre bandı, DataTable, cursor "Daha fazla yükle", detay drawer, sidebar "İçerik Arşivi" linki; viewer sidebar'da link yok.
+
+**Teslim çıktısı:**
+- `apps/web/app/(dashboard)/admin/content-archive/page.tsx`
+- `components/admin/content-archive-filters.tsx`, `content-archive-table.tsx`, `content-archive-detail-drawer.tsx`
+- `hooks/use-content-archive.ts`, `use-content-archive-detail.ts`
+- `lib/content-archive-labels.ts`
+- `apps/web/lib/constants.ts` — `ADMIN_NAV_ITEMS` link
+- `apps/web/types/api.ts` — TS tipleri
+- `components/common/loading-skeleton.tsx` — `ContentArchiveSkeleton` (opsiyonel export)
+
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop (API integration yeşil)
+- [ ] `apps/web/app/(dashboard)/admin/audit-logs/page.tsx` filtre + infinite pattern
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.2.4 — kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-CONTENT-ARCHIVE (kolon, filtre, drawer)
+3. `Docs/05_FRONTEND_SPEC.md` — route `/admin/content-archive`, admin guard
+4. `Docs/03_API_CONTRACTS.md` §11.6 — FE query param eşlemesi
+5. `apps/web/hooks/use-audit-logs.ts` — cursor flatten pattern
+
+**Uygulama planı:**
+1. `content-archive-labels.ts` — `schema_category`, `content_category` TR label map; skor yüzde format
+2. `use-content-archive.ts` — React Query `useInfiniteQuery`; filtre değişince `queryKey` reset; `getNextPageParam` → `next_cursor`
+3. `content-archive-filters.tsx` — controlled state; kaynak dropdown `useSources`; filtreler `Docs/06` tablosu
+4. `content-archive-table.tsx` — DataTable kolonları; topics chip max 3; digest link chips → `/digests/{id}`
+5. `content-archive-detail-drawer.tsx` — sheet/drawer; `useContentArchiveDetail(id, schema)`; loading/error states
+6. `page.tsx` — `RoleGate`; filtre + table + "Daha fazla yükle" Button (`has_more`); empty states (`Docs/06`)
+7. `constants.ts` — `{ label: "İçerik Arşivi", href: "/admin/content-archive" }` Pipeline'dan sonra
+8. Manuel: admin login → filtre → drawer → bülten linki
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/admin/content-archive/page.tsx`, `components/admin/content-archive-*.tsx`, `hooks/use-content-archive.ts`, `hooks/use-content-archive-detail.ts`, `lib/content-archive-labels.ts` |
+| Güncelle | `lib/constants.ts`, `types/api.ts`, `loading-skeleton.tsx` (opsiyonel) |
+| Dokunma | Backend API, processor, mobil |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Ekran ID | `Docs/06` S-ADMIN-CONTENT-ARCHIVE | Route `/admin/content-archive` |
+| Pagination UX | `Docs/06` | Explicit button, not infinite scroll |
+| Admin-only nav | `Docs/06` rol tablosu | `ADMIN_NAV_ITEMS` only |
+| Detay API | `Docs/03` §11.6 | `schema_category` query from list row |
+| Min skor UI | `Docs/06` | FE 0–100 → API 0–1 divide |
+
+**Kalite kapıları:**
+- [ ] Admin UI: filtre + load more + drawer render
+- [ ] Viewer layout'ta nav link DOM'da yok (code review)
+- [ ] `npm run build` (apps/web) yeşil
+- [ ] TypeScript strict — yeni tiplerde `any` yok
+
+**Bu iterasyonda yok:**
+- Mobil RN ekranı, CSV export, inline edit, otomatik polling
+
+**Risk / dikkat:**
+- `schema_category` list row'dan detail'e taşınmalı — drawer açılışında zorunlu query
+- Uzun `clean_content` drawer'da scroll — layout shift önle skeleton
+
+**Stop:**
+- [ ] `npm run build` (apps/web)
+- [ ] Manuel smoke: admin → İçerik Arşivi → filtre → detay → bülten linki
+- [ ] Faz 6.2 Done Definition checklist
+- [ ] PR/onay → Faz 6.2 tamamlandı

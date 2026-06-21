@@ -224,7 +224,7 @@
 
 **Karar [PROC-002]:** Keyword matching yalnızca enrichment değil **gate** mekanizmasıdır. `sources.config.ingest_mode`: `"all"` (domain-specific kaynaklar, otomatik kabul) veya `"filtered"` (master keyword havuzunda ≥1 eşleşme zorunlu). Eşleşmeyen makaleler `processed_items` ve `content_chunks`'a yazılmaz. Gate normalize sonrası çalışır.
 
-**Karar [PROC-003]:** `relevance_score` deterministik formül: `keyword_intensity * 0.6 + freshness * 0.4`. Source reliability weight kaldırıldı — tüm kaynaklar admin-curated. Kategori çözümleme: en çok keyword eşleşmesi → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`.
+**Karar [PROC-003]:** `relevance_score` deterministik **saf keyword ilgisi** formülü: `0.7 * coverage + 0.3 * freq` — `coverage = min(eşleşen farklı keyword / 5, 1.0)`, `freq = min(ort geçiş / 3, 1.0)`. Source reliability weight kaldırıldı — tüm kaynaklar admin-curated. **Güncellik (freshness) skordan kaldırıldı** — bültenler tarih-pencereli seçildiğinden tüm adaylar aynı güncellik bandında; freshness konu-ilgisini bastırıyordu. Eski `eşleşen / master_havuz × freq` formülü keyword katkısını ~0.18'e ezdiğinden hiçbir haber %40'ı geçemiyordu. Eşleşme kelime-sınırı (`\b`) bazlı (substring değil). Kategori çözümleme: en çok keyword eşleşmesi → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`.
 
 Detay: `Docs/04_BACKEND_SPEC.md` §8.3–8.4; `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 3 §3.4–3.7.
 
@@ -275,6 +275,8 @@ Detay: `Docs/04_BACKEND_SPEC.md` §8.3–8.4; `Docs/10_IMPLEMENTATION_ROADMAP.md
 - **SMTP (harici):** E-posta bildirimleri kurumsal SMTP relay üzerinden (IaC dışı). [X-TS-006]
 
 **Karar [INF-003]:** Pipeline orkestrasyonu n8n kullanılmadan EventBridge → Lambda → SQS → Processor şeklinde kurulur. Her collector `BaseCollector` abstract class'ını implement eder; ana pipeline değişmeden yeni collector eklenebilir. [X-CODE-001]
+
+**Karar [PIPE-002]:** SQS mesajından `raw_items` ingest, ayrı Lambda consumer yerine **Processor Lambda giriş adımında** idempotent yapılır (`ingest_message` reuse). Gerekçe: topic-per-type kuyrukta tek consumer; Faz 6.1 ingest/process gözlem aşamaları ile uyum. ADR: `docs/adr/0001-processor-ingest-at-entry.md`. [X-CODE-001]
 
 **Karar [INF-004]:** Near-real-time tolerans 5-15 dakikadır. RSS 15 dk, piyasa API 5 dk, resmi duyurular 30 dk polling aralığıyla çalışır. [X-S-006]
 

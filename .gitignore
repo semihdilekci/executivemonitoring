@@ -44,3 +44,6 @@ Thumbs.db
 apps/mobile/.expo/
 apps/mobile/android/
 apps/mobile/ios/
+
+# Editor/agent debug logs
+.cursor/debug-*.log

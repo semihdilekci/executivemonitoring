@@ -5,13 +5,22 @@ import { apiClient } from "@/lib/api-client";
 import { queryKeys } from "@/lib/constants";
 import {
   getSessionReadIds,
+  isDigestReadApiSupported,
   markDigestReadApiSupported,
   updateSessionReadState,
 } from "@/lib/digest-read-cache";
 import type { ApiError } from "@/types/api";
 import { useAuth } from "./use-auth";
 
+function isReadEndpointUnavailable(error: ApiError): boolean {
+  return error.statusCode === 404 || error.statusCode === 405;
+}
+
 async function syncReadToApi(digestId: string, read: boolean): Promise<void> {
+  if (isDigestReadApiSupported() === false) {
+    return;
+  }
+
   try {
     if (read) {
       await apiClient.post(`/digests/${digestId}/read`);
@@ -21,7 +30,7 @@ async function syncReadToApi(digestId: string, read: boolean): Promise<void> {
     markDigestReadApiSupported(true);
   } catch (error) {
     const apiError = error as ApiError;
-    if (apiError.statusCode === 404 || apiError.statusCode === 405) {
+    if (isDigestReadApiSupported() === null && isReadEndpointUnavailable(apiError)) {
       markDigestReadApiSupported(false);
       return;
     }

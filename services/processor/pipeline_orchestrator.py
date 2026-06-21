@@ -7,6 +7,7 @@ import logging
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.collectors.persistence import IngestStatus, ingest_message
 from services.processor.base_processor import ProcessorChain, ProcessorStepError, with_dedup_first
 from services.processor.chunker import ChunkerProcessor
 from services.processor.config import get_processor_settings
@@ -72,8 +73,37 @@ class PipelineOrchestrator:
     def lifecycle(self) -> DbRawItemLifecycle:
         return self._lifecycle
 
-    async def process(self, item: ProcessorInput) -> ProcessedResult:
-        """Tek SQS mesajını işler; başarıda processed_items + content_chunks yazar."""
+    async def process(
+        self,
+        item: ProcessorInput,
+        *,
+        sqs_body: str | None = None,
+    ) -> ProcessedResult:
+        """Tek SQS mesajını işler; başarıda processed_items + content_chunks yazar.
+
+        `sqs_body` verilirse pipeline zincirinden **önce** idempotent `raw_item`
+        ingest çalışır (`Docs/04` §8.0, ADR-0001). Duplicate → skip, invalid → DLQ
+        path (failed). `sqs_body` None ise raw_item önceden seed edilmiş kabul edilir.
+        """
+        if sqs_body is not None:
+            ingest = await ingest_message(self._session, sqs_body, redis=self._redis)
+            if ingest.status is IngestStatus.DUPLICATE:
+                logger.info(
+                    "processor_ingest_duplicate",
+                    extra={
+                        "source_id": str(item.source_id),
+                        "content_hash": item.content_hash,
+                    },
+                )
+                return ProcessedResult(status="skipped", skip_reason="ingest_duplicate")
+            if ingest.status is IngestStatus.INVALID:
+                error_message = "ingest geçersiz mesaj"
+                logger.warning(
+                    "processor_ingest_invalid",
+                    extra={"source_id": str(item.source_id)},
+                )
+                return ProcessedResult(status="failed", error=error_message)
+
         await self._lifecycle.mark_processing(item)
         try:
             result = await self._chain.run(item)

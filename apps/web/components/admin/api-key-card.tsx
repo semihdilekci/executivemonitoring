@@ -54,7 +54,7 @@ export function ApiKeyCard({
       </div>
 
       <div className="rounded-md bg-gray-50 px-3 py-2 font-mono text-sm text-gray-600">
-        {formatMaskedApiKey(apiKey.key_alias, apiKey.provider, apiKey.key_suffix)}
+        {formatMaskedApiKey(apiKey.key_alias, apiKey.key_suffix)}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm">

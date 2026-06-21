@@ -25,7 +25,7 @@ export default function AdminAuditLogsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const usersQuery = useUsers({ limit: 100 });
+  const usersQuery = useUsers({ limit: 50 });
   const auditQuery = useAuditLogs({
     event_type: eventType || undefined,
     actor_user_id: actorUserId || undefined,

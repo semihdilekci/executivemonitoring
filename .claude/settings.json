@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(ps -o command= -p 43684)",
+      "Bash(curl -s -i -X POST http://localhost:8000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@ygip.test\",\"password\":\"DevPass1\"}')",
+      "Bash(curl -s -i -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@ygip.test\",\"password\":\"DevPass1\"}')",
+      "Read(//private/tmp/**)",
+      "Bash(rm -f cj.txt)",
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\n\" -c cj.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@ygip.test\",\"password\":\"DevPass1\"}')",
+      "Bash(awk '{print $6}')",
+      "Bash(curl -s -o /dev/null -w \"GET / -> status=%{http_code} redirect=%{redirect_url}\\\\n\" -b cj.txt http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"GET /login -> status=%{http_code} redirect=%{redirect_url}\\\\n\" -b cj.txt http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"GET /api/auth/session -> status=%{http_code}\\\\n\" -b cj.txt http://localhost:3000/api/auth/session)",
+      "Bash(git -C /Users/semihdilekci/Documents/ExecutiveMonitoring diff .cursor/rules/56-phase-06-web-frontend-fix.mdc)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(curl -s -o /dev/null -w \"fonts.googleapis: %{http_code} in %{time_total}s\\\\n\" --max-time 5 https://fonts.googleapis.com/)",
+      "Bash(curl -s http://localhost:3000/login)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(curl -s -i http://localhost:3000/login)",
+      "Bash(git -C /Users/semihdilekci/Documents/ExecutiveMonitoring diff HEAD -- apps/web/hooks/use-digests.ts apps/web/hooks/use-digest-read.ts apps/web/components/digest/read-toggle.tsx apps/web/lib/constants.ts)",
+      "Bash(xargs rg -ln \"digests/.*read|/read\\\\b|is_read\")"
+    ]
+  }
+}

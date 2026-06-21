@@ -203,6 +203,9 @@ const VIEWER_NAV_ITEMS = [
 | `/admin/prompt-templates` | Prompt şablon yönetimi | Admin | Auth + Role guard |
 | `/admin/api-keys` | API key yönetimi | Admin | Auth + Role guard |
 | `/admin/notifications` | Bildirim yönetimi + JWT ayarları | Admin | Auth + Role guard |
+| `/admin/pipeline` | Pipeline izleme (kokpit) — Faz 6.1 | Admin | Auth + Role guard |
+| `/admin/pipeline/[id]` | Pipeline run detayı (canlı timeline) — Faz 6.1 | Admin | Auth + Role guard |
+| `/admin/content-archive` | İçerik Arşivi — işlenmiş haber gezgini — Faz 6.2 | Admin | Auth + Role guard |
 | `/admin/chat-history` | Chatbot sohbet geçmişi | Admin | Auth + Role guard |
 | `/admin/audit-logs` | Audit log | Admin | Auth + Role guard |
 
@@ -587,6 +590,26 @@ export function useDigests() {
   });
 }
 ```
+
+**Canlı izleme (polling) — Pipeline Run (Faz 6.1):**
+
+Çalışan bir kaynağın durumu sunucu tarafında ilerlediğinde (pipeline run), React Query `refetchInterval` ile koşullu polling kullanılır. Terminal duruma ulaşınca polling kendini durdurur — sonsuz istek yok.
+
+```typescript
+export function usePipelineRun(runId: string) {
+  return useQuery({
+    queryKey: queryKeys.pipeline.run(runId),
+    queryFn: async () => (await apiClient.get<PipelineRunDetail>(`/pipeline/runs/${runId}`)).data,
+    // running/pending iken 3 sn'de bir; terminal statüde durur
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "running" || status === "pending" ? 3000 : false;
+    },
+  });
+}
+```
+
+Liste ekranı (S-ADMIN-PIPELINE) aynı koşullu yaklaşımı 5 sn aralıkla uygular: listede en az bir `running`/`pending` run varsa poll eder, hepsi terminal ise durur.
 
 **Digest Detay:**
 

@@ -8,20 +8,20 @@ Kaynak faz tipi → minimum docs: `.cursor/skills/phase-creator/docs-map.md`.
 
 ## Boyut özeti
 
-| ID  | Boyut               | Birincil spec                   | Kod kanıt yöntemi              |
-| --- | ------------------- | ------------------------------- | ------------------------------ |
-| D1  | Done Definition     | phase `.mdc` §Done Definition   | Checklist ↔ dosya/test varlığı |
-| D2  | İterasyon hedefleri | phase `.mdc` §İterasyon         | Modül/route/API listesi        |
-| D3  | API contract        | `Docs/03`                       | Controller, DTO, route prefix  |
-| D4  | Ekran kataloğu      | `Docs/06` S-\*                  | routes, pages, PermissionGate  |
-| D5  | DB şema             | `Docs/02`                       | `schema.prisma`, migrations    |
-| D6  | Güvenlik baseline   | `03`, `Docs/07`                 | Decorator, guard, masking grep |
-| D7  | Explicit Don'ts     | phase `.mdc`                    | Anti-pattern taraması          |
-| D8  | Scope creep         | phase `.mdc` §Files NOT touched | Yeni dosya vs izinli scope     |
-| D9  | Test & coverage     | `Docs/08`, Done Definition      | test dosyaları, CI script      |
-| D10 | Pattern tutarlılığı | `04`, glob 10–16                | Error code, Zod, audit outbox  |
-| D11 | Roadmap deliverable | `Docs/10` §Faz N                | Deliverable listesi            |
-| D12 | UAT hazırlık        | `Docs/11` §Faz N                | Not — otomatik PASS yok        |
+| ID | Boyut | Birincil spec | Kod kanıt yöntemi |
+| -- | ----- | ------------- | ----------------- |
+| D1 | Done Definition | phase `.mdc` §Done Definition | Checklist ↔ dosya/test varlığı |
+| D2 | İterasyon hedefleri | phase `.mdc` §İterasyon | Modül/route/API listesi |
+| D3 | API contract | `Docs/03` | Controller, DTO, route prefix |
+| D4 | Ekran kataloğu | `Docs/06` S-* | routes, pages, PermissionGate |
+| D5 | DB şema | `Docs/02` | `schema.prisma`, migrations |
+| D6 | Güvenlik baseline | `03`, `Docs/07` | Decorator, guard, masking grep |
+| D7 | Explicit Don'ts | phase `.mdc` | Anti-pattern taraması |
+| D8 | Scope creep | phase `.mdc` §Files NOT touched | Yeni dosya vs izinli scope |
+| D9 | Test & coverage | `Docs/08`, Done Definition | test dosyaları, CI script |
+| D10 | Pattern tutarlılığı | `04`, glob 10–16 | Error code, Zod, audit outbox |
+| D11 | Roadmap deliverable | `Docs/10` §Faz N | Deliverable listesi |
+| D12 | UAT hazırlık | `Docs/11` §Faz N | Not — otomatik PASS yok |
 
 ---
 
@@ -60,12 +60,12 @@ Kaynak faz tipi → minimum docs: `.cursor/skills/phase-creator/docs-map.md`.
 5. Zod DTO — `packages/dto` import
 6. Error code — `packages/shared/constants/error-codes.ts` domain pattern
 
-| Sapma                  | Tip      | Severity              |
-| ---------------------- | -------- | --------------------- |
-| Endpoint yok           | MISSING  | BLOCKER (core) / HIGH |
-| Policy eksik           | SECURITY | BLOCKER               |
-| Audit eksik (mutating) | SECURITY | HIGH                  |
-| Yanlış path/method     | WRONG    | HIGH                  |
+| Sapma | Tip | Severity |
+| ----- | --- | -------- |
+| Endpoint yok | MISSING | BLOCKER (core) / HIGH |
+| Policy eksik | SECURITY | BLOCKER |
+| Audit eksik (mutating) | SECURITY | HIGH |
+| Yanlış path/method | WRONG | HIGH |
 
 ---
 
@@ -73,7 +73,7 @@ Kaynak faz tipi → minimum docs: `.cursor/skills/phase-creator/docs-map.md`.
 
 **Yöntem:**
 
-1. `Docs/06` S-\* ID listesi (phase Required Context)
+1. `Docs/06` S-* ID listesi (phase Required Context)
 2. `apps/web/src/routes/` + `features/**/pages/`
 3. PermissionGate / RoleGuard — UX only notu; backend deny ayrı D6
 4. TR UI label spot-check (opsiyonel LOW)
@@ -99,14 +99,14 @@ Eksik tablo/kolon → BLOCKER (data model). Index eksik → MEDIUM (Faz 11 defer
 
 `03-security-baseline.mdc` 6'lı checklist — faz kapsamına giren maddeler:
 
-| #   | Kontrol        | Kanıt                                  |
-| --- | -------------- | -------------------------------------- |
-| 1   | Auth/session   | auth modülü, cookie flags test         |
-| 2   | Authz 3-katman | PolicyGuard, PolicyScope, FieldMasking |
-| 3   | Encryption     | CryptoService usage                    |
-| 4   | Input/dosya    | Zod whitelist, upload pipeline         |
-| 5   | Audit          | outbox same tx                         |
-| 6   | KVKK/non-prod  | seed sentetik, template no PII         |
+| # | Kontrol | Kanıt |
+| --- | ------- | ----- |
+| 1 | Auth/session | auth modülü, cookie flags test |
+| 2 | Authz 3-katman | PolicyGuard, PolicyScope, FieldMasking |
+| 3 | Encryption | CryptoService usage |
+| 4 | Input/dosya | Zod whitelist, upload pipeline |
+| 5 | Audit | outbox same tx |
+| 6 | KVKK/non-prod | seed sentetik, template no PII |
 
 İhlal → `SECURITY` BLOCKER veya HIGH.
 
@@ -146,12 +146,12 @@ phase `.mdc` §Explicit Don'ts — her madde:
 3. CI komut çıktısı (read-only)
 4. Coverage script varsa eşik
 
-| Durum              | Tip      | Severity            |
-| ------------------ | -------- | ------------------- |
-| Test dosyası yok   | TEST_GAP | HIGH (kritik modül) |
-| Deny senaryosu yok | TEST_GAP | HIGH                |
-| CI fail            | TEST_GAP | BLOCKER             |
-| Coverage <% eşik   | TEST_GAP | HIGH                |
+| Durum | Tip | Severity |
+| ----- | --- | -------- |
+| Test dosyası yok | TEST_GAP | HIGH (kritik modül) |
+| Deny senaryosu yok | TEST_GAP | HIGH |
+| CI fail | TEST_GAP | BLOCKER |
+| Coverage <% eşik | TEST_GAP | HIGH |
 
 ---
 
@@ -190,24 +190,24 @@ Sapma → `PATTERN` MEDIUM.
 
 ## Faz tipine göre minimum boyut seti
 
-| Faz tipi           | Zorunlu boyutlar                |
-| ------------------ | ------------------------------- |
-| Scaffold / infra   | D1, D8, D9, D11                 |
-| Backend API        | D1–D3, D6–D9, D11               |
-| Frontend ekran     | D1, D2, D4, D8, D9, D11         |
-| Full-stack         | D1–D11 (D12 opsiyonel F9+)      |
-| Admin              | D1–D11 + maker-checker D6/D7    |
-| Security hardening | D6, D7, D9, D11, D12            |
-| Performance        | D9, D11 (+ D5 index defer notu) |
+| Faz tipi | Zorunlu boyutlar |
+| -------- | ---------------- |
+| Scaffold / infra | D1, D8, D9, D11 |
+| Backend API | D1–D3, D6–D9, D11 |
+| Frontend ekran | D1, D2, D4, D8, D9, D11 |
+| Full-stack | D1–D11 (D12 opsiyonel F9+) |
+| Admin | D1–D11 + maker-checker D6/D7 |
+| Security hardening | D6, D7, D9, D11, D12 |
+| Performance | D9, D11 (+ D5 index defer notu) |
 
 ---
 
 ## Kanıt kalite seviyesi
 
-| Seviye | Açıklama                     | Kabul       |
-| ------ | ---------------------------- | ----------- |
-| A      | path:satır + spec § referans | ✅ Tercih   |
-| B      | grep sayısı + dosya listesi  | ✅          |
-| C      | "modül mevcut" genel ifade   | ❌ Yetersiz |
+| Seviye | Açıklama | Kabul |
+| ------ | -------- | ----- |
+| A | path:satır + spec § referans | ✅ Tercih |
+| B | grep sayısı + dosya listesi | ✅ |
+| C | "modül mevcut" genel ifade | ❌ Yetersiz |
 
 Bulgu C seviyesindeyse rapora **yazma** — daha fazla araştır.

@@ -62,6 +62,7 @@ class ProcessedItem(Base, UUIDPrimaryKeyMixin):
         server_default=func.now(),
     )
     schema_category: Mapped[str] = mapped_column(String(50), nullable=False)
+    content_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
 
 def _processed_item_table_args(schema: str) -> tuple[Any, ...]:
@@ -84,6 +85,10 @@ def _processed_item_table_args(schema: str) -> tuple[Any, ...]:
             f"idx_{schema}_processed_items_entities",
             "entities",
             postgresql_using="gin",
+        ),
+        Index(
+            f"idx_{schema}_processed_items_content_category",
+            "content_category",
         ),
         {"schema": schema},
     )

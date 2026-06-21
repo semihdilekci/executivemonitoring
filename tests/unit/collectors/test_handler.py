@@ -12,6 +12,7 @@ from services.collectors.handler import (
     COLLECTOR_MAP,
     lambda_handler,
     run_collector_batch,
+    run_collector_for_source,
 )
 from services.collectors.models import RawArticle
 from services.collectors.source_lifecycle import InMemorySourceFetchLifecycle
@@ -134,3 +135,47 @@ async def test_run_collector_batch_counts_failed_sources() -> None:
     assert results["sources_failed"] == 1
     assert results["sources_processed"] == 0
     assert source.error_count == 1
+
+
+@pytest.mark.asyncio
+async def test_run_collector_batch_counts_empty_sources() -> None:
+    source = _make_source()
+    empty = _StubCollector([])  # çekim başarılı ama 0 makale
+    COLLECTOR_MAP["rss"] = empty  # type: ignore[assignment]
+    publisher = AsyncMock()
+    lifecycle = InMemorySourceFetchLifecycle({source.id: source})
+
+    results = await run_collector_batch(
+        "rss",
+        [source],
+        publisher,
+        lifecycle=lifecycle,
+    )
+
+    assert results["sources_processed"] == 1
+    assert results["sources_failed"] == 0
+    assert results["sources_empty"] == 1
+    assert results["published"] == 0
+
+
+@pytest.mark.asyncio
+async def test_run_collector_for_source_warns_on_zero_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    source = _make_source()
+    empty = _StubCollector([])
+    publisher = AsyncMock()
+    lifecycle = InMemorySourceFetchLifecycle({source.id: source})
+
+    with caplog.at_level("WARNING", logger="ygip.collectors.handler"):
+        count = await run_collector_for_source(
+            empty,  # type: ignore[arg-type]
+            source,
+            publisher,
+            lifecycle=lifecycle,
+        )
+
+    assert count == 0
+    # Çekim başarılı sayılır (hata değil) ama uyarı ile görünür kılınır.
+    assert source.error_count == 0
+    assert any(record.message == "collector_zero_content" for record in caplog.records)

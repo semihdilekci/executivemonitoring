@@ -11,6 +11,8 @@ from packages.shared.models.digest_section import DigestSection
 from packages.shared.models.notification_log import NotificationLog
 from packages.shared.models.notification_preference import NotificationPreference
 from packages.shared.models.password_reset_token import PasswordResetToken
+from packages.shared.models.pipeline_run import PipelineRun
+from packages.shared.models.pipeline_run_step import PipelineRunStep
 from packages.shared.models.processed_item import (
     PROCESSED_ITEM_MODELS,
     FmcgProcessedItem,
@@ -45,6 +47,8 @@ __all__ = [
     "NotificationPreference",
     "PROCESSED_ITEM_MODELS",
     "PasswordResetToken",
+    "PipelineRun",
+    "PipelineRunStep",
     "ProcessedItem",
     "PromptTemplate",
     "RawItem",

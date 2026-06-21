@@ -173,9 +173,9 @@ class DigestGenerator:
                 {
                     "article_count": len(articles),
                     "section_count": len(digest_sections),
-                    "providers_used": list(
+                    "providers_used": sorted(
                         {
-                            section.prompt_template_id
+                            str(section.prompt_template_id)
                             for section in digest_sections
                             if section.prompt_template_id is not None
                         }

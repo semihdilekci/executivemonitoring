@@ -113,6 +113,13 @@ async def persist_pipeline_output(
     entities_raw = output.extras.get("entities", [])
     entities: list[Any] = list(entities_raw) if isinstance(entities_raw, list) else []
 
+    category_raw = output.extras.get("category")
+    content_category = (
+        category_raw.strip()
+        if isinstance(category_raw, str) and category_raw.strip()
+        else None
+    )
+
     processed_item = model_cls(
         raw_item_id=raw_item_id,
         source_id=output.source_id,
@@ -124,6 +131,7 @@ async def persist_pipeline_output(
         entities=entities,
         published_at=output.published_at,
         schema_category=schema_category,
+        content_category=content_category,
     )
     session.add(processed_item)
     await session.flush()

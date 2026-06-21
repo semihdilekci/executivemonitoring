@@ -8,6 +8,7 @@ from typing import Any
 
 from packages.shared.enums import SourceStatus, SourceType
 from packages.shared.models.source import Source
+from redis.asyncio import Redis
 
 from services.collectors.base_collector import BaseCollector
 from services.collectors.email_collector import EmailCollector
@@ -66,6 +67,21 @@ async def run_collector_for_source(
     try:
         articles = await with_retry(lambda: collector.collect(source))
         count = await collector.process_articles(source, articles, publisher)
+        if count == 0:
+            # Çekim teknik olarak başarılı ama hiç içerik yayınlanmadı — sessiz
+            # "başarı/0 içerik" durumu yanlış konfigürasyonu (ör. bayatlamış RSS
+            # URL'si, RSS bekleyip JSON dönen endpoint) maskeler. raw_count ayrımı:
+            # 0 ise kaynak hiç içerik döndürmedi (feed/API sorunu); >0 ise tüm
+            # makaleler validation/dedup'ta düştü.
+            logger.warning(
+                "collector_zero_content",
+                extra={
+                    "source_id": str(source.id),
+                    "source_name": source.name,
+                    "source_type": source.source_type.value,
+                    "raw_count": len(articles),
+                },
+            )
         await fetch_lifecycle.record_success(source.id)
         return count
     except Exception as exc:
@@ -87,6 +103,7 @@ async def run_collector_batch(
     audit_logger: CollectionAuditLogger | None = None,
     notifier: CollectionNotifier | None = None,
     lifecycle: SourceFetchLifecycle | None = None,
+    redis_client: Redis | None = None,
 ) -> dict[str, int]:
     """Aktif kaynak listesi üzerinde collector çalıştırır."""
     collector = COLLECTOR_MAP.get(source_type)
@@ -94,8 +111,17 @@ async def run_collector_batch(
         msg = f"Collector tanımlı değil: source_type={source_type}"
         raise KeyError(msg)
 
+    # URL-cache (tekrar fetch önleme) için redis'i singleton collector'a bağla.
+    if redis_client is not None:
+        collector.bind_redis(redis_client)
+
     sqs = publisher or SQSPublisher()
-    results: dict[str, int] = {"published": 0, "sources_processed": 0, "sources_failed": 0}
+    results: dict[str, int] = {
+        "published": 0,
+        "sources_processed": 0,
+        "sources_failed": 0,
+        "sources_empty": 0,
+    }
 
     for source in sources:
         try:
@@ -109,6 +135,10 @@ async def run_collector_batch(
             )
             results["published"] += count
             results["sources_processed"] += 1
+            # "İşlendi ama 0 içerik" sayısı — pipeline özetinde dejenere kaynakları
+            # görünür kılar (başarılı görünüp içerik düşmeyen kaynaklar).
+            if count == 0:
+                results["sources_empty"] += 1
         except Exception:
             results["sources_failed"] += 1
             logger.exception(

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aws_cdk import Duration
+from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_lambda as lambda_
@@ -19,7 +21,25 @@ if TYPE_CHECKING:
     from aws_cdk.aws_iam import Role
     from aws_cdk.aws_sqs import Queue
 
+# Bundle artifact (`scripts/build_lambda.sh collector` → dist/lambda/collector/);
+# unified `services.collectors.handler.lambda_handler` giriş noktası içerir.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_BUNDLE_DIR = _REPO_ROOT / "dist" / "lambda" / "collector"
+# Bundle build edilmediğinde (CI synth) synth'in geçmesi için minimal placeholder.
 _LAMBDA_STUB_DIR = Path(__file__).resolve().parent / "lambda_stub"
+
+_COLLECTOR_HANDLER = "services.collectors.handler.lambda_handler"
+
+
+def _resolve_collector_code() -> lambda_.Code:
+    """Deploy'da bundle artifact'ı, yoksa (CI synth) stub placeholder'ı kullan.
+
+    Gerçek deploy öncesi `./scripts/build_lambda.sh collector` zorunlu — aksi
+    halde stub placeholder ile synth geçer ama runtime handler bulunamaz
+    (`infra/README.md` Lambda Bundle).
+    """
+    asset_dir = _BUNDLE_DIR if _BUNDLE_DIR.is_dir() else _LAMBDA_STUB_DIR
+    return lambda_.Code.from_asset(str(asset_dir))
 
 
 class CollectorOrchestration(Construct):
@@ -32,9 +52,13 @@ class CollectorOrchestration(Construct):
         *,
         lambda_role: Role,
         queues: dict[str, Queue],
+        vpc: ec2.IVpc,
+        security_group: ec2.ISecurityGroup,
     ) -> None:
         super().__init__(scope, construct_id)
 
+        self._vpc = vpc
+        self._security_group = security_group
         self.functions: dict[str, lambda_.Function] = {}
 
         for schedule in COLLECTOR_SCHEDULES:
@@ -67,14 +91,24 @@ class CollectorOrchestration(Construct):
             function_name=function_name,
             description=f"YGIP {source_type} collector — EventBridge scheduled",
             runtime=lambda_.Runtime.PYTHON_3_12,
-            handler="handler.lambda_handler",
-            code=lambda_.Code.from_asset(str(_LAMBDA_STUB_DIR)),
+            handler=_COLLECTOR_HANDLER,
+            code=_resolve_collector_code(),
             role=lambda_role,
             memory_size=schedule.memory_mb,
             timeout=Duration.seconds(schedule.timeout_seconds),
+            # RDS VPC-internal — collector `load_active_sources` için VPC erişimi
+            # zorunlu (`Docs/09` §7.3). RDS SG, VPC CIDR'den 5432 ingress'e izin verir.
+            vpc=self._vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            security_groups=[self._security_group],
             environment={
+                # AWS_REGION Lambda runtime tarafından otomatik sağlanır (reserved key).
                 "ENVIRONMENT": ENVIRONMENT,
                 env_key: queue.queue_url,
+                # Secret değil, deploy-time param (`Docs/09` §7); commit edilmez,
+                # `cdk deploy` öncesi export edilir (`infra/README.md`).
+                "DATABASE_URL": os.environ.get("DATABASE_URL", ""),
+                "REDIS_URL": os.environ.get("REDIS_URL", ""),
             },
             log_group=log_group,
         )

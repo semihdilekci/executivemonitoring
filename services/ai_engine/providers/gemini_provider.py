@@ -20,7 +20,10 @@ from services.ai_engine.providers.base import LLMProvider
 
 logger = logging.getLogger("ygip.ai_engine.gemini")
 
-DEFAULT_GEMINI_MODEL = "gemini-1.5-flash"
+# Güncel GA model — `gemini-1.5-flash` Generative Language API'de emekliye ayrıldı (404).
+# `flash-lite` digest gibi uzun yapılandırılmış çıktıda güvenilir (thinking modeli çıktıyı
+# kısaltmaz) ve hızlıdır. `GEMINI_MODEL` env ile override edilebilir (`llm_client_factory`).
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
@@ -43,7 +46,7 @@ class GeminiProvider(LLMProvider):
         key_id: UUID,
         model: str = DEFAULT_GEMINI_MODEL,
         is_active: bool = True,
-        timeout_seconds: float = 60.0,
+        timeout_seconds: float = 120.0,
     ) -> None:
         if not api_key.strip():
             msg = "Gemini API key boş"

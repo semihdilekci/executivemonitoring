@@ -507,6 +507,10 @@ Admin panelinden eklenen LLM API key'leri (Groq, Gemini) veritabanında şifrele
 | `digest.started` | Digest üretimi başladı | Sistem (cron) |
 | `digest.completed` | Digest başarıyla üretildi | Sistem |
 | `digest.failed` | Digest üretimi başarısız | Sistem |
+| `pipeline.triggered` | Manuel pipeline run tetiklendi (Faz 6.1) | Admin |
+| `pipeline.completed` | Pipeline run tamamlandı (completed/partial) | Sistem |
+| `pipeline.failed` | Pipeline run başarısız | Sistem |
+| `pipeline.cancelled` | Pipeline run admin tarafından iptal edildi | Admin |
 | `settings.updated` | Sistem ayarı değiştirildi | Admin |
 | `password.reset_initiated` | Şifre sıfırlama başlatıldı | Admin |
 | `password.reset_completed` | Şifre sıfırlama tamamlandı | Kullanıcı (token ile) |

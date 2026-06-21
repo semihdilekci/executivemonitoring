@@ -1,0 +1,584 @@
+---
+description: "[Faz 6.1] Pipeline Monitoring kokpiti — gerçek-zamanlı orkestrasyon: manuel collect→process→digest tetikleme + adım-adım canlı izleme. 8 iterasyon/chat (DB → orkestratör → collect → process → digest → API → FE liste → FE detay). Mesajda \"Faz 6.1 — İterasyon M\" belirt."
+---
+
+# Faz 6.1: Pipeline Monitoring (Süreç Kokpiti)
+
+## Goal
+
+Admin'in `collect → ingest → process → digest` pipeline'ını (seçili kaynak tipleriyle) ve bülten güncellemesini **manuel tetikleyip** her aşamayı **gerçek-zamanlı izlediği** `S-ADMIN-PIPELINE` kokpiti. Her tetikleme `pipeline_runs` olarak tarihsel kaydedilir; uygulama-seviyesi kalıcı state-machine orkestratör aşamaları otomatik ilerletir, collector Lambda'larını invoke eder, SQS/processed gözlemiyle ilerlemeyi `pipeline_run_steps`'e yazar. Hata/aksaklık ekranda teşhis edilebilir. Detay `Docs/10` Faz 6.1.
+
+## Feature branch (zorunlu)
+
+Bu faz **kendi feature branch'inde**: `feature/f61-pipeline-monitoring` (`48-git-phase-branch.mdc`). MVP-0'a bilinçli operasyonel ekleme; `main`'de faz kodu yok.
+
+**Stop (İterasyon 1, kod öncesi):** [ ] `main` güncel; [ ] `feature/f61-pipeline-monitoring` oluşturuldu; [ ] `git push -u origin HEAD`; [ ] Faz 0–4 migration'ları (`001`–`004`) local'de `alembic upgrade head` ile uygulanmış.
+
+## Bu fazın çalışma modeli
+
+- Tek sohbet fazı bitirmez. Her chat: `@59-phase-061-pipeline-monitoring` + **「Faz 6.1 — İterasyon M」**.
+- Katman sırası: **DB → orkestratör çekirdek → stage adapter'ları (collect/process/digest) → API → FE (liste, detay)** — karıştırma.
+- Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil. Plan moduna geçme — iterasyon blueprint yeterli.
+- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Collector/processor/ai-engine iş mantığı **değişmez** — yalnızca invoke + gözlem adapter eklenir; EventBridge cron'a dokunulmaz.
+
+---
+
+### İterasyon 1 — Pipeline Run DB + Domain (6.1.1)
+
+**Hedef:** `pipeline_runs` + `pipeline_run_steps` tabloları, 4 enum ve `005_pipeline_tables.py` migration; `alembic upgrade head` + downgrade round-trip ve integration test yeşil.
+
+**Teslim çıktısı:**
+- `packages/shared/enums.py` — `PipelineRunType`, `PipelineRunStatus`, `PipelineStage`, `PipelineStepStatus`
+- `packages/shared/models/pipeline_run.py`, `pipeline_run_step.py` + `__init__.py` export
+- `alembic/versions/005_pipeline_tables.py` (down_revision `004_notification_logs`)
+- `tests/integration/test_pipeline_migration.py`
+
+**Önkoşullar:**
+- [ ] Feature branch Stop tamam
+- [ ] `004_notification_logs` uygulanmış (`alembic current` = 004)
+
+**Docs okuma sırası:** (yalnızca bunları — sırayla)
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.1 — iterasyon kapsamı ve çıktı listesi
+2. `Docs/02_DATABASE_SCHEMA.md` §3 + §4.18–4.19 — enum + tablo DDL, index/constraint isimleri
+3. `Docs/01_DOMAIN_MODEL.md` §2.18–2.19, §5.5 — entity alanları + run state machine
+4. `Docs/09_DEV_WORKFLOW.md` §8.1–8.2 — migration oluşturma, downgrade zorunluluğu
+
+**Uygulama planı:**
+1. `enums.py` — 4 enum'u mevcut enum kalıbıyla ekle; PostgreSQL TYPE adları `Docs/02` §3 ile birebir (`pipeline_run_type_enum` …)
+2. `models/pipeline_run.py` — `base.py` UUID PK + timestamp mixin; alanlar `Docs/02` §4.18; `triggered_by` FK `ON DELETE SET NULL`; JSONB default'lar
+3. `models/pipeline_run_step.py` — `run_id` FK CASCADE; `uq_pipeline_run_steps_run_id_stage` unique; sayaç kolonları `Docs/02` §4.19
+4. `005_pipeline_tables.py` — enum CREATE TYPE → tablolar → index'ler; `downgrade()` drop sırası tersine + enum DROP
+5. `tests/integration/test_pipeline_migration.py` — `upgrade head` sonrası tablo+enum varlığı, `downgrade -1` + tekrar `upgrade` round-trip (PG yoksa skip)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `packages/shared/models/pipeline_run.py`, `pipeline_run_step.py`, `alembic/versions/005_pipeline_tables.py`, `tests/integration/test_pipeline_migration.py` |
+| Güncelle | `packages/shared/enums.py`, `packages/shared/models/__init__.py` |
+| Dokunma | Orkestratör servis, router, FE (sonraki iterasyonlar), mevcut `001`–`004` migration'lar |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| 4 pipeline enum | `Docs/02` §3 | TYPE adı + değerler birebir; SQLAlchemy `Enum(name=...)` |
+| `pipeline_runs` kolonları | `Docs/02` §4.18 | `source_types`/`params`/`stats` JSONB; `triggered_by` SET NULL |
+| `pipeline_run_steps` unique | `Docs/02` §4.19 | `uq_pipeline_run_steps_run_id_stage`; `run_id` CASCADE |
+| State machine başlangıç | `Docs/01` §5.5 | run default `pending`, step default `pending` |
+| Migration zinciri | `Docs/02` §7 | down_revision `004_notification_logs` |
+
+**Kalite kapıları:**
+- [ ] `alembic upgrade head` + `alembic downgrade -1` + `upgrade head` yeşil
+- [ ] `pytest tests/integration/test_pipeline_migration.py -v`
+- [ ] `ruff` + `mypy packages/shared` yeşil
+- [ ] Raw SQL yok — yalnızca Alembic `op.*` + enum CREATE (`03-security-baseline`)
+
+**Bu iterasyonda yok:**
+- Orkestratör servis, stage executor, API endpoint, FE — yalnızca DB + model + migration
+
+**Risk / dikkat:**
+- Autogenerate enum'ları yanlış çıkarabilir — migration'ı **elle** yaz, `op.execute` ile CREATE TYPE (`Docs/09` §8.2)
+- `005` down_revision yanlış zincirlenirse `upgrade` kırılır — `alembic history` ile doğrula
+
+**Stop:**
+- [ ] `alembic upgrade head` && `alembic downgrade -1` && `alembic upgrade head`
+- [ ] `pytest tests/integration/test_pipeline_migration.py -v`
+- [ ] PR/onay → İterasyon 2
+
+---
+
+### İterasyon 2 — Orkestratör Çekirdeği (State Machine) (6.1.2)
+
+**Hedef:** Run'ı `pending → running → completed/partial/failed/cancelled` ilerleten, her step geçişini kalıcılaştıran idempotent orkestratör + stub stage executor'lar; unit testler yeşil (gerçek invoke yok).
+
+**Teslim çıktısı:**
+- `services/orchestrator/run_repository.py` — run/step CRUD + transaction'lı status transition
+- `services/orchestrator/stage_executors.py` — `StageExecutor` arayüzü + 4 stub executor (sayaç döndüren placeholder)
+- `services/orchestrator/pipeline_orchestrator.py` — state machine advance loop
+- `tests/unit/orchestrator/test_pipeline_orchestrator.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop (tablolar + model)
+- [ ] `services/orchestrator/__init__.py` mevcut (yoksa oluştur)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.2 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §10.5 — orkestratör bileşenleri, aşama yürütme modeli, hata politikası
+3. `Docs/01_DOMAIN_MODEL.md` §5.5 — geçiş kuralları (partial/failed/skipped)
+4. `Docs/04_BACKEND_SPEC.md` §6 — repository katmanı kalıbı (tek entity sorumluluğu)
+
+**Uygulama planı:**
+1. `run_repository.py` — `create_run`, `init_steps` (collect=1…digest=4 veya digest_update için tek digest), `advance_step(status, counts, detail, error)`, `finalize_run(status, error_summary)`; audit hook'u İterasyon 6'da bağlanacak (şimdilik no-op parametre)
+2. `stage_executors.py` — `class StageExecutor(Protocol): async def run(self, run, step) -> StepResult`; `StepResult` dataclass (`items_in/out/failed`, `detail`, `error`); 4 stub (`Collect/Ingest/Process/Digest`) sabit/parametrik sonuç döner
+3. `pipeline_orchestrator.py` — `async def drive(run_id)`: run'ı `running` yap → `sequence` sırasında step'leri sür → executor sonucuna göre `advance_step` → hata politikası (`Docs/01` §5.5) → `finalize_run`; **idempotent**: `completed` step atla
+4. `digest_update` dalı — yalnızca digest step koşar, collect/ingest/process `skipped`
+5. `tests/unit/orchestrator/test_pipeline_orchestrator.py` — happy path (4 step completed → run completed); bir executor `error` → `partial`; kritik collect boş → sonrası `skipped`, run `failed`; idempotent re-drive
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/orchestrator/run_repository.py`, `stage_executors.py`, `pipeline_orchestrator.py`, `__init__.py`, `tests/unit/orchestrator/test_pipeline_orchestrator.py` |
+| Güncelle | — |
+| Dokunma | Gerçek collector/SQS/digest invoke (İter 3–5), router (İter 6), FE |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Run state machine | `Docs/01` §5.5 | `running → completed/partial/failed/cancelled` |
+| Idempotent advance | `Docs/04` §10.5 | `completed` step yeniden koşmaz |
+| Hata politikası | `Docs/04` §10.5 | kaynak hata → `partial`; kritik boş → `failed` + sonrası `skipped` |
+| StageExecutor sözleşmesi | `Docs/04` §10.5 | `async run(run, step) -> StepResult` |
+| digest_update dalı | `Docs/01` §5.5 | collect/ingest/process `skipped` |
+
+**Kalite kapıları:**
+- [ ] Pozitif: 4 step → run `completed`
+- [ ] Deny/edge: executor hata → `partial`; kritik boş → `failed`; idempotent re-drive
+- [ ] `pytest tests/unit/orchestrator -v` yeşil
+- [ ] `ruff` + `mypy services/orchestrator` yeşil
+
+**Bu iterasyonda yok:**
+- Gerçek Lambda invoke / SQS gözlem / digest çağrısı (stub kalır); API; FE; IAM
+
+**Risk / dikkat:**
+- Orkestratör **kendi DB session**'ını yönetmeli (background driver) — request session'ı kullanma; `Docs/04` §10.5 `session_factory` notu
+- State transition'lar transaction içinde; yarım kalan run "running" takılmasın → finalize her dalda garanti
+
+**Stop:**
+- [ ] `pytest tests/unit/orchestrator -v`
+- [ ] `ruff check services/orchestrator` && `mypy services/orchestrator`
+- [ ] PR/onay → İterasyon 3
+
+---
+
+### İterasyon 3 — Collect + Ingest Stage Adapter (6.1.3)
+
+**Hedef:** Stub yerine gerçek `CollectStageExecutor` (seçili `source_type` collector Lambda'larını boto3 invoke) + `IngestStageExecutor` (`raw_items` artış gözlemi); IAM `lambda:InvokeFunction` izni; unit testler (invoke mock) yeşil.
+
+**Teslim çıktısı:**
+- `CollectStageExecutor` + `IngestStageExecutor` (gerçek implementasyon, `stage_executors.py`)
+- `services/orchestrator/aws_clients.py` — boto3 lambda client wrapper + queue/lambda adı çözümleme
+- IAM güncellemesi: orkestratör role'üne collector Lambda invoke izni (`infra/`)
+- `tests/unit/orchestrator/test_collect_stage.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop (orkestratör + stub'lar)
+- [ ] Faz 2 collector Lambda adları/handler'ları mevcut (`services/collectors/handler.py`)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.3 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §7 — collector framework + Lambda handler, source_type → Lambda eşlemesi
+3. `Docs/04_BACKEND_SPEC.md` §10.5 — collect/ingest yürütme modeli + IAM notu
+4. `.cursor/rules/30-infra-aws.mdc` — kaynak adlandırma `{env}-ygip-*`, IAM least-privilege
+5. `Docs/04_BACKEND_SPEC.md` §12 — environment-scoped resource ARN çözümleme
+
+**Uygulama planı:**
+1. `aws_clients.py` — `lambda:InvokeFunction` çağrısı; Lambda adı `{env}-ygip-{type}-collector` çözümleme (`Docs/04` §7, §12)
+2. `CollectStageExecutor.run` — `run.source_types` (`["all"]` → aktif tipler) için collector Lambda'ları invoke; kaynak bazlı ok/failed → `StepResult.detail` (`{rss:{ok},gov:{ok},email:{failed}}`); request id'leri detail'e
+3. `IngestStageExecutor.run` — invoke öncesi/sonrası `raw_items` (status=pending) sayısını oku; delta = ingested; timeout'lu kısa gözlem; sayaçları step'e
+4. IAM: `infra/` orkestratör role policy'sine collector Lambda ARN'leri için `lambda:InvokeFunction` (env-scoped); `synth`/`plan` doğrula
+5. `tests/unit/orchestrator/test_collect_stage.py` — boto3 invoke **mock** (moto veya monkeypatch); tek tip başarı, bir tip hata → `partial` detail, `all` genişletme
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/orchestrator/aws_clients.py`, `tests/unit/orchestrator/test_collect_stage.py` |
+| Güncelle | `services/orchestrator/stage_executors.py` (Collect+Ingest gerçek impl), `infra/**` (IAM policy) |
+| Dokunma | `services/collectors/**` iş mantığı (yalnızca invoke — değiştirme), processor, digest |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| source_type → Lambda | `Docs/04` §7 | `{env}-ygip-{type}-collector` |
+| Collect invoke + sayaç | `Docs/04` §10.5 | kaynak bazlı ok/failed `detail`'e |
+| Ingest gözlem | `Docs/04` §10.5 | `raw_items` (pending) delta |
+| IAM invoke izni | `30-infra-aws` | env-scoped ARN, least-privilege |
+| Collector dokunulmaz | `Docs/10` §6.1 Don'ts | yalnızca invoke; cron değişmez |
+
+**Kalite kapıları:**
+- [ ] Pozitif: 2 tip invoke → ingested sayacı
+- [ ] Deny/edge: bir tip invoke hata → `partial` detail; `["all"]` genişleme
+- [ ] `pytest tests/unit/orchestrator/test_collect_stage.py -v` (invoke mock)
+- [ ] `ruff` + `mypy services/orchestrator` yeşil; IAM `synth`/`plan` hatasız
+
+**Bu iterasyonda yok:**
+- Process (SQS) gözlem, digest stage, gerçek AWS'e deploy, API, FE
+
+**Risk / dikkat:**
+- Lambda invoke **async (Event)** vs **sync (RequestResponse)**: collect için sync invoke sonucu beklenir; uzun süren collector'da timeout → `partial`, sonsuz bekleme yok
+- Testlerde gerçek AWS'e çıkma — tüm boto3 çağrıları mock; credential gerektirmez
+- `all` genişletmesinde pasif/error kaynaklar atlanır (`Docs/01` §source rules)
+
+**Stop:**
+- [ ] `pytest tests/unit/orchestrator/test_collect_stage.py -v`
+- [ ] `ruff` + `mypy services/orchestrator`; `infra` `synth`/`plan`
+- [ ] PR/onay → İterasyon 4
+
+---
+
+### İterasyon 4 — Process Stage Adapter (SQS + Processed Gözlem) (6.1.4)
+
+**Hedef:** `ProcessStageExecutor` — SQS `ApproximateNumberOfMessages` + `processed_items` artışını drain'e kadar gözlemleyerek process aşamasını tamamlar; IAM `sqs:GetQueueAttributes`; unit testler (moto/mock) yeşil.
+
+**Teslim çıktısı:**
+- `ProcessStageExecutor` gerçek implementasyonu (`stage_executors.py`)
+- `aws_clients.py` — SQS `get_queue_attributes` helper
+- IAM: orkestratör role'üne SQS `GetQueueAttributes` izni (`infra/`)
+- `tests/unit/orchestrator/test_process_stage.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop (collect/ingest + aws_clients)
+- [ ] Faz 0.6/2 SQS queue adları mevcut (`{env}-ygip-{type}-queue`)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.4 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §8 — processor pipeline (SQS consumer, idempotency, DLQ)
+3. `Docs/04_BACKEND_SPEC.md` §10.5 — process aşaması drain kriteri (queue 0 + processed delta)
+4. `Docs/02_DATABASE_SCHEMA.md` §2 — `processed_items` schema-partition (5 schema sayımı)
+
+**Uygulama planı:**
+1. `aws_clients.py` — `get_queue_attributes(queue, ["ApproximateNumberOfMessages","...NotVisible"])` (`Docs/04` §8)
+2. `ProcessStageExecutor.run` — poll döngüsü: ilgili tip queue'larının mesaj sayısı 0 **ve** `processed_items` artışı duruncaya kadar; `max_polls` + `poll_interval` + toplam timeout; `detail.drain_polls`
+3. `processed_items` sayımı 5 schema'da toplanır (`news`/`market`/`geo`/`transport`/`fmcg` — `Docs/02` §2); items_out = processed delta, items_failed = (ingested − processed)
+4. IAM: SQS `GetQueueAttributes` policy (env-scoped queue ARN); `synth`/`plan`
+5. `tests/unit/orchestrator/test_process_stage.py` — moto SQS: dolu queue → drain → tamamlanma; timeout senaryosu → `partial`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `tests/unit/orchestrator/test_process_stage.py` |
+| Güncelle | `services/orchestrator/stage_executors.py` (Process impl), `aws_clients.py`, `infra/**` (SQS IAM) |
+| Dokunma | `services/processor/**` iş mantığı, collect/digest executor |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Drain kriteri | `Docs/04` §10.5 | queue 0 + processed delta durur |
+| processed sayımı | `Docs/02` §2 | 5 schema toplanır |
+| Timeout → partial | `Docs/04` §10.5 | sonsuz poll yok |
+| SQS read izni | `30-infra-aws` | `sqs:GetQueueAttributes` env-scoped |
+| Processor dokunulmaz | `Docs/10` §6.1 Don'ts | yalnızca gözlem |
+
+**Kalite kapıları:**
+- [ ] Pozitif: dolu queue drain → process `completed`, items_out doğru
+- [ ] Deny/edge: timeout → `partial`; processed delta=0
+- [ ] `pytest tests/unit/orchestrator/test_process_stage.py -v`
+- [ ] `ruff` + `mypy services/orchestrator`; IAM `synth`/`plan`
+
+**Bu iterasyonda yok:**
+- Digest stage, API, FE, gerçek processor Lambda değişikliği
+
+**Risk / dikkat:**
+- At-least-once: `ApproximateNumberOfMessages` gecikmeli/yaklaşık — drain'i **processed delta** ile çapraz doğrula; yalnız queue sayısına güvenme
+- DLQ'ya düşen mesajlar process'i sonsuz bekletmesin — DLQ depth'i de oku, başarısızlığı `items_failed`'e yansıt (`Docs/04` §8)
+
+**Stop:**
+- [ ] `pytest tests/unit/orchestrator/test_process_stage.py -v`
+- [ ] `ruff` + `mypy services/orchestrator`; `infra` `synth`/`plan`
+- [ ] PR/onay → İterasyon 5
+
+---
+
+### İterasyon 5 — Digest Stage Adapter + digest_update (6.1.5)
+
+**Hedef:** `DigestStageExecutor` mevcut digest üretimini çağırır; `digest_update` run tipi (yalnızca digest aşaması, diğerleri `skipped`) uçtan uca orkestratörle çalışır; unit testler yeşil.
+
+**Teslim çıktısı:**
+- `DigestStageExecutor` gerçek implementasyonu (`stage_executors.py`)
+- Orkestratör `digest_update` dalı tamamlanmış (init_steps + drive)
+- `tests/unit/orchestrator/test_digest_stage.py` + `digest_update` akış testi
+
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop (collect/ingest/process gerçek)
+- [ ] Faz 4 `services/ai-engine/digest_generator.py` çağrılabilir
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.5 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §9 — AI engine digest generator akışı (section, status)
+3. `Docs/03_API_CONTRACTS.md` §7 — `/digests/generate` request kuralları (digest_type, period, send_notification)
+4. `Docs/01_DOMAIN_MODEL.md` §5.3 — digest status (`generating → ready/failed`)
+
+**Uygulama planı:**
+1. `DigestStageExecutor.run` — `run.params`'tan digest_type/period/send_notification; `digest_generator` orchestrator'ı çağır (mevcut akış, `Docs/04` §9); `digests.status` `ready`→completed, `failed`→failed; `detail.digest_id` + section sayısı; `run.stats.digest_id`
+2. Orkestratör `init_steps` — `digest_update` için yalnızca digest step (`sequence=4`), collect/ingest/process step'leri `skipped` olarak oluştur (`Docs/01` §5.5)
+3. `collect_pipeline` dalında digest stage zincirin sonuna bağlanır (process completed/partial sonrası)
+4. `tests/unit/orchestrator/test_digest_stage.py` — digest generator **mock**; ready → completed; failed → failed; `digest_update` run: yalnız digest koşar, diğerleri `skipped`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `tests/unit/orchestrator/test_digest_stage.py` |
+| Güncelle | `services/orchestrator/stage_executors.py` (Digest impl), `pipeline_orchestrator.py` (digest_update init) |
+| Dokunma | `services/ai-engine/**` iş mantığı (yalnızca çağrı), `apps/api/routers/digests.py` |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Digest çağrısı | `Docs/04` §9 | mevcut `digest_generator`; yeniden yazma yok |
+| digest params | `Docs/03` §7 | digest_type/period/send_notification |
+| status eşlemesi | `Docs/01` §5.3 | `ready`→completed, `failed`→failed |
+| digest_update skipped | `Docs/01` §5.5 | collect/ingest/process `skipped` |
+
+**Kalite kapıları:**
+- [ ] Pozitif: digest ready → step+run completed; `stats.digest_id` dolu
+- [ ] Deny/edge: digest failed → run failed; `digest_update` skipped doğrulama
+- [ ] `pytest tests/unit/orchestrator -v` (tüm orkestratör testleri)
+- [ ] `ruff` + `mypy services/orchestrator` yeşil
+
+**Bu iterasyonda yok:**
+- API endpoint, FE, gerçek LLM çağrısı (mock)
+
+**Risk / dikkat:**
+- Digest üretimi uzun sürebilir — orkestratör senkron bekler; background driver context'inde timeout/iptal kontrolü (`cancelled` run mid-digest)
+- `send_notification=false` test modunda mail/push gitmemeli (`Docs/06` S-DIGEST-TRIGGER-CONFIRM)
+
+**Stop:**
+- [ ] `pytest tests/unit/orchestrator -v`
+- [ ] `ruff` + `mypy services/orchestrator`
+- [ ] PR/onay → İterasyon 6
+
+---
+
+### İterasyon 6 — Pipeline API Endpoint'leri (6.1.6)
+
+**Hedef:** `POST/GET /pipeline/runs`, `GET /pipeline/runs/{id}`, `POST /pipeline/runs/{id}/cancel` çalışır; admin-only + audit + rate limit + eşzamanlılık guard; integration test (viewer 403, concurrency 409) yeşil.
+
+**Teslim çıktısı:**
+- `apps/api/routers/pipeline.py` + `apps/api/schemas/pipeline.py`
+- `main.py` router include + run tetikleme background driver bağlama
+- Audit: `pipeline.triggered/completed/failed/cancelled`
+- `tests/integration/test_pipeline_api.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 5 Stop (orkestratör uçtan uca)
+- [ ] `005` migration uygulanmış
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.6 — kapsam
+2. `Docs/03_API_CONTRACTS.md` §11.5 — request/response, error code, query param
+3. `Docs/03_API_CONTRACTS.md` §12 (yetki) + §15 (pipeline trigger rate limit) + §13 (error taxonomy)
+4. `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — audit event'ler + aynı transaction
+5. `Docs/04_BACKEND_SPEC.md` §10.5 — eşzamanlılık guard + background driver
+
+**Uygulama planı:**
+1. `schemas/pipeline.py` — `TriggerPipelineRequest` (run_type + source_types | digest params), `PipelineRunSummary`, `PipelineRunDetail` (+ steps), `Docs/03` §11.5 alanları birebir; `source_types` validation → geçersiz `INVALID_SOURCE_TYPE`
+2. `routers/pipeline.py` — 4 endpoint; tümü `Depends(require_admin)`; `POST` → run create (`pending`) + background driver (digests.py `session_factory` kalıbı) → 202; concurrency guard (aktif collect run → `PIPELINE_ALREADY_RUNNING` 409)
+3. `GET /runs` cursor pagination (`Docs/03` §14); `GET /runs/{id}` steps `sequence` sırasında; 404 `PIPELINE_RUN_NOT_FOUND`
+4. `cancel` — yalnızca `pending`/`running`; aksi `PIPELINE_NOT_CANCELLABLE` 409
+5. Audit: `pipeline.triggered` (tetik), `pipeline.completed/failed` (driver finalize), `pipeline.cancelled` — aynı session (`Docs/07` §9.1); rate limit dependency 5/dk (`Docs/03` §15)
+6. `main.py` — `app.include_router(pipeline.router)`
+7. `tests/integration/test_pipeline_api.py` — trigger 202; viewer 403; ikinci collect 409; geçersiz source_type 422; detail steps; cancel 200 + tekrar cancel 409
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/api/routers/pipeline.py`, `apps/api/schemas/pipeline.py`, `tests/integration/test_pipeline_api.py` |
+| Güncelle | `apps/api/main.py` (router include) |
+| Dokunma | Orkestratör iç mantık (İter 2–5 sabit), FE |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Trigger 202 + async | `Docs/03` §11.5 | digests.py background driver kalıbı |
+| Concurrency guard | `Docs/03` §11.5 | aktif collect → `PIPELINE_ALREADY_RUNNING` |
+| Admin-only | `Docs/03` §12 | 4 satır `require_admin` |
+| Audit aynı transaction | `Docs/07` §9.1 | `pipeline.triggered` commit öncesi |
+| Rate limit | `Docs/03` §15 | 5/dk/user trigger |
+| Error kodları | `Docs/03` §13 | NOT_FOUND/ALREADY_RUNNING/NOT_CANCELLABLE/INVALID_SOURCE_TYPE |
+
+**Kalite kapıları:**
+- [ ] Pozitif: trigger → run + steps; detail polling shape
+- [ ] Deny: viewer 403; concurrency 409; invalid source_type 422; double-cancel 409
+- [ ] `pytest tests/integration/test_pipeline_api.py -v`
+- [ ] `ruff apps/api` + `mypy apps/api` yeşil
+
+**Bu iterasyonda yok:**
+- FE ekranları (İter 7–8), SSE/WebSocket, yeni cron
+
+**Risk / dikkat:**
+- Background driver request lifecycle'ından bağımsız olmalı — request session kapanınca run takılmamalı; ayrı `session_factory` (`Docs/04` §10.5)
+- `triggered_by` audit + run aynı kullanıcı; token sızıntısı yok (`Docs/07` §3)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_pipeline_api.py -v`
+- [ ] `ruff apps/api` && `mypy apps/api`
+- [ ] PR/onay → İterasyon 7
+
+---
+
+### İterasyon 7 — FE: Kokpit Listesi + Tetikleme (6.1.7)
+
+**Hedef:** `S-ADMIN-PIPELINE` (`/admin/pipeline`) — run geçmişi tablosu + tetik modal (kaynak seçimi) + sidebar + data hook'ları; koşullu polling; `npm run build`/`lint` yeşil (yeni route).
+
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/pipeline/page.tsx` + tetik modal bileşeni
+- `hooks/use-pipeline.ts` (list + trigger + cancel), `types/api.ts` pipeline tipleri
+- Sidebar'a "Pipeline İzleme" linki + `constants.ts` route + queryKeys
+
+**Önkoşullar:**
+- [ ] İterasyon 6 Stop (API canlı)
+- [ ] API + web dev server ayakta; admin seed (`admin@ygip.test`)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.7 — kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-PIPELINE, S-ADMIN-PIPELINE-TRIGGER (tablo, durum badge, kaynak seçimi, boş/loading)
+3. `Docs/05_FRONTEND_SPEC.md` §4 — route tablosu + sidebar + role guard
+4. `Docs/05_FRONTEND_SPEC.md` §8 — koşullu polling (refetchInterval) pattern
+5. `Docs/03_API_CONTRACTS.md` §11.5 — list/trigger/cancel response shape
+
+**Uygulama planı:**
+1. `types/api.ts` — `PipelineRunSummary`, `PipelineRunDetail`, `PipelineStep`, run_type/status union'ları (`Docs/03` §11.5)
+2. `hooks/use-pipeline.ts` — `usePipelineRuns` (filter + cursor; listede aktif run varsa 5 sn polling `Docs/05` §8), `useTriggerPipeline`, `useTriggerDigestUpdate`, `useCancelPipelineRun`; `queryKeys.pipeline.*` (`constants.ts`)
+3. `admin/pipeline/page.tsx` — `RoleGate` + başlık + iki buton + filtre bandı + DataTable (mevcut `admin/sources` tablo kalıbı); 4 aşamalı mini step göstergesi; durum badge; satıra tıkla → `/admin/pipeline/[id]`
+4. Tetik modal — kaynak checkbox grubu (Resmi/RSS/E-posta/Tümü), "Tümü" diğerlerini disable; submit → trigger → detay route'a yönlendir; 409 → modal banner
+5. "Bülten Güncelle" → mevcut S-DIGEST-TRIGGER-CONFIRM varyantı ile `digest_update`
+6. Sidebar bileşenine "Pipeline İzleme" linki; `constants.ts` route; boş/loading state (`Docs/06`)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/web/app/(dashboard)/admin/pipeline/page.tsx`, `apps/web/components/admin/pipeline-trigger-modal.tsx`, `apps/web/hooks/use-pipeline.ts` |
+| Güncelle | `apps/web/types/api.ts`, `apps/web/lib/constants.ts` (route+queryKeys), sidebar bileşeni |
+| Dokunma | `admin/pipeline/[id]/page.tsx` (İter 8), backend |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Kokpit tablo + butonlar | `Docs/06` S-ADMIN-PIPELINE | sources tablo kalıbı |
+| Kaynak seçim modal | `Docs/06` S-ADMIN-PIPELINE-TRIGGER | Tümü → diğerleri disable |
+| Liste polling | `Docs/05` §8 | aktif run varsa 5 sn, yoksa durur |
+| Route + role guard | `Docs/05` §4 | `/admin/pipeline` admin-only |
+| 409 UX | `Docs/03` §11.5 | "çalışan pipeline var" toast/banner |
+
+**Kalite kapıları:**
+- [ ] Tetik modal → 202 → detay route; 409 → banner
+- [ ] Liste polling aktif run'da çalışır, terminal'de durur
+- [ ] Viewer `/admin/pipeline` → middleware redirect (RoleGate)
+- [ ] `cd apps/web && npm run build && npm run lint` yeşil (yeni route sayısı +1/+2)
+
+**Bu iterasyonda yok:**
+- Run detay timeline (İter 8), mobil, SSE
+
+**Risk / dikkat:**
+- Polling tüm liste terminal olunca **durmalı** — sonsuz istek/maliyet (`Docs/05` §8)
+- Admin link viewer DOM'una sızmamalı (Faz 6 RoleGate kalıbı)
+
+**Stop:**
+- [ ] `cd apps/web && npm run build && npm run lint`
+- [ ] Manuel: admin → tetik → 202; viewer → redirect
+- [ ] PR/onay → İterasyon 8
+
+---
+
+### İterasyon 8 — FE: Run Detay Timeline + Canlı İzleme (6.1.8)
+
+**Hedef:** `S-ADMIN-PIPELINE-DETAIL` (`/admin/pipeline/[id]`) — 4 aşamalı dikey timeline + canlı polling + hata teşhis paneli + iptal; bülten-güncelle tetik akışı tamam; `npm run build`/`lint` yeşil. **Faz 6.1 Done.**
+
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/pipeline/[id]/page.tsx` — timeline + stats + hata paneli + iptal
+- `hooks/use-pipeline-run.ts` — koşullu (3 sn) polling
+- Bülten güncelleme tetik akışı (`digest_update`) bağlı
+
+**Önkoşullar:**
+- [ ] İterasyon 7 Stop (liste + tetik)
+- [ ] En az bir test run tetiklenebiliyor (uçtan uca)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.1.8 — kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-PIPELINE-DETAIL (timeline, aşama kartı, hata paneli, iptal, digest_update notu)
+3. `Docs/05_FRONTEND_SPEC.md` §8 — `usePipelineRun` refetchInterval (terminal'de durur)
+4. `Docs/03_API_CONTRACTS.md` §11.5 — `GET /runs/{id}` steps shape + cancel
+
+**Uygulama planı:**
+1. `hooks/use-pipeline-run.ts` — `usePipelineRun(id)` 3 sn koşullu polling (`Docs/05` §8); terminal statüde durur
+2. `admin/pipeline/[id]/page.tsx` — üst bilgi kartı (tip/durum/kullanıcı/süre + `stats` bandı, digest_id → digest detay linki)
+3. Aşama timeline (dikey stepper, `sequence` sırası) — her aşama: durum ikonu, sayaçlar (in/out/failed), süre, collect kaynak kırılımı (`detail`)
+4. Hata teşhis paneli — `error_message` + (varsa) request id/SQS detail; "Denetim loguna git" linki
+5. İptal butonu (`running`/`pending`) → ConfirmDialog → `useCancelPipelineRun`; terminal'de gizli
+6. `digest_update` görünümü — yalnız Bülten aşaması aktif, diğerleri `atlandı` (⊘); bülten güncelle tetiği detaydan da erişilebilir
+7. Loading skeleton (`Docs/06`)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/web/app/(dashboard)/admin/pipeline/[id]/page.tsx`, `apps/web/hooks/use-pipeline-run.ts`, timeline bileşeni |
+| Güncelle | `apps/web/hooks/use-pipeline.ts` (cancel paylaşımı gerekiyorsa), `types/api.ts` |
+| Dokunma | Backend, liste sayfası iş mantığı (İter 7 sabit) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Aşama timeline | `Docs/06` S-ADMIN-PIPELINE-DETAIL | dikey stepper, sequence sırası |
+| Canlı polling | `Docs/05` §8 | 3 sn, terminal'de durur |
+| Hata teşhisi | `Docs/06` S-ADMIN-PIPELINE-DETAIL | error_message + audit linki |
+| İptal | `Docs/03` §11.5 | yalnız pending/running |
+| digest_update skipped | `Docs/06` (not) | collect/ingest/process ⊘ |
+
+**Kalite kapıları:**
+- [ ] Koşan run'da timeline canlı ilerler; terminal'de polling durur
+- [ ] Hatalı aşamada teşhis paneli + audit linki; iptal akışı 200
+- [ ] `digest_update` detay yalnız Bülten aşamasını aktif gösterir
+- [ ] `cd apps/web && npm run build && npm run lint` yeşil
+
+**Bu iterasyonda yok:**
+- Mobil ekran, SSE/WebSocket, E2E Playwright (MVP-0 dışı `Docs/08` §1)
+
+**Risk / dikkat:**
+- Terminal statüde polling durmazsa sonsuz istek — `refetchInterval` `false` dönmeli (`Docs/05` §8)
+- Uzun `error_message` / `detail` JSONB güvenli render — `dangerouslySetInnerHTML` yok (Faz 6 kuralı)
+
+**Stop:**
+- [ ] `cd apps/web && npm run build && npm run lint`
+- [ ] Manuel: uçtan uca tetik → canlı timeline → tamamlanma; hata teşhisi; iptal
+- [ ] Faz 6.1 Done Definition tamam; `Docs/10` Faz 6.1 işareti
+
+---
+
+## Required Context
+
+- `Docs/10_IMPLEMENTATION_ROADMAP.md` — Faz 6.1 (§6.1.1–6.1.8)
+- `Docs/02_DATABASE_SCHEMA.md` §3, §4.18–4.19 — pipeline tabloları/enum (tek kaynak)
+- `Docs/01_DOMAIN_MODEL.md` §2.18–2.19, §5.5 — entity + run state machine
+- `Docs/03_API_CONTRACTS.md` §11.5, §12, §13, §15 — endpoint/yetki/error/rate limit
+- `Docs/04_BACKEND_SPEC.md` §10.5, §7–9 — orkestratör + collector/processor/digest
+- `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-PIPELINE, S-ADMIN-PIPELINE-TRIGGER, S-ADMIN-PIPELINE-DETAIL
+- `Docs/05_FRONTEND_SPEC.md` §4, §8 — route + polling
+- `Docs/07_SECURITY_IMPLEMENTATION.md` §9.1 — audit event'ler
+- `Docs/08_TESTING_STRATEGY.md` §3.6, §4.2 — orkestratör + API test
+- `.cursor/rules/30-infra-aws.mdc` — İterasyon 3–4 IAM
+
+## Done Definition
+
+- [ ] `collect_pipeline` (seçili kaynaklar) ve `digest_update` run'ları uçtan uca tetiklenir, 4 aşama canlı izlenir
+- [ ] Run geçmişi + detay timeline + hata teşhisi (`S-ADMIN-PIPELINE`, `S-ADMIN-PIPELINE-DETAIL`) çalışır
+- [ ] Admin-only + audit (`pipeline.*`) + rate limit + eşzamanlılık guard (409)
+- [ ] `ruff` + `mypy` + `pytest` (unit orkestratör + integration API) yeşil; `npm run build`/`lint` yeşil
+- [ ] `005_pipeline_tables.py` migration `upgrade`/`downgrade` round-trip
+- [ ] PR `feature/f61-pipeline-monitoring` → `main` (Semih onayı)
+
+## Explicit Don'ts
+
+- EventBridge cron tetiklemelerini değiştirme — manuel yol paralel ve ayrı
+- Collector/processor/ai-engine **iş mantığını** yeniden yazma — yalnızca invoke + gözlem adapter
+- Viewer erişimi; admin link/route'unun viewer DOM'una sızması
+- Gerçek WebSocket/SSE; Step Functions IaC; mobil ekran (MVP-0 dışı)
+- Production'a onaysız deploy / gerçek AWS'e test invoke (testler mock)
+- `dangerouslySetInnerHTML` ile run detail/hata içeriği render
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 6.1 tamamlandı işareti → `@phase-controller` gap audit.

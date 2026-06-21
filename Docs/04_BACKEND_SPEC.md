@@ -73,6 +73,7 @@ Monorepo içinde backend ile ilgili üç ana dizin bulunur:
         prompt_templates.py         → Prompt şablon CRUD (admin-only)
         api_keys.py                 → LLM API key CRUD + kullanım metrikleri (admin-only)
         digests.py                  → Digest listeleme/detay + manuel tetikleme
+        pipeline.py                 → Pipeline run tetikleme/listeleme/detay/iptal (admin-only, Faz 6.1)
         chatbot.py                  → Soru gönderme + sohbet geçmişi
         notifications.py            → Bildirim alıcı yönetimi + FCM token kayıt
         audit_logs.py               → Audit log listeleme (admin-only)
@@ -125,6 +126,12 @@ Monorepo içinde backend ile ilgili üç ana dizin bulunur:
     llm_client.py                   → Multi-provider LLM client (Groq, Gemini)
     embedding_client.py             → Embedding API client
     prompt_renderer.py              → Jinja2 prompt template rendering
+
+/services/orchestrator/             → Pipeline orkestrasyon (Faz 6.1)
+    pipeline_orchestrator.py        → Run state machine: aşamaları ilerletir, step durumu kalıcılaştırır
+    stage_executors.py              → Collect/Ingest/Process/Digest stage executor'ları
+    run_repository.py               → pipeline_runs / pipeline_run_steps CRUD + status transition
+    handler.py                      → Orkestratör worker entry point (async run driver)
 
 /packages/shared/                   → Ortak modüller
     /models/                        → SQLAlchemy ORM modelleri
@@ -596,6 +603,21 @@ Collector'lar normalize edilmiş makaleyi SQS'e JSON mesaj olarak gönderir:
 
 Her kaynak tipi için ayrı SQS queue bulunur: `ygip-prod-rss-queue`, `ygip-prod-email-queue`, `ygip-prod-gov-queue`. Her queue'nun dead-letter queue'su (DLQ) zorunludur: `ygip-prod-rss-dlq`.
 
+### Feed Collector Davranışı (RSS / Gov)
+
+**Tarih penceresi (`max_age_days`, varsayılan 7):** Feed collector'lar feed'in tüm geçmişini değil yalnızca son N günü toplar. Yayın tarihi pencerenin dışındaki entry'ler atlanır (`rss_window_filtered` / `gov_window_filtered` log). Böylece bir feed aylar öncesine kadar makale dökmez (ör. perakende.org). Pencere kaynak başına `sources.config.max_age_days` ile değiştirilebilir. Tarihi olmayan entry'ler (nadir) içerik kaybını önlemek için tutulur.
+
+**Tam metin çıkarma (RSS, `fetch_full_text`, varsayılan `true`):** Çoğu RSS feed gövdede yalnızca kısa özet/snippet verir. Feed gövdesi `FULL_TEXT_MIN_WORDS` (120) kelimenin altındaysa collector makale URL'sinden tam HTML sayfayı indirip ana metni `trafilatura` ile çıkarır (best-effort; hata veya boş sonuçta feed özetine düşülür). Aynı sayfaların her polling döngüsünde tekrar indirilmesini önlemek için toplanan URL'ler Redis'te TTL'li (`collector:url:{hash}`, 14 gün) işaretlenir; işaretli URL'ler atlanır. `fetch_full_text: false` ile devre dışı bırakılabilir.
+
+> Not: Tam metin geçişi içerik hash'ini değiştirir — feature açıldıktan sonra ilk döngüde, önceden yalnızca özetle kaydedilmiş makaleler tam-metin sürümüyle yeniden işlenebilir (dedup hash farklı). Dev'de re-seed ile temizlenebilir.
+
+#### `sources.config` — feed alanları
+
+| Alan | Tip | Varsayılan | Açıklama |
+| ---- | --- | ---------- | -------- |
+| `max_age_days` | int | 7 | Yalnızca son N gün içindeki entry'leri topla |
+| `fetch_full_text` | bool | `true` (RSS) | Kısa özetlerde makale sayfasından tam metin çek |
+
 ### Yeni Collector Ekleme Adımları
 
 1. `BaseCollector`'ı extend eden yeni class oluştur (örn: `api_collector.py`).
@@ -614,17 +636,32 @@ Processor, SQS queue'lardan mesaj tüketen ve makaleyi adım adım işleyen Lamb
 
 ```mermaid
 flowchart LR
-    A["SQS Queue"] --> B["Dedup"]
+    A["SQS Queue"] --> I["Ingest raw_items"]
+    I --> B["Dedup"]
     B --> C["Normalize"]
     C --> D["Gate"]
     D --> E["Enrich + Score"]
     E --> F["Chunk"]
     F --> G["PostgreSQL"]
     B -->|"Duplicate"| H["Atla"]
-    D -->|"No keyword match"| I["DROP"]
+    D -->|"No keyword match"| I2["DROP"]
 ```
 
 > **MVP-0 pipeline kararı (K1–K5):** Keyword-based enrichment; LLM enrichment yok. Keyword gate normalize sonrası çalışır — eşleşmeyen makaleler `processed_items` ve `content_chunks`'a yazılmaz. `relevance_score` deterministik formül (`§8.4`); source reliability weight kaldırıldı.
+
+### 8.0 Runtime Giriş — SQS Mesajından raw_items Ingest
+
+Processor Lambda handler, pipeline zincirinden **önce** idempotent `raw_item` upsert yapar (`services/collectors/persistence.ingest_message` reuse). Ayrı ingest Lambda **yok** — aynı SQS kuyruğunda çift consumer mimarisi engellenir (`docs/adr/0001-processor-ingest-at-entry.md`).
+
+| Adım | Davranış |
+|------|----------|
+| Deserialize | SQS JSON → `ProcessorInput` |
+| Ingest | `ingest_message` — duplicate Redis/DB → skip; invalid → DLQ |
+| Pipeline | dedup → normalize → gate → enrich → score → chunk |
+| Lifecycle | `raw_items.status`: pending → processing → processed/failed/skipped |
+| Persist | `processed_items` + `content_chunks` (başarılı gate path) |
+
+Faz 6.1 `IngestStageExecutor` collect sonrası `raw_items` (status=pending) artışını gözlemler; `ProcessStageExecutor` SQS drain + `processed_items` artışını gözlemler — ikisi de bu runtime model ile uyumludur (`§10.5`).
 
 ### 8.1 Dedup
 
@@ -738,19 +775,30 @@ CATEGORY_RULES = {
 
 #### `relevance_score` (K4)
 
-Gate'i geçen makaleler arasında sıralama skoru — **deterministik**, admin müdahalesi yok. `source_reliability_weight` kaldırıldı (K3).
+Gate'i geçen makaleler arasında **saf konu-ilgisi** sıralama skoru — **deterministik**, admin müdahalesi yok. `source_reliability_weight` kaldırıldı (K3); **güncellik (freshness) skordan kaldırıldı (K4)** — bültenler zaten tarih-pencereli seçildiği için tüm adaylar aynı güncellik bandındadır ve freshness konu-ilgisini bastırıyordu (taze ama alakasız haber, eski ama çok-alakalı haberi geçiyordu).
 
 ```python
+COVERAGE_WEIGHT, FREQ_WEIGHT = 0.7, 0.3
+DISTINCT_SATURATION, FREQ_NORMALIZE_CAP = 5.0, 3.0
+
 def calculate_relevance_score(article: ProcessedArticle) -> float:
-    keyword_intensity = _calc_keyword_intensity(article.content, article.matched_keywords)
-    freshness = _calc_freshness(article.published_at)
-    return keyword_intensity * 0.6 + freshness * 0.4
+    distinct = len(article.matched_keywords)
+    if distinct == 0:
+        return 0.0
+    coverage = min(distinct / DISTINCT_SATURATION, 1.0)
+    avg_hits = _total_keyword_hits(article.content, article.matched_keywords) / distinct
+    freq = min(avg_hits / FREQ_NORMALIZE_CAP, 1.0)
+    return min(COVERAGE_WEIGHT * coverage + FREQ_WEIGHT * freq, 1.0)
 ```
 
 | Bileşen | Ağırlık | Hesaplama |
 | ------- | ------- | --------- |
-| Keyword yoğunluğu | %60 | (eşleşen farklı keyword sayısı / master havuz büyüklüğü) × frekans normalize |
-| Güncellik | %40 | Son 24 saat: 1.0; son 72 saat: 0.5; daha eski: 0.2 |
+| Keyword coverage | %70 | `min(eşleşen farklı keyword / 5, 1.0)` — doyumlu sayım (master havuz büyüklüğüne **bölünmez**) |
+| Keyword frekansı | %30 | `min(ortalama geçiş / 3, 1.0)` — keyword'lerin metindeki yoğunluğu |
+
+> **Eşleşme:** kelime-sınırı (`\b`) bazlı, case-insensitive + NFC. Substring eşleşme kaldırıldı (`ai`→`hair`, `kur`→`kurul` yanlış-pozitiflerini önlemek için). Frekans sayımı da aynı kelime-sınırı kuralını kullanır.
+>
+> **Neden havuz büyüklüğüne bölünmüyordu sorunu:** Eski formül `eşleşen / 55` kullandığından keyword katkısı en fazla ~0.18'e eziliyordu; bu yüzden 1000+ haberin hiçbiri %40'ı geçemiyordu ve sıralama freshness'e teslim oluyordu.
 
 Sonuç: `{schema}.processed_items.relevance_score` (0.0–1.0; `Docs/02` CHECK).
 
@@ -780,6 +828,21 @@ Embedding API çağrısı batch yapılır — tek istekte 20-50 chunk.
 ### 8.6 İdempotency
 
 Aynı SQS mesajı birden fazla kez işlenebilir (at-least-once delivery). İdempotency `content_hash` + `source_id` üzerinden sağlanır: hash Redis'te veya `raw_items` / `processed_items` üzerinde mevcutsa makale atlanır. İşlem sırası önemlidir — dedup ilk adımdır.
+
+### 8.8 İçerik Arşivi Repository (Faz 6.2)
+
+Admin-only read API; processor/enricher iş mantığı değişmez (yalnızca `content_category` persist eklenir).
+
+| Bileşen | Sorumluluk |
+| ------- | ---------- |
+| `ProcessedItemRepository.list` | 5 schema UNION ALL; filtreler; `processed_at DESC, id DESC`; cursor `{schema}:{uuid}` |
+| `ProcessedItemRepository.get_by_id` | `schema` + `id` ile tek satır; bulunamazsa `NOT_FOUND` |
+| `DigestUsageRepository.find_for_items` | Sayfa başına batch: `digest_sections` + `digests` join; `source_references @> '[{"processed_item_id":"<uuid>"}]'` veya uygulama katmanında JSON parse |
+| `ContentArchiveService` | Router ince; source adı join; liste yanıtında `clean_content` strip |
+
+**Cursor formatı:** Base64 veya `{schema}:{id}` string — client'a `next_cursor` olarak döner. İlk sayfada cursor gönderilmez.
+
+**Performans:** Liste endpoint max `limit=100`. `q` (title ILIKE) ve `topic` (GIN `@>`) birlikte kullanılabilir. `has_digest=true` filtre subquery veya post-filter (MVP: batch digest lookup sonrası filter — dokümante edilir).
 
 ### 8.7 Dead-Letter Queue İşleme
 
@@ -942,6 +1005,34 @@ Lock TTL, job'ın beklenen maksimum çalışma süresinin 2 katıdır. Lock alı
 ### Job İdempotency
 
 Digest generator idempotent'tir: aynı digest tipi + aynı tarih aralığı için tekrar çalıştırıldığında, mevcut digest varsa üzerine yazar (update, duplicate yaratmaz). Collector'lar content hash ile idempotent'tir.
+
+---
+
+## 10.5 Pipeline Orkestrasyon (Faz 6.1)
+
+`POST /pipeline/runs` (`Docs/03` §11.5) ile manuel tetiklenen run'ları yöneten katman. EventBridge cron tetiklemelerine **dokunmaz** — paralel, manuel bir yoldur. Collector/processor/ai-engine iş mantığı değişmez; orkestratör yalnızca bu bileşenleri **invoke eder ve gözlemler**.
+
+### Bileşenler
+
+- **`PipelineOrchestrator`** — Run'ın kalıcı state machine'i (`Docs/01` §5.5). `pending → running → completed/partial/failed/cancelled`. Aşamaları `sequence` sırasında ilerletir; her geçişte `pipeline_run_steps` günceller. Advance işlemi **idempotent**: aynı run tekrar sürülürse zaten `completed` step atlanır.
+- **`StageExecutor` arayüzü** — Her aşama bir executor: `CollectStageExecutor`, `IngestStageExecutor`, `ProcessStageExecutor`, `DigestStageExecutor`. Sözleşme: `async def run(run, step) -> StepResult` (sayaçlar + detail + hata).
+- **`run_repository`** — `pipeline_runs`/`pipeline_run_steps` CRUD + transaction'lı status transition + audit yazımı (`Docs/07` §9.1).
+- **`handler`** — Run'ı asenkron süren worker entry point (Lambda veya FastAPI background task; `digests.py` async tetikleme kalıbıyla aynı `session_factory` yaklaşımı).
+
+### Aşama yürütme modeli
+
+| Aşama | Mekanizma | Tamamlanma kriteri |
+|-------|-----------|--------------------|
+| `collect` | Seçili `source_type` collector Lambda'larını boto3 `lambda:InvokeFunction` ile çağırır | Tüm invoke'lar döner; kaynak bazlı ok/failed sayacı |
+| `ingest` | `raw_items` (status=pending) artışını gözlemler | Beklenen yeni `raw_items` sayısı veya timeout |
+| `process` | SQS `ApproximateNumberOfMessages` + `processed_items` artışı | Queue drain (0 mesaj) veya max poll/timeout |
+| `digest` | `digest_generator` çağrısı (mevcut akış) | `digests.status` `ready`/`failed` |
+
+**Hata politikası:** Bir kaynak/aşama başarısız ama sonraki aşama anlamlıysa run `partial` ile devam eder; kritik aşama (örn. hiç raw_item yok) başarısızsa sonrası `skipped`, run `failed`. Her aşama hatası `pipeline_run_steps.error_message` + `system.error` audit'e yazılır (teşhis için).
+
+**Eşzamanlılık:** Aynı tipte `pending`/`running` run varken yeni `collect_pipeline` reddedilir (`PIPELINE_ALREADY_RUNNING`) — orkestratör tek aktif collect run garantisi.
+
+**IAM:** Orkestratör execution role'ü collector Lambda'larına `lambda:InvokeFunction` ve SQS queue'lara `sqs:GetQueueAttributes` izni alır; resource ARN'leri environment-scoped (`Docs/04` §12, `30-infra-aws.mdc`).
 
 ---
 

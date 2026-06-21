@@ -294,6 +294,40 @@ Tetiklenen alarm olayı.
 | `notified` | BOOLEAN | NOT NULL, DEFAULT false | Bildirim gönderildi mi |
 | `created_at` | TIMESTAMPTZ | NOT NULL | Tetiklenme zamanı |
 
+### 2.18 PipelineRun (Faz 6.1)
+
+Admin'in manuel tetiklediği bir pipeline çalıştırması. `collect_pipeline` tüm aşamaları, `digest_update` yalnızca digest aşamasını koşar.
+
+| Attribute | Tip | Kısıt | Açıklama |
+|-----------|-----|-------|----------|
+| `id` | UUID | PK | Tekil tanımlayıcı |
+| `run_type` | ENUM | NOT NULL | `collect_pipeline` \| `digest_update` |
+| `status` | ENUM | NOT NULL, DEFAULT `pending` | `pending`/`running`/`completed`/`partial`/`failed`/`cancelled` |
+| `source_types` | JSONB | NOT NULL, DEFAULT `[]` | Seçilen kaynak tipleri (`["rss","email","gov"]` veya `["all"]`) |
+| `params` | JSONB | NOT NULL, DEFAULT `{}` | Run parametreleri (digest_type, period, send_notification) |
+| `stats` | JSONB | NOT NULL, DEFAULT `{}` | Toplulaştırılmış sayaçlar (collected/ingested/processed/digest_id) |
+| `triggered_by` | UUID | FK → users.id, NULL | Tetikleyen admin (silinirse NULL) |
+| `error_summary` | TEXT | NULL | Run düzeyi hata özeti |
+| `started_at` / `finished_at` | TIMESTAMPTZ | NULL | Koşma penceresi |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Oluşturulma zamanı |
+
+### 2.19 PipelineRunStep (Faz 6.1)
+
+Bir run'ın aşama bazlı adımı. Her aşama (collect/ingest/process/digest) için en fazla bir step.
+
+| Attribute | Tip | Kısıt | Açıklama |
+|-----------|-----|-------|----------|
+| `id` | UUID | PK | Tekil tanımlayıcı |
+| `run_id` | UUID | FK → pipeline_runs.id, NOT NULL | Bağlı run (CASCADE) |
+| `stage` | ENUM | NOT NULL | `collect`/`ingest`/`process`/`digest` |
+| `status` | ENUM | NOT NULL, DEFAULT `pending` | `pending`/`running`/`completed`/`failed`/`skipped` |
+| `sequence` | SMALLINT | NOT NULL | Aşama sırası (1–4) |
+| `items_in` / `items_out` / `items_failed` | INTEGER | NOT NULL, DEFAULT 0 | Aşama sayaçları |
+| `detail` | JSONB | NOT NULL, DEFAULT `{}` | Aşamaya özel kırılım (kaynak bazlı, request id) |
+| `error_message` | TEXT | NULL | Aşama hata mesajı (teşhis) |
+| `started_at` / `finished_at` | TIMESTAMPTZ | NULL | Aşama koşma penceresi |
+| `created_at` | TIMESTAMPTZ | NOT NULL | — |
+
 ---
 
 ## 3. Entity İlişki Diyagramı
@@ -508,9 +542,13 @@ erDiagram
 ### ProcessedItem
 
 - Her ProcessedItem tam olarak bir RawItem'dan üretilir (1:1 ilişki).
-- `relevance_score` 0-1 aralığındadır; 0 = düşük öncelik, 1 = yüksek öncelik. Skor pipeline enrich aşamasında deterministik formülle hesaplanır (`keyword_intensity * 0.6 + freshness * 0.4`; `Docs/04` §8.4). Gate'i geçemeyen makaleler için `processed_items` oluşturulmaz.
+- `relevance_score` 0-1 aralığındadır; 0 = düşük öncelik, 1 = yüksek öncelik. Skor pipeline enrich aşamasında deterministik **saf keyword ilgisi** formülüyle hesaplanır (`0.7 * coverage + 0.3 * freq`; güncellik skora dahil edilmez; `Docs/04` §8.4). Gate'i geçemeyen makaleler için `processed_items` oluşturulmaz.
 - `schema_category` alanı DB schema bölümleme kategorisine karşılık gelir (news, market, geo, transport, fmcg).
+- `content_category` enricher keyword kural kategorisidir (`macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`). `ingest_mode: "all"` kaynaklarda `default_category` değeri kullanılır. Faz 6.2 öncesi kayıtlarda `NULL` olabilir.
+- `topics` JSONB dizisi gate/enricher tarafından eşleşen keyword'leri taşır (İçerik Arşivi ekranında chip olarak gösterilir).
 - İşlenmiş item üzerinden content chunk'lar oluşturulur.
+- **İçerik Arşivi (Faz 6.2):** Admin-only operasyonel görünüm — yalnızca `processed_items` satırı olan (gate'i geçmiş) içerikler listelenir; `raw_items` skip/failed kayıtları arşivde görünmez.
+- **Bülten kullanımı:** Bir ProcessedItem hangi digest'lerde kaynak olarak geçtiyse `digest_sections.source_references` JSONB içindeki `processed_item_id` ile tespit edilir (ters sorgu; native FK yok).
 
 ### ContentChunk
 
@@ -630,6 +668,28 @@ stateDiagram-v2
 ```
 
 `inactive` kullanıcı login yapamaz. Mevcut access token süresi dolana kadar geçerli kalır ancak refresh token yenilenemez.
+
+### 5.5 PipelineRun Status (Faz 6.1)
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : Admin tetikler (POST /pipeline/runs)
+    pending --> running : Orkestratör ilk aşamayı başlatır
+    running --> completed : Tüm aşamalar başarılı
+    running --> partial : Bazı aşama/kaynak hata, run ilerledi
+    running --> failed : Kritik aşama hata → durur
+    pending --> cancelled : Başlamadan iptal
+    running --> cancelled : Admin iptal eder
+```
+
+Geçiş kuralları:
+- `pending → running`: Orkestratör run'ı alır, ilk `pipeline_run_steps` aşamasını `running` yapar.
+- `running → completed`: `collect_pipeline` için 4 aşama (veya seçili tipler) tümü `completed`; `digest_update` için `digest` aşaması `completed`.
+- `running → partial`: En az bir aşama/kaynak `failed` ama run sonraki aşamalara devam edebildi (örn. RSS toplandı, email hata verdi). `error_summary` doldurulur.
+- `running → failed`: Bir aşama tamamen başarısız ve sonraki aşamalar anlamsız (örn. hiç raw_item toplanmadı → process/digest atlanır, run `failed`).
+- `* → cancelled`: Admin `POST /pipeline/runs/{id}/cancel`; yalnızca `pending`/`running` iptal edilebilir.
+
+Adım (step) durumu ayrı izlenir: `pending → running → completed/failed`; `digest_update` run'ında koşmayan aşamalar `skipped`.
 
 ---
 
@@ -755,5 +815,7 @@ Frontend, digest içeriğini her zaman API üzerinden (`GET /api/v1/digests/{id}
 | NotificationPreference | ✅ | ✅ | ✅ | ✅ |
 | PasswordResetToken | ✅ | ✅ | ✅ | ✅ |
 | SystemSetting | ✅ | ✅ | ✅ | ✅ |
+| PipelineRun | ✅ (Faz 6.1) | ✅ | ✅ | ✅ |
+| PipelineRunStep | ✅ (Faz 6.1) | ✅ | ✅ | ✅ |
 | Alarm | — | ✅ | ✅ | ✅ |
 | AlarmEvent | — | ✅ | ✅ | ✅ |

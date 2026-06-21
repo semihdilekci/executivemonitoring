@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,6 +22,8 @@ def _make_gov_source(**config_overrides: object) -> Source:
         "gov_subtype": "tcmb",
         "ingest_mode": "all",
         "default_category": "official",
+        # Generic parse testleri tarih'ten bağımsız olsun:
+        "max_age_days": 3650,
     }
     config.update(config_overrides)
     return Source(
@@ -180,3 +183,31 @@ async def test_gov_collector_content_hash_on_transform(tcmb_feed_xml: str) -> No
 def test_collector_map_registers_gov() -> None:
     assert "gov" in COLLECTOR_MAP
     assert isinstance(COLLECTOR_MAP["gov"], GovCollector)
+
+
+@pytest.mark.asyncio
+async def test_gov_collector_window_filters_old_entries() -> None:
+    now = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)
+    collector = GovCollector(now=now)
+    source = _make_gov_source(gov_subtype="tcmb", max_age_days=7)
+    feed = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>Guncel duyuru 2026/42</title>
+    <link>https://www.tcmb.gov.tr/yeni</link>
+    <description>Bu hafta yayimlanan duyuru.</description>
+    <pubDate>Sat, 20 Jun 2026 09:00:00 +0300</pubDate>
+  </item>
+  <item>
+    <title>Eski duyuru 2026/01</title>
+    <link>https://www.tcmb.gov.tr/eski</link>
+    <description>Mart ayinda yayimlanan duyuru.</description>
+    <pubDate>Sun, 01 Mar 2026 09:00:00 +0300</pubDate>
+  </item>
+</channel></rss>"""
+
+    with patch.object(collector, "_fetch", return_value=feed):
+        articles = await collector.collect(source)
+
+    assert len(articles) == 1
+    assert "Guncel" in articles[0].title

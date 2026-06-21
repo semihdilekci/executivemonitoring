@@ -31,7 +31,7 @@ export default function AdminChatHistoryPage() {
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
-  const usersQuery = useUsers({ limit: 100 });
+  const usersQuery = useUsers({ limit: 50 });
   const historyQuery = useChatHistory({
     user_id: userId || undefined,
     start_date: startDate || undefined,

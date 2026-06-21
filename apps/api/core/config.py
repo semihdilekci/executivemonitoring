@@ -32,10 +32,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_REFRESH: int = 20
     RATE_LIMIT_PASSWORD_RESET: int = 3
     RATE_LIMIT_CHATBOT: int = 20
+    RATE_LIMIT_PIPELINE: int = 5
 
     PASSWORD_RESET_BASE_URL: str = "http://localhost:3000/reset-password"
 
     ENCRYPTION_KEY: str = ""
+
+    IMAP_HOST: str = ""
+    IMAP_USER: str = ""
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

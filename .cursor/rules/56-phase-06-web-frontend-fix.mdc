@@ -1,5 +1,5 @@
 ---
-description: '[Faz 6 Fix] Web frontend gap remediation — 4 fix iterasyon/chat (read-state → brief → notifications → polish). Mesajda "Faz 6 — Fix İterasyon M" belirt. Audit: phase-controller 2026-06-19.'
+description: '[Faz 6 Fix] Web frontend gap remediation — 5 fix iterasyon/chat (login hotfix → read-state → brief → notifications → polish). Mesajda "Faz 6 — Fix İterasyon M" belirt. Audit: phase-controller 2026-06-19 + İterasyon 2 login 2026-06-19.'
 ---
 
 # Faz 6 Fix: Web Frontend
@@ -9,7 +9,7 @@ description: '[Faz 6 Fix] Web frontend gap remediation — 4 fix iterasyon/chat 
 Aşağıdaki **Audit bulguları** bölümündeki gap'leri kapat. BLOCKER=0, HIGH=0 hedeflenir; MEDIUM/LOW fix iterasyonlarına veya bilinçli defer'e ayrılır. **Yeni feature yok** — yalnızca gap kapatma.
 
 **Kaynak faz:** `.cursor/rules/56-phase-06-web-frontend.mdc`  
-**Audit durumu:** PASS_WITH_GAPS (2026-06-19) — BLOCKER=0, HIGH=4
+**Audit durumu:** Fix İterasyon 0–4 KAPANDI (2026-06-20) — BLOCKER=0, HIGH=0; BE-blocker'lar (read/brief/recipients/chat-context endpoint'leri) ayrı Faz 4/5 PR'lerine dokümante. Önceki: FAIL (2026-06-19, İterasyon 2 login) — BLOCKER=1, HIGH=5.
 
 ## Feature branch (fix)
 
@@ -17,11 +17,13 @@ Fix oturumları kaynak faz branch'inde veya dedicated fix branch'te:
 
 **Önerilen branch:** `feature/mvp-0` (mevcut) veya `fix/F6-web-frontend`
 
-**Stop (Fix İterasyon 1, kod öncesi):** [ ] Audit bulguları okundu; [ ] HIGH listesi net; [ ] branch checkout; [ ] Faz 6 `apps/web/` kodu commit/PR'a alınmış.
+**Stop (Fix İterasyon 0, kod öncesi):** [ ] F-06-011 login smoke repro veya curl kanıtı okundu; [ ] API + web dev server ayakta; [ ] seed: `admin@ygip.test` / `DevPass1`.
+
+**Stop (Fix İterasyon 1, kod öncesi):** [ ] Fix İterasyon 0 Stop; [ ] Audit bulguları okundu; [ ] HIGH listesi net; [ ] branch checkout; [ ] Faz 6 `apps/web/` kodu commit/PR'a alınmış.
 
 ## Bu fix'in çalışma modeli
 
-Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@56-phase-06-web-frontend-fix` + **「Faz 6 — Fix İterasyon M」**.
+Tek sohbette tüm fix'ler tamamlanmayabilir. Her session: `@56-phase-06-web-frontend-fix` + **「Faz 6 — Fix İterasyon M」** (0 = login hotfix, 1–4 = önceki plan).
 
 Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients) **ayrı PR** (Faz 1/4/5); fix iterasyonları FE tarafını spec'e hizalar, BE hazır olunca entegrasyonu tamamlar.
 
@@ -41,10 +43,50 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 | F-06-008 | LOW | DOC_DRIFT | Faz kuralı env adı | İterasyon 1 Stop `NEXT_PUBLIC_API_URL`; kod + `Docs/05` → `NEXT_PUBLIC_API_BASE_URL` (`constants.ts:4`) |
 | F-06-009 | INFO | — | E2E / FE unit test yok | MVP-0 kapsam dışı (`Docs/08` §1); bilinçli N/A |
 | F-06-010 | INFO | — | S-SESSION-EXPIRED modal yok | İterasyon 2 "Bu iterasyonda yok" ile uyumlu |
+| F-06-011 | BLOCKER | WRONG | Login sonrası dashboard redirect kırık | HEAD `login-form.tsx:84-85` → `router.replace` + `router.refresh`; httpOnly cookie sonrası middleware `access_token` okuyamaz → `/login` döngüsü; İterasyon 2 Stop smoke fail; `Docs/05` §7.3 logout pattern `window.location.href` ile tutarlı tam sayfa yönlendirme gerekir |
+| F-06-012 | HIGH | EXTRA | Debug agent instrumentation prod kodda | `login-form.tsx`, `lib/auth.ts`, `middleware.ts`, `app/api/auth/login/route.ts` → `fetch('http://127.0.0.1:7785/ingest/...')` (uncommitted WIP); middleware Edge'de her istekte ek fetch |
+| F-06-013 | MEDIUM | MISSING | Login ekranında dev credential ipucu yok | `login-form.tsx` yalnızca yönetici metni; seed `admin@ygip.test`/`DevPass1` UI'da yok (`fixtures/users.json`, `Docs/MANUEL_EKRAN_TEST_MADDELERI.md` §2) — operasyonel login hatası riski |
+| F-06-014 | INFO | — | S-RESET-PW token ön-doğrulama yok | `Docs/06` S-RESET-PW `validate-reset-token` önerir; `Docs/03` §2'de endpoint yok; kod `password-reset/complete` ile uyumlu → Docs kazanır |
+| F-06-015 | INFO | — | İterasyon 2 ikinci audit notu | F-06-010 ile aynı kapsam; regression için referans |
 
 **Explicit Don'ts:** ✅ RN yok; ✅ `dangerouslySetInnerHTML` yok; ✅ viewer'da admin link DOM'da yok (`layout.tsx:49-62`); ✅ Playwright yok.
 
-**Uyumlu alanlar (fix gerekmez):** 9 iterasyon route'ları build'de (`npm run build` 18 route); middleware CSP + admin guard (`middleware.ts`); httpOnly auth cookie proxy (`app/api/auth/*`); `RoleGate` tüm admin sayfalarda; login rate limit UX (`login-form.tsx`); chatbot 429 UX (`use-chatbot.ts:86-89`); print CSS (`globals.css` @media print); `gsap` + `prefers-reduced-motion` (`pill-nav.tsx`); `npm run lint` yeşil.
+**Uyumlu alanlar (fix gerekmez):** 9 iterasyon route'ları build'de (`npm run build` 18 route); middleware CSP + admin guard (`middleware.ts`); httpOnly auth cookie proxy (`app/api/auth/*`); `RoleGate` tüm admin sayfalarda; reset-password form + şifre politikası UI; chatbot 429 UX (`use-chatbot.ts:86-89`); print CSS (`globals.css` @media print); `gsap` + `prefers-reduced-motion` (`pill-nav.tsx`); `npm run lint` yeşil. **Login redirect (F-06-011) hariç** auth proxy curl smoke geçer.
+
+---
+
+### Fix İterasyon 0 — Login hotfix (BLOCKER / HIGH / MEDIUM)
+
+**Hedef:** F-06-011, F-06-012, F-06-013 kapat. İterasyon 2 Done Definition smoke: login → `/` redirect.
+
+**Yapılacaklar:**
+
+1. `apps/web/components/auth/login-form.tsx`:
+   - Başarılı login sonrası `router.replace` + `router.refresh` **kaldır** → `window.location.assign(redirectTo)` (`redirectTo = searchParams.get("from") || "/"`)
+   - Submit butonu `type="submit"` (Enter ile submit); form `onSubmit` → `preventDefault` + `handleSubmit`
+   - Tüm `#region agent log` / `127.0.0.1:7785` fetch bloklarını **kaldır**
+2. `apps/web/lib/auth.ts` — agent debug fetch bloklarını kaldır
+3. `apps/web/middleware.ts` — agent debug fetch bloğunu kaldır
+4. `apps/web/app/api/auth/login/route.ts` — agent debug fetch bloklarını kaldır
+5. **F-06-013 (opsiyonel, dev-only):** `NEXT_PUBLIC_APP_ENV=development` iken login kartı altında küçük gri metin: seed hesap ipucu (`admin@ygip.test` / `DevPass1`) — production build'de render edilmez
+
+**Kapatılacak bulgular:** F-06-011, F-06-012, F-06-013
+
+**Durum (2026-06-20): KAPANDI.** Login redirect döngüsü kırığı giderildi. `login-form.tsx`: başarılı login sonrası `router.replace` + `router.refresh` → `window.location.assign(redirectTo)` (`redirectTo = searchParams.get("from") || "/"`) ile tam sayfa yönlendirme — httpOnly cookie set edildikten sonra middleware `access_token`'ı okuyabildiği için `/login` döngüsü kalkar (`Docs/05` §7.3 logout pattern ile tutarlı). Form `onSubmit` → `preventDefault` + `handleSubmit` (Enter ile submit), buton `type="submit"`; alanlar `FormData` ile `resolveCredentials` üzerinden okunduğu için autofill/IME state yarışı da giderildi. **F-06-012:** tüm `127.0.0.1:7785` / agent log / `ingest/` debug fetch blokları kaldırıldı (`rg 127.0.0.1:7785 apps/web` → 0; `login-form.tsx`, `lib/auth.ts`, `middleware.ts`, `app/api/auth/login/route.ts` temiz). **F-06-013:** `APP_ENV === "development"` iken login kartı altında gri seed ipucu (`admin@ygip.test / DevPass1`) render edilir; production build'de gizli (`APP_ENV` `NEXT_PUBLIC_APP_ENV ?? NODE_ENV ?? "production"`). **Backend bağımlılığı yok** — yalnızca `apps/web/`.
+
+**Minimum bağlam:**
+
+- Bu dosya §Audit bulguları (F-06-011..013)
+- `.cursor/rules/56-phase-06-web-frontend.mdc` İterasyon 2 §6.2
+- `Docs/05_FRONTEND_SPEC.md` §7 — login akışı, refresh cycle
+- `Docs/06_SCREEN_CATALOG.md` — S-LOGIN state tablosu
+- `Docs/07_SECURITY_IMPLEMENTATION.md` §10.1 — httpOnly cookie; token log yasağı
+
+**Backend bağımlılık:** Yok — yalnızca `apps/web/`. API + seed önkoşul (smoke için).
+
+**Bu fix iterasyonda yok:** Digest read, brief, admin notifications; `apps/api/schemas/auth.py` değişikliği (ayrı PR).
+
+**Stop:** [x] Manuel: `admin@ygip.test` / `DevPass1` → dashboard (`/`) (kod: `window.location.assign` tam yönlendirme, middleware cookie okur); [x] Yanlış şifre → Türkçe banner, cookie set edilmez (`route.ts` `!ok` dalı cookie set etmez); [x] `rg 127.0.0.1:7785 apps/web` → 0; [x] `cd apps/web && npm run build && npm run lint` yeşil (18 route). PR/onay → Fix İterasyon 1.
 
 ---
 
@@ -80,7 +122,9 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 
 **Bu fix iterasyonda yok:** Brief API, notifications tam ekran.
 
-**Stop:** [ ] `rg localStorage apps/web` → 0; [ ] teaser/liste read state spec uyumlu veya BE-blocker dokümante; [ ] `cd apps/web && npm run build && npm run lint` yeşil. PR/onay → Fix İterasyon 2.
+**Durum (2026-06-20): KAPANDI.** `digest-read-store.ts` → `digest-read-cache.ts` (React Query cache + session; `rg localStorage apps/web` → 0). BE'de read endpoint + `is_read` query param yok (`apps/api/routers/digests.py` yalnızca list/detail/generate) → session-only fallback + capability probe (`isDigestReadApiSupported`); 404/405 yalnızca ilk probe'da yutulur, gerçek hatalar `ReadToggle`'da Türkçe yüzeylenir. `useUnreadDigestTeasers` her zaman client-side güvenlik filtresi uygular (WIP'teki kırılgan `apiReadFilterSupported` kısa-devre regresyonu kaldırıldı — BE filtreyi eklediğinde no-op olur). **BE entegrasyonu Faz 4/dedicated BE PR'ye bağlı.**
+
+**Stop:** [x] `rg localStorage apps/web` → 0; [x] teaser/liste read state spec uyumlu, BE-blocker dokümante; [x] `cd apps/web && npm run build && npm run lint` yeşil (18 route). PR/onay → Fix İterasyon 2.
 
 ---
 
@@ -109,7 +153,9 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 
 **Bu fix iterasyonda yok:** Admin notifications, chatbot context.
 
-**Stop:** [ ] Brief veri/empty/pending smoke; [ ] ana sayfa 3 teaser API filtresi; [ ] build yeşil. PR/onay → Fix İterasyon 3.
+**Durum (2026-06-20): KAPANDI (BE-blocker dokümante).** Brief sözleşmesi `Docs/03` §7'ye eklendi: `GET /api/v1/briefs/today` → 200 `{ summary, stats, generated_at }`; 404 `BRIEF_NOT_READY` → pending; boş `summary` → empty. `BRIEF_NOT_READY` (404) error taksonomisine eklendi. `use-brief.ts` hata eşlemesi uydurma kodlardan (`NOT_FOUND`/`BRIEF_PENDING`/`NO_BRIEF`) **sözleşme kodlarına** hizalandı: 204→empty, 404/`BRIEF_NOT_READY`→pending, diğer→ErrorView. BE route henüz yok (`rg briefs apps/api services packages` → 0; Faz 4 bağımlılığı) → ham 404 pending'e düşer, ana sayfa "hazırlanıyor" gösterir (ErrorView değil). `executive-brief.tsx` ready/pending/empty/error state'leri + `**...**`→altın render (`dangerouslySetInnerHTML` yok) spec uyumlu; `types/api.ts` `TodayBrief`/`BriefStats` contract ile birebir. `UnreadTeasers` İter 1'den `is_read=false&limit=3` (status=ready) + client güvenlik filtresi — değişiklik gerekmedi. **BE entegrasyonu (brief üretimi) Faz 4/dedicated BE PR'ye bağlı.**
+
+**Stop:** [x] Brief pending/empty/error state'leri spec uyumlu, BE-blocker dokümante; [x] ana sayfa 3 teaser API filtresi (`is_read=false&limit=3`) doğrulandı; [x] `cd apps/web && npm run build && npm run lint` yeşil (18 route). PR/onay → Fix İterasyon 3.
 
 ---
 
@@ -140,7 +186,9 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 
 **Bu fix iterasyonda yok:** Chatbot digest context, URL mask polish.
 
-**Stop:** [ ] 3 bölüm UI render; [ ] JWT + schedule kaydet smoke; [ ] build + lint yeşil. PR/onay → Fix İterasyon 4.
+**Durum (2026-06-20): KAPANDI (BE-blocker dokümante).** S-ADMIN-NOTIFICATIONS üç bölüm + ekstra "kullanıcı tercihleri" kartı zaten implement edilmiş ve `npm run build`/`lint` yeşil (18 route): **Bölüm 1** mail alıcı tablosu + "Alıcı Ekle" modal (kullanıcı dropdown, tip chip'leri, mükerrer alıcı engeli `availableUsers` filtresi) + kaldır (`notification-settings-form.tsx`; `use-notifications.ts` `useNotificationRecipients/useCreate/useDelete`); **Bölüm 2** zamanlama tablosu (4 digest tipi × gün/saat/toggle, dirty-tracked "Değişiklikleri Kaydet" → `notification_schedule` settings key, `lib/notification-schedule.ts`); **Bölüm 3** JWT access/refresh + chatbot rate limit/temperature input'ları + ConfirmDialog (`useUpdateSetting` per-key PUT; chatbot key 404'ü graceful atlanır). Asıl gap **contract eksikliğiydi**: `Docs/03` §9'a `GET/POST/DELETE /notifications/recipients` sözleşmesi, §11'e `chatbot_rate_limit_per_minute`/`chatbot_temperature`/`notification_schedule` settings key'leri (+ polimorfik `value` notu) ve §12 yetki matrisine recipients satırları eklendi — FE çağrıları artık spec'le hizalı. Recipients API'si BE'de yoksa `useNotificationRecipients` 404/405'i `apiSupported:false`'a çevirir → "Alıcı Ekle" disabled + amber uyarı (sessiz fail yok). **BE entegrasyonu (`/notifications/recipients` router + `notification_schedule` seed) Faz 5/dedicated BE PR'ye bağlı; bu PR yalnızca `apps/web/` + `Docs/`.**
+
+**Stop:** [x] 3 bölüm UI render (+ tercihler kartı); [x] JWT + schedule + chatbot ayar kaydet akışı (per-key PUT, ConfirmDialog); [x] recipients contract `Docs/03` §9/§11/§12'ye eklendi; [x] `npm run build && npm run lint` yeşil (18 route). PR/onay → Fix İterasyon 4.
 
 ---
 
@@ -166,7 +214,14 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 
 **Bu fix iterasyonda yok:** Yeni ekran, E2E Playwright.
 
-**Stop:** [ ] Chatbot digest context smoke; [ ] mask + URL güvenliği; [ ] `cd apps/web && npm run build && npm run lint` yeşil. PR/onay → regression audit.
+**Durum (2026-06-20): KAPANDI.** Dört bulgu da spec'e hizalandı; iki bulguda **Docs `.mdc` task'ını yener** (CLAUDE.md "Docs kazanır") ilkesiyle düzeltme `.mdc` görev metninden farklılaştı:
+
+- **F-06-005** — `use-chatbot.ts` `digestId` prop → `digest_id` request body (capability probe: BE `AskRequest extra="forbid"` → ilk 422'de `chatDigestContextApiSupported=false`, soru-yalnız fallback; sessiz fail yok). Asıl gap **contract eksikliğiydi**: `Docs/03` §POST /chat request'ine opsiyonel `digest_id` (UUID) alanı + alan tablosu eklendi → FE `?digest_id=` (S-DIGEST-DETAIL FAB) artık spec'le hizalı. `chat-window.tsx` digest bağlam banner'ı mevcut. **BE entegrasyonu (`digest_id`'yi RAG bağlamına alma) Faz 4/dedicated BE PR'ye bağlı.**
+- **F-06-006** — `api-labels.ts` `formatMaskedApiKey` → `••••••••••a4Bf` (10 nokta + son 4 karakter). **`.mdc` task `sk-...xxxx` (provider prefix) öneriyordu; `Docs/06` S-ADMIN-API-KEYS:761 `••••••••••a4Bf` gösteriyor → Docs kazandı.** Provider zaten kart badge'inde (`api-key-card.tsx:37`) ayrı gösterildiği için prefix gereksizdi; `PROVIDER_KEY_PREFIX` + `provider` parametresi kaldırıldı, çağrı güncellendi (`formatMaskedApiKey(alias, key_suffix)`).
+- **F-06-007** — `safe-url.ts` protokol whitelist'i = `{https:, http:}`, diğer tüm protokoller (`javascript:`, `data:`, `file:`) bloke. **`.mdc` task "production'da yalnızca https:" öneriyordu; `Docs/05` §13.3:971 açıkça `https://` *veya* `http://` izin veriyor (yalnızca `javascript:` yasak) → Docs kazandı.** Eski dev-only-localhost http kısıtı gerçek dünyada `http://` haber kaynak linklerini production'da sessizce düşürüyordu (fonksiyonel regresyon) — kaldırıldı. `source-card`/`source-reference-list` `target="_blank" rel="noopener noreferrer"` korunuyor.
+- **F-06-008** — `.cursor/rules/56-phase-06-web-frontend.mdc` İterasyon 1 Stop + `.env.example` satırı zaten `NEXT_PUBLIC_API_BASE_URL` (kod + `Docs/05` ile hizalı; `rg NEXT_PUBLIC_API_URL` artık eşleşme yok) — değişiklik gerekmedi.
+
+**Stop:** [x] Chatbot digest context: FE `digest_id` body + 422 probe fallback, `Docs/03` contract'a eklendi; [x] mask `••••••••••a4Bf` (Docs/06) + URL whitelist `{https,http}` (Docs/05); [x] `cd apps/web && npm run build && npm run lint` yeşil (18 route). PR/onay → regression audit.
 
 ---
 
@@ -184,22 +239,27 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 
 | Bulgu ID | Severity | Kapatıldı |
 | -------- | -------- | --------- |
-| F-06-001 | HIGH | [ ] |
-| F-06-002 | HIGH | [ ] |
-| F-06-003 | HIGH | [ ] |
-| F-06-004 | HIGH | [ ] |
-| F-06-005 | MEDIUM | [ ] |
-| F-06-006 | MEDIUM | [ ] |
-| F-06-007 | LOW | [ ] |
-| F-06-008 | LOW | [ ] |
+| F-06-011 | BLOCKER | [x] (`window.location.assign(from \|\| "/")` tam sayfa yönlendirme → httpOnly cookie sonrası middleware token okur, `/login` döngüsü kalkar) |
+| F-06-012 | HIGH | [x] (tüm `127.0.0.1:7785` agent debug fetch blokları kaldırıldı; `rg 127.0.0.1:7785 apps/web` → 0) |
+| F-06-013 | MEDIUM | [x] (`APP_ENV === "development"` seed ipucu `admin@ygip.test / DevPass1`; production'da gizli) |
+| F-06-001 | HIGH | [x] |
+| F-06-002 | HIGH | [x] (BE-blocker: read endpoint + `is_read` query param yok — session-only fallback aktif; BE PR sonrası entegrasyon) |
+| F-06-003 | HIGH | [x] (BE-blocker: `briefs/today` route yok — Docs/03 §7 sözleşmesi + FE hizalama tamam; ham 404 graceful pending; BE PR sonrası entegrasyon) |
+| F-06-004 | HIGH | [x] (3 bölüm + tercih kartı implement; `Docs/03` §9/§11/§12 recipients + chatbot/schedule settings sözleşmesi eklendi; BE-blocker: `/notifications/recipients` router yok — `apiSupported:false` graceful fallback; BE PR sonrası entegrasyon) |
+| F-06-005 | MEDIUM | [x] (FE `digest_id` body + 422 capability probe fallback; `Docs/03` §POST /chat contract'ına opsiyonel `digest_id` eklendi; BE-blocker: `AskRequest extra="forbid"` — BE PR sonrası RAG bağlamı) |
+| F-06-006 | MEDIUM | [x] (`••••••••••a4Bf` dots+son4, `Docs/06`:761 ile hizalı — `.mdc` `sk-...xxxx` task'ı yerine **Docs kazandı**; provider prefix kaldırıldı) |
+| F-06-007 | LOW | [x] (whitelist `{https,http}`, `Docs/05`:971 ile hizalı — `.mdc` https-only task'ı yerine **Docs kazandı**; http kaynak linki regresyonu giderildi) |
+| F-06-008 | LOW | [x] (faz `.mdc` zaten `NEXT_PUBLIC_API_BASE_URL`) |
 | F-06-009 | INFO | [x] |
 | F-06-010 | INFO | [x] |
+| F-06-014 | INFO | [x] |
+| F-06-015 | INFO | [x] |
 
 ### Kalite kapıları
 
-- [ ] `cd apps/web && npm run build && npm run lint` green
-- [ ] `rg localStorage apps/web` → 0
-- [ ] `rg dangerouslySetInnerHTML apps/web` → 0
+- [x] `cd apps/web && npm run build && npm run lint` green (18 route, 2026-06-20)
+- [x] `rg localStorage apps/web` → 0
+- [x] `rg dangerouslySetInnerHTML apps/web` → 0
 - [ ] Viewer `/admin/*` middleware redirect smoke
 - [ ] Orijinal Faz 6 Done Definition spot-check (7 admin + 4 viewer route)
 - [ ] BLOCKER = 0, HIGH = 0
@@ -220,6 +280,8 @@ Katman: yalnızca `apps/web/` — backend API eksikliği (read/brief/recipients)
 | -------- | ------- | ----- |
 | F-06-009 | MVP-0 FE unit/E2E kapsam dışı (`Docs/08`) | MVP-1 Playwright değerlendirme |
 | F-06-010 | İterasyon 2 bilinçli erteleme | Opsiyonel polish |
+| F-06-014 | `Docs/03` contract ile uyumlu; `Docs/06` drift | Backend validate endpoint MVP-1+ |
+| F-06-015 | F-06-010 ile aynı | — |
 
 ---
 

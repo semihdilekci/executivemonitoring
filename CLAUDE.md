@@ -86,8 +86,10 @@ Mesajda **「Faz N — İterasyon M」** belirt. Kod öncesi `48-git-phase-branc
 | 4 | AI engine | `@54-phase-04-ai-engine` |
 | 5 | Bildirim backend | `@55-phase-05-notifications` |
 | 6 | Web frontend | `@56-phase-06-web-frontend` |
+| 6.1 | Pipeline monitoring kokpiti | `@59-phase-061-pipeline-monitoring` |
+| 6.2 | İçerik Arşivi (admin) | `@60-phase-062-content-archive` |
 | 7 | Mobil | `@57-phase-07-mobile` |
-| 8 | Production deploy | `@58-phase-08-production-launch` |
+| 8 | Pipeline runtime (Lambda deploy) | `@58-phase-08-pipeline-runtime` |
 
 ---
 

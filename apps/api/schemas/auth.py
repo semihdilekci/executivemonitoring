@@ -2,18 +2,29 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 
 from packages.shared.enums import UserRole
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from apps.api.core.security import validate_password_strength
 
+_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def validate_login_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not _EMAIL_PATTERN.match(normalized):
+            raise ValueError("Geçerli bir e-posta adresi girin.")
+        return normalized
 
 
 class RefreshRequest(BaseModel):

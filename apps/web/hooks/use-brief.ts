@@ -17,21 +17,21 @@ function isEmptyBrief(brief: TodayBrief): boolean {
 async function fetchTodayBrief(): Promise<BriefQueryState> {
   try {
     const response = await apiClient.get<TodayBrief>("/briefs/today");
+    // Boş summary → henüz `ready` bülten yok (Docs/03 §7 briefs/today).
     if (isEmptyBrief(response.data)) {
       return { status: "empty" };
     }
     return { status: "ready", brief: response.data };
   } catch (error) {
     const apiError = error as ApiError;
-    if (
-      apiError.statusCode === 404 ||
-      apiError.code === "NOT_FOUND" ||
-      apiError.code === "BRIEF_PENDING"
-    ) {
-      return { status: "pending" };
-    }
-    if (apiError.code === "NO_BRIEF" || apiError.statusCode === 204) {
+    // Sözleşme (Docs/03 §7): 404 BRIEF_NOT_READY → özet henüz hazırlanmadı.
+    // 204 → veri yok. Backend route henüz yokken (Faz 4 bağımlılığı) ham 404
+    // de pending'e düşer; ana sayfa "hazırlanıyor" gösterir, ErrorView değil.
+    if (apiError.statusCode === 204) {
       return { status: "empty" };
+    }
+    if (apiError.statusCode === 404 || apiError.code === "BRIEF_NOT_READY") {
+      return { status: "pending" };
     }
     throw error;
   }

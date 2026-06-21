@@ -100,3 +100,40 @@ class NotificationType(StrEnum):
     """Bildirim tipi — `notification_logs.notification_type`."""
 
     DIGEST_READY = "digest_ready"
+
+
+class PipelineRunType(StrEnum):
+    """Pipeline çalıştırma tipi (`pipeline_run_type_enum`)."""
+
+    COLLECT_PIPELINE = "collect_pipeline"
+    DIGEST_UPDATE = "digest_update"
+
+
+class PipelineRunStatus(StrEnum):
+    """Pipeline run durumu (`pipeline_run_status_enum`)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class PipelineStage(StrEnum):
+    """Pipeline aşaması (`pipeline_stage_enum`)."""
+
+    COLLECT = "collect"
+    INGEST = "ingest"
+    PROCESS = "process"
+    DIGEST = "digest"
+
+
+class PipelineStepStatus(StrEnum):
+    """Pipeline adım durumu (`pipeline_step_status_enum`)."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"

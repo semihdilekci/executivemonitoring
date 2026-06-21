@@ -10,10 +10,8 @@ export const API_PROVIDER_BADGE_CLASS: Record<ApiProvider, string> = {
   gemini: "bg-violet-100 text-violet-800 border-violet-200",
 };
 
-const PROVIDER_KEY_PREFIX: Record<ApiProvider, string> = {
-  groq: "gsk",
-  gemini: "AI",
-};
+/** Docs/06 S-ADMIN-API-KEYS: `••••••••••a4Bf` — yalnızca son 4 karakter görünür. */
+const MASK_PREFIX = "•".repeat(10);
 
 function resolveKeySuffix(alias: string, keySuffix?: string | null): string {
   if (keySuffix && keySuffix.length >= 4) {
@@ -28,10 +26,7 @@ function resolveKeySuffix(alias: string, keySuffix?: string | null): string {
 
 export function formatMaskedApiKey(
   alias: string,
-  provider: ApiProvider = "groq",
   keySuffix?: string | null,
 ): string {
-  const prefix = PROVIDER_KEY_PREFIX[provider];
-  const suffix = resolveKeySuffix(alias, keySuffix);
-  return `${prefix}-...${suffix}`;
+  return `${MASK_PREFIX}${resolveKeySuffix(alias, keySuffix)}`;
 }

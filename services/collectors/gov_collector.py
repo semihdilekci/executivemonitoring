@@ -16,8 +16,11 @@ from urllib.request import Request, urlopen
 import feedparser
 from packages.shared.enums import SourceType
 from packages.shared.models.source import Source
+from redis.asyncio import Redis
 
 from services.collectors.base_collector import BaseCollector
+from services.collectors.feed_utils import is_within_window, resolve_window_days
+from services.collectors.kap_api_collector import KapApiCollector
 from services.collectors.models import RawArticle
 
 logger = logging.getLogger("ygip.collectors.gov")
@@ -32,6 +35,15 @@ _INSTITUTION_BY_SUBTYPE = {
     "kap": "KAP",
     "resmi_gazete": "Resmi Gazete",
 }
+# TCMB Atom feed'i tarihleri Türkçe ay kısaltmasıyla verir ("18 Haz 2026 14:00:00");
+# feedparser/parsedate_to_datetime bunu çözemediği için elle parse ediyoruz.
+_TR_MONTHS = {
+    "oca": 1, "şub": 2, "sub": 2, "mar": 3, "nis": 4, "may": 5, "haz": 6,
+    "tem": 7, "ağu": 8, "agu": 8, "eyl": 9, "eki": 10, "kas": 11, "ara": 12,
+}
+_TR_DATE_RE = re.compile(
+    r"(\d{1,2})\s+([A-Za-zÇĞİÖŞÜçğıöşü]+)\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?"
+)
 
 
 class GovCollector(BaseCollector):
@@ -39,7 +51,18 @@ class GovCollector(BaseCollector):
 
     source_type = SourceType.GOV
 
+    def __init__(self, redis_client: Redis | None = None, *, now: datetime | None = None) -> None:
+        super().__init__(redis_client)
+        self._now = now
+        # KAP gibi JSON API kaynakları (parser_type == "api") RSS parse edilemez;
+        # bu kaynaklar için ayrı API collector'a delege edilir. Altyapı KAP'ı
+        # "gov" schedule'ı ile tetiklediğinden source_type "gov" kalır.
+        self._api_collector: KapApiCollector | None = None
+
     async def collect(self, source: Source) -> list[RawArticle]:
+        if _is_api_source(source.config):
+            return await self._get_api_collector(source).collect(source)
+
         endpoint_url = source.config.get("endpoint_url")
         if not isinstance(endpoint_url, str) or not endpoint_url.strip():
             logger.warning(
@@ -59,6 +82,11 @@ class GovCollector(BaseCollector):
             raise RuntimeError(f"Gov feed alınamadı: {endpoint_url}") from exc
 
         return self._parse_feed(source, raw_feed)
+
+    def _get_api_collector(self, source: Source) -> KapApiCollector:
+        if self._api_collector is None:
+            self._api_collector = KapApiCollector(self._redis, now=self._now)
+        return self._api_collector
 
     async def _fetch(self, url: str, *, timeout: int = 30) -> bytes:
         """Feed içeriğini indirir — unit testlerde mock'lanır."""
@@ -81,11 +109,28 @@ class GovCollector(BaseCollector):
             return []
 
         gov_subtype = _resolve_gov_subtype(source.config)
+        window_days = resolve_window_days(source.config)
+
         articles: list[RawArticle] = []
+        skipped_old = 0
         for entry in parsed.entries:
-            article = self._entry_to_article(source, entry, gov_subtype)
+            published_at = _parse_published_at(entry)
+            if not is_within_window(published_at, window_days, now=self._now):
+                skipped_old += 1
+                continue
+            article = self._entry_to_article(source, entry, gov_subtype, published_at)
             if article is not None:
                 articles.append(article)
+
+        if skipped_old:
+            logger.info(
+                "gov_window_filtered",
+                extra={
+                    "source_id": str(source.id),
+                    "skipped_old": skipped_old,
+                    "window_days": window_days,
+                },
+            )
         return articles
 
     def _entry_to_article(
@@ -93,16 +138,22 @@ class GovCollector(BaseCollector):
         source: Source,
         entry: Any,
         gov_subtype: str | None,
+        published_at: datetime | None,
     ) -> RawArticle | None:
         title = _normalize_text(_clean_text(getattr(entry, "title", "")))
         url = _clean_text(getattr(entry, "link", ""))
         content = self._extract_content(entry)
 
+        # Resmi duyuru feed'lerinde (ör. TCMB Basın Duyuruları) özet alanı çoğu
+        # zaman boştur; başlık tek anlamlı içeriktir. İçerik yoksa başlığa düş ki
+        # geçerli duyurular validasyonda elenmesin.
+        if not content and title:
+            content = title
+
         if not title or not content or not url:
             return None
 
         external_id = _clean_text(getattr(entry, "id", "")) or url
-        published_at = _parse_published_at(entry)
         metadata = _build_gov_metadata(entry, title, gov_subtype)
 
         return RawArticle(
@@ -133,6 +184,11 @@ class GovCollector(BaseCollector):
                 return _normalize_text(extracted)
 
         return _normalize_text(_clean_text(raw_content))
+
+
+def _is_api_source(config: dict[str, Any]) -> bool:
+    """Kaynak RSS yerine JSON API mi? (`parser_type == "api"`)."""
+    return str(config.get("parser_type", "")).strip().lower() == "api"
 
 
 def _resolve_gov_subtype(config: dict[str, Any]) -> str | None:
@@ -235,5 +291,31 @@ def _parse_published_at(entry: Any) -> datetime | None:
                     return dt.replace(tzinfo=UTC)
                 return dt.astimezone(UTC)
             except (TypeError, ValueError):
-                continue
+                pass
+            tr_dt = _parse_turkish_date(raw)
+            if tr_dt is not None:
+                return tr_dt
     return None
+
+
+def _parse_turkish_date(raw: str) -> datetime | None:
+    """`18 Haz 2026 14:00:00` gibi Türkçe ay kısaltmalı tarihleri UTC olarak çözer."""
+    match = _TR_DATE_RE.search(raw)
+    if not match:
+        return None
+    day, month_name, year, hour, minute, second = match.groups()
+    month = _TR_MONTHS.get(month_name[:3].lower())
+    if month is None:
+        return None
+    try:
+        return datetime(
+            int(year),
+            month,
+            int(day),
+            int(hour or 0),
+            int(minute or 0),
+            int(second or 0),
+            tzinfo=UTC,
+        )
+    except (TypeError, ValueError):
+        return None

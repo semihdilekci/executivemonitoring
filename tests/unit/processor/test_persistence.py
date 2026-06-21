@@ -51,6 +51,7 @@ def _output_with_chunks(
     )
     output.extras = {
         "schema_category": "news",
+        "category": "macro",
         "clean_content": item.content,
         "language": "tr",
         "relevance_score": 0.5,
@@ -104,6 +105,53 @@ async def test_persist_pipeline_output_happy_path() -> None:
     assert result.chunk_count == 1
     session.add.assert_called_once()
     assert session.flush.await_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_persist_pipeline_output_sets_content_category() -> None:
+    raw_item_id = uuid.uuid4()
+    item = _sample_input()
+    output = _output_with_chunks(item)
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=_mock_scalar_result(None))
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+
+    embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
+    await persist_pipeline_output(
+        session,  # type: ignore[arg-type]
+        embedding,
+        raw_item_id=raw_item_id,
+        output=output,
+    )
+
+    added = session.add.call_args.args[0]
+    assert added.content_category == "macro"
+
+
+@pytest.mark.asyncio
+async def test_persist_pipeline_output_content_category_none_when_missing() -> None:
+    raw_item_id = uuid.uuid4()
+    item = _sample_input()
+    output = _output_with_chunks(item)
+    output.extras.pop("category")
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=_mock_scalar_result(None))
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+
+    embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
+    await persist_pipeline_output(
+        session,  # type: ignore[arg-type]
+        embedding,
+        raw_item_id=raw_item_id,
+        output=output,
+    )
+
+    added = session.add.call_args.args[0]
+    assert added.content_category is None
 
 
 @pytest.mark.asyncio
