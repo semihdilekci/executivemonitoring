@@ -7,7 +7,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from services.processor.base_processor import BaseProcessor
-from services.processor.keyword_pool import has_master_keyword_match
+from services.processor.keyword_pool import KeywordPoolProvider, has_master_match
 from services.processor.models import ProcessorContext, ProcessorOutput
 
 logger = logging.getLogger("ygip.processor.gate")
@@ -53,8 +53,19 @@ def resolve_ingest_mode(config: dict[str, Any]) -> str:
 class GateProcessor(BaseProcessor):
     """ingest_mode gate — filtered kaynaklarda master keyword eşleşmesi zorunlu."""
 
-    def __init__(self, source_config_resolver: SourceConfigResolver | None = None) -> None:
+    def __init__(
+        self,
+        source_config_resolver: SourceConfigResolver | None = None,
+        *,
+        keyword_pool_provider: KeywordPoolProvider | None = None,
+    ) -> None:
         self._config_resolver = source_config_resolver
+        self._keyword_pool_provider = keyword_pool_provider
+
+    async def _master_pool(self) -> tuple[str, ...]:
+        if self._keyword_pool_provider is None:
+            return ()
+        return await self._keyword_pool_provider.master_pool()
 
     async def _load_config(self, ctx: ProcessorContext) -> dict[str, Any]:
         if "source_config" in ctx.data.extras:
@@ -82,7 +93,8 @@ class GateProcessor(BaseProcessor):
             )
             return ctx.data
 
-        if has_master_keyword_match(ctx.data.title, ctx.data.content):
+        master_pool = await self._master_pool()
+        if has_master_match(ctx.data.title, ctx.data.content, master_pool):
             logger.debug(
                 "processor_gate_pass_filtered",
                 extra={"source_id": str(ctx.data.source_id)},

@@ -14,6 +14,8 @@ from services.processor.config import get_processor_settings
 from services.processor.embedding_service import EmbeddingService, build_embedding_backend
 from services.processor.enricher import EnricherProcessor
 from services.processor.gate_processor import GateProcessor
+from services.processor.keyword_pool import KeywordPoolProvider
+from services.processor.keyword_repository import load_active_keywords
 from services.processor.models import ProcessedResult, ProcessorInput
 from services.processor.normalizer import NormalizerProcessor
 from services.processor.persistence import persist_pipeline_output, resolve_raw_item_id
@@ -28,15 +30,17 @@ def build_processor_chain(
     redis: Redis,
     *,
     source_config_resolver: DbSourceConfigResolver | None = None,
+    keyword_pool_provider: KeywordPoolProvider | None = None,
 ) -> ProcessorChain:
     """Dedup → normalize → gate → enrich → score → chunk (`Docs/04` §8)."""
     resolver = source_config_resolver
+    provider = keyword_pool_provider
     return with_dedup_first(
         redis,
         [
             NormalizerProcessor(),
-            GateProcessor(resolver),
-            EnricherProcessor(resolver),
+            GateProcessor(resolver, keyword_pool_provider=provider),
+            EnricherProcessor(resolver, keyword_pool_provider=provider),
             ScorerProcessor(),
             ChunkerProcessor(),
         ],
@@ -63,7 +67,12 @@ class PipelineOrchestrator:
             batch_size=settings.EMBEDDING_BATCH_SIZE,
         )
         config_resolver = DbSourceConfigResolver(session)
-        self._chain = chain or build_processor_chain(redis, source_config_resolver=config_resolver)
+        keyword_provider = KeywordPoolProvider(lambda: load_active_keywords(session))
+        self._chain = chain or build_processor_chain(
+            redis,
+            source_config_resolver=config_resolver,
+            keyword_pool_provider=keyword_provider,
+        )
 
     @property
     def chain(self) -> ProcessorChain:

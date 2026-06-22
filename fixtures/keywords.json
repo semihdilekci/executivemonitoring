@@ -1,0 +1,4627 @@
+[
+  {
+    "term_tr": "enflasyon",
+    "term_en": "inflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "faiz",
+    "term_en": "interest rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "merkez bankası",
+    "term_en": "central bank",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "tcmb",
+    "term_en": "central bank of turkey",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "gayri safi yurt içi hasıla",
+    "term_en": "gross domestic product",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "gsyih",
+    "term_en": "gdp",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "büyüme oranı",
+    "term_en": "growth rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "cari açık",
+    "term_en": "current account deficit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "işsizlik",
+    "term_en": "unemployment",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "bütçe açığı",
+    "term_en": "budget deficit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "resesyon",
+    "term_en": "recession",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "para politikası",
+    "term_en": "monetary policy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "maliye politikası",
+    "term_en": "fiscal policy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "uluslararası para fonu",
+    "term_en": "international monetary fund",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "borsa",
+    "term_en": "stock exchange",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "hisse senedi",
+    "term_en": "equity share",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "borsa istanbul",
+    "term_en": "borsa istanbul",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "döviz kuru",
+    "term_en": "exchange rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "macro",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "dolar",
+    "term_en": "dollar",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "euro",
+    "term_en": "euro",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "tahvil",
+    "term_en": "bond",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "hazine bonosu",
+    "term_en": "treasury bill",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "bilanço",
+    "term_en": "balance sheet",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "halka arz",
+    "term_en": "initial public offering",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "temettü",
+    "term_en": "dividend",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "politika faizi",
+    "term_en": "policy rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "kamuyu aydınlatma platformu",
+    "term_en": "public disclosure platform",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kripto para",
+    "term_en": "cryptocurrency",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kredi derecelendirme",
+    "term_en": "credit rating",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "hızlı tüketim ürünleri",
+    "term_en": "fast moving consumer goods",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 10
+      }
+    ]
+  },
+  {
+    "term_tr": "perakende",
+    "term_en": "retail",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 9
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "market zinciri",
+    "term_en": "supermarket chain",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "gıda",
+    "term_en": "food",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "içecek",
+    "term_en": "beverage",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "ambalaj",
+    "term_en": "packaging",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "tedarik zinciri",
+    "term_en": "supply chain",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "tüketici talebi",
+    "term_en": "consumer demand",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 8
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "raf payı",
+    "term_en": "shelf share",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "atıştırmalık",
+    "term_en": "snack",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "süt ürünleri",
+    "term_en": "dairy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "unlu mamuller",
+    "term_en": "bakery",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "şekerleme",
+    "term_en": "confectionery",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "marka sadakati",
+    "term_en": "brand loyalty",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "e-ticaret",
+    "term_en": "e-commerce",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "strateji",
+    "term_en": "strategy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "inovasyon",
+    "term_en": "innovation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "dijital dönüşüm",
+    "term_en": "digital transformation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "yapay zeka",
+    "term_en": "artificial intelligence",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "sürdürülebilirlik",
+    "term_en": "sustainability",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "birleşme ve satın alma",
+    "term_en": "mergers and acquisitions",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "yatırım",
+    "term_en": "investment",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "büyüme stratejisi",
+    "term_en": "growth strategy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "rekabet",
+    "term_en": "competition",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "pazar payı",
+    "term_en": "market share",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "araştırma geliştirme",
+    "term_en": "research and development",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "verimlilik",
+    "term_en": "efficiency",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 3
+      }
+    ]
+  },
+  {
+    "term_tr": "otomasyon",
+    "term_en": "automation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "jeopolitik",
+    "term_en": "geopolitical",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "savaş",
+    "term_en": "war",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "yaptırım",
+    "term_en": "sanctions",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 9
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ambargo",
+    "term_en": "embargo",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 8
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "çatışma",
+    "term_en": "conflict",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "diplomasi",
+    "term_en": "diplomacy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "sınır güvenliği",
+    "term_en": "border security",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "terör",
+    "term_en": "terrorism",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "darbe",
+    "term_en": "coup",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "enerji güvenliği",
+    "term_en": "energy security",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "göç",
+    "term_en": "migration",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "savunma sanayii",
+    "term_en": "defense industry",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "resmi gazete",
+    "term_en": "official gazette",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "yönetmelik",
+    "term_en": "regulation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "kanun",
+    "term_en": "law",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "mevzuat",
+    "term_en": "legislation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "kişisel verilerin korunması",
+    "term_en": "personal data protection",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "vergi",
+    "term_en": "tax",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "gümrük",
+    "term_en": "customs",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "rekabet kurumu",
+    "term_en": "competition authority",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "denetim",
+    "term_en": "audit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "teşvik",
+    "term_en": "incentive",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "uyum",
+    "term_en": "compliance",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "üretici fiyat endeksi",
+    "term_en": "producer price index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "tüketici fiyat endeksi",
+    "term_en": "consumer price index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "manşet enflasyon",
+    "term_en": "headline inflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "çekirdek enflasyon",
+    "term_en": "core inflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "stagflasyon",
+    "term_en": "stagflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "dezenflasyon",
+    "term_en": "disinflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "hiperenflasyon",
+    "term_en": "hyperinflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "ekonomik durgunluk",
+    "term_en": "economic stagnation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "döviz rezervi",
+    "term_en": "foreign exchange reserves",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "net rezervler",
+    "term_en": "net reserves",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "dış ticaret açığı",
+    "term_en": "trade deficit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "ihracat",
+    "term_en": "exports",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "fmcg",
+        "rating": 4
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ithalat",
+    "term_en": "imports",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "ödemeler dengesi",
+    "term_en": "balance of payments",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "doğrudan yabancı yatırım",
+    "term_en": "foreign direct investment",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "sıcak para",
+    "term_en": "hot money",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "sermaye çıkışı",
+    "term_en": "capital outflow",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "risk primi",
+    "term_en": "risk premium",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "cds primi",
+    "term_en": "credit default swap",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "kamu borcu",
+    "term_en": "public debt",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "dış borç",
+    "term_en": "external debt",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "bütçe dengesi",
+    "term_en": "budget balance",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "faiz dışı fazla",
+    "term_en": "primary surplus",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "asgari ücret",
+    "term_en": "minimum wage",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "reel ücret",
+    "term_en": "real wages",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "satın alma gücü",
+    "term_en": "purchasing power",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "tüketici güven endeksi",
+    "term_en": "consumer confidence index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "reel sektör güven endeksi",
+    "term_en": "real sector confidence index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "sanayi üretimi",
+    "term_en": "industrial production",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "kapasite kullanım oranı",
+    "term_en": "capacity utilization rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "satın alma yöneticileri endeksi",
+    "term_en": "purchasing managers index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ekonomik büyüme",
+    "term_en": "economic growth",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "ekonomik kriz",
+    "term_en": "economic crisis",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 9
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "emtia fiyatları",
+    "term_en": "commodity prices",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "petrol fiyatları",
+    "term_en": "oil prices",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      },
+      {
+        "category": "geopolitical",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "doğalgaz fiyatları",
+    "term_en": "natural gas prices",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "geopolitical",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "altın fiyatları",
+    "term_en": "gold prices",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "niceliksel sıkılaşma",
+    "term_en": "quantitative tightening",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "parasal genişleme",
+    "term_en": "quantitative easing",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "amerikan merkez bankası",
+    "term_en": "federal reserve",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "avrupa merkez bankası",
+    "term_en": "european central bank",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "orta vadeli program",
+    "term_en": "medium term program",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "vergi reformu",
+    "term_en": "tax reform",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "istihdam",
+    "term_en": "employment",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "kur korumalı mevduat",
+    "term_en": "fx protected deposit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "bist 100",
+    "term_en": "bist 100 index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 9
+      }
+    ]
+  },
+  {
+    "term_tr": "piyasa endeksi",
+    "term_en": "market index",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "piyasa değeri",
+    "term_en": "market capitalization",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "işlem hacmi",
+    "term_en": "trading volume",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "volatilite",
+    "term_en": "volatility",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "portföy",
+    "term_en": "portfolio",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "portföy yönetimi",
+    "term_en": "portfolio management",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "varlık yönetimi",
+    "term_en": "asset management",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "yatırım fonu",
+    "term_en": "mutual fund",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "borsa yatırım fonu",
+    "term_en": "exchange traded fund",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "emeklilik fonu",
+    "term_en": "pension fund",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "girişim sermayesi",
+    "term_en": "venture capital",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "özel sermaye",
+    "term_en": "private equity",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "melek yatırımcı",
+    "term_en": "angel investor",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "kredi",
+    "term_en": "loan",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kredi faizi",
+    "term_en": "lending rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "mevduat",
+    "term_en": "deposit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "mevduat faizi",
+    "term_en": "deposit rate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "banka",
+    "term_en": "bank",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "bankacılık sektörü",
+    "term_en": "banking sector",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "bankacılık düzenleme ve denetleme kurumu",
+    "term_en": "banking regulation authority",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "sermaye piyasası kurulu",
+    "term_en": "capital markets board",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "sermaye piyasası",
+    "term_en": "capital market",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "likidite",
+    "term_en": "liquidity",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "nakit akışı",
+    "term_en": "cash flow",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "net kar",
+    "term_en": "net profit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "faaliyet karı",
+    "term_en": "operating profit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "favök",
+    "term_en": "ebitda",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ciro",
+    "term_en": "revenue",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 8
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "borçluluk oranı",
+    "term_en": "leverage ratio",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "iflas",
+    "term_en": "bankruptcy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "konkordato",
+    "term_en": "debt composition",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "yeniden yapılandırma",
+    "term_en": "restructuring",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "eurobond",
+    "term_en": "eurobond",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "repo",
+    "term_en": "repurchase agreement",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "swap",
+    "term_en": "currency swap",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "türev ürünler",
+    "term_en": "derivatives",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "vadeli işlemler",
+    "term_en": "futures contract",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "opsiyon",
+    "term_en": "options contract",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "temel analiz",
+    "term_en": "fundamental analysis",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "teknik analiz",
+    "term_en": "technical analysis",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "fiyat kazanç oranı",
+    "term_en": "price earnings ratio",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "hisse geri alımı",
+    "term_en": "share buyback",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "sermaye artırımı",
+    "term_en": "capital increase",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "bedelli sermaye artırımı",
+    "term_en": "rights issue",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "finansal tablolar",
+    "term_en": "financial statements",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "faiz indirimi",
+    "term_en": "rate cut",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "faiz artırımı",
+    "term_en": "rate hike",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "yatırımcı ilişkileri",
+    "term_en": "investor relations",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "kredi hacmi",
+    "term_en": "credit volume",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "bisküvi",
+    "term_en": "biscuit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "çikolata",
+    "term_en": "chocolate",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "gofret",
+    "term_en": "wafer",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "kek",
+    "term_en": "cake",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "kraker",
+    "term_en": "cracker",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "sakız",
+    "term_en": "chewing gum",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "kuruyemiş",
+    "term_en": "nuts",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "bakliyat",
+    "term_en": "legumes",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "yemeklik yağ",
+    "term_en": "edible oil",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "margarin",
+    "term_en": "margarine",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "dondurma",
+    "term_en": "ice cream",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ambalajlı su",
+    "term_en": "bottled water",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "meşrubat",
+    "term_en": "soft drink",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "hazır gıda",
+    "term_en": "packaged food",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "gıda güvenliği",
+    "term_en": "food safety",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "helal gıda",
+    "term_en": "halal food",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "organik ürün",
+    "term_en": "organic product",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "glutensiz ürün",
+    "term_en": "gluten free product",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "özel markalı ürün",
+    "term_en": "private label",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "marka",
+    "term_en": "brand",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "markalaşma",
+    "term_en": "branding",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "reklam",
+    "term_en": "advertising",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "pazarlama",
+    "term_en": "marketing",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "promosyon",
+    "term_en": "promotion",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "indirim marketi",
+    "term_en": "discount retailer",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "süpermarket",
+    "term_en": "supermarket",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "hipermarket",
+    "term_en": "hypermarket",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "bakkal",
+    "term_en": "convenience store",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "toptan satış",
+    "term_en": "wholesale",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "dağıtım ağı",
+    "term_en": "distribution network",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "lojistik",
+    "term_en": "logistics",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "soğuk zincir",
+    "term_en": "cold chain",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "depo yönetimi",
+    "term_en": "warehouse management",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "stok yönetimi",
+    "term_en": "inventory management",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "fason üretim",
+    "term_en": "contract manufacturing",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "üretim tesisi",
+    "term_en": "production facility",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "fabrika",
+    "term_en": "factory",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kategori yönetimi",
+    "term_en": "category management",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "tüketici davranışı",
+    "term_en": "consumer behavior",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "satın alma alışkanlığı",
+    "term_en": "purchasing habits",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "fiyatlandırma",
+    "term_en": "pricing",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "gıda enflasyonu",
+    "term_en": "food inflation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "tarım",
+    "term_en": "agriculture",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "hammadde",
+    "term_en": "raw material",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "buğday",
+    "term_en": "wheat",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kakao",
+    "term_en": "cocoa",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "şeker",
+    "term_en": "sugar",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "fındık",
+    "term_en": "hazelnut",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ayçiçek yağı",
+    "term_en": "sunflower oil",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ihracat pazarı",
+    "term_en": "export market",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ortaklık",
+    "term_en": "partnership",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "stratejik ortaklık",
+    "term_en": "strategic partnership",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "ortak girişim",
+    "term_en": "joint venture",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "şirket devralma",
+    "term_en": "takeover",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "elden çıkarma",
+    "term_en": "divestiture",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "kurumsal dönüşüm",
+    "term_en": "corporate transformation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "pazara giriş",
+    "term_en": "market entry",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "uluslararasılaşma",
+    "term_en": "internationalization",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "ihracat stratejisi",
+    "term_en": "export strategy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "çeşitlendirme",
+    "term_en": "diversification",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "dikey entegrasyon",
+    "term_en": "vertical integration",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "ölçek ekonomisi",
+    "term_en": "economies of scale",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "maliyet liderliği",
+    "term_en": "cost leadership",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "farklılaşma stratejisi",
+    "term_en": "differentiation strategy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "rekabet avantajı",
+    "term_en": "competitive advantage",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "değer zinciri",
+    "term_en": "value chain",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "iş modeli",
+    "term_en": "business model",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "girişimcilik",
+    "term_en": "entrepreneurship",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "girişim",
+    "term_en": "startup",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "kuluçka merkezi",
+    "term_en": "incubator",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "teknoloji yatırımı",
+    "term_en": "technology investment",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "veri analitiği",
+    "term_en": "data analytics",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "büyük veri",
+    "term_en": "big data",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "bulut bilişim",
+    "term_en": "cloud computing",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "nesnelerin interneti",
+    "term_en": "internet of things",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "endüstri 4.0",
+    "term_en": "industry 4.0",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "robotik",
+    "term_en": "robotics",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "makine öğrenmesi",
+    "term_en": "machine learning",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "üretken yapay zeka",
+    "term_en": "generative ai",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "siber güvenlik",
+    "term_en": "cybersecurity",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "dijitalleşme",
+    "term_en": "digitalization",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "müşteri deneyimi",
+    "term_en": "customer experience",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "çok kanallı satış",
+    "term_en": "omnichannel",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "çevresel sosyal yönetişim",
+    "term_en": "environmental social governance",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "karbon ayak izi",
+    "term_en": "carbon footprint",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "net sıfır emisyon",
+    "term_en": "net zero emissions",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "yeşil dönüşüm",
+    "term_en": "green transition",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "döngüsel ekonomi",
+    "term_en": "circular economy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "yenilenebilir enerji",
+    "term_en": "renewable energy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kurumsal yönetişim",
+    "term_en": "corporate governance",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "yetenek yönetimi",
+    "term_en": "talent management",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "insan kaynakları",
+    "term_en": "human resources",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "patent",
+    "term_en": "patent",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "fikri mülkiyet",
+    "term_en": "intellectual property",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "lisans anlaşması",
+    "term_en": "licensing agreement",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "jeopolitik gerilim",
+    "term_en": "geopolitical tension",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "bölgesel kriz",
+    "term_en": "regional crisis",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "ateşkes",
+    "term_en": "ceasefire",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "barış görüşmeleri",
+    "term_en": "peace talks",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "ittifak",
+    "term_en": "alliance",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "nato",
+    "term_en": "nato",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "avrupa birliği",
+    "term_en": "european union",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "birleşmiş milletler",
+    "term_en": "united nations",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "dış politika",
+    "term_en": "foreign policy",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "ticaret savaşı",
+    "term_en": "trade war",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 8
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "gümrük tarifesi",
+    "term_en": "import tariff",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ticaret anlaşması",
+    "term_en": "trade agreement",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "serbest ticaret",
+    "term_en": "free trade",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "gümrük birliği",
+    "term_en": "customs union",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 5
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "jeoekonomi",
+    "term_en": "geoeconomics",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "enerji koridoru",
+    "term_en": "energy corridor",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "boru hattı",
+    "term_en": "pipeline",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "tedarik güvenliği",
+    "term_en": "supply security",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kritik mineraller",
+    "term_en": "critical minerals",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "nükleer program",
+    "term_en": "nuclear program",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "askeri operasyon",
+    "term_en": "military operation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "seçim",
+    "term_en": "election",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "siyasi istikrarsızlık",
+    "term_en": "political instability",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 8
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "rejim değişikliği",
+    "term_en": "regime change",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "ayaklanma",
+    "term_en": "uprising",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "mülteci",
+    "term_en": "refugee",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "istihbarat",
+    "term_en": "intelligence",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "siber saldırı",
+    "term_en": "cyberattack",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "regulatory",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ortadoğu",
+    "term_en": "middle east",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "doğu akdeniz",
+    "term_en": "eastern mediterranean",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "karadeniz",
+    "term_en": "black sea",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "rusya",
+    "term_en": "russia",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ukrayna",
+    "term_en": "ukraine",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "çin",
+    "term_en": "china",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "amerika birleşik devletleri",
+    "term_en": "united states",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "iran",
+    "term_en": "iran",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "körfez ülkeleri",
+    "term_en": "gulf states",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "geopolitical",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "tebliğ",
+    "term_en": "communique",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "genelge",
+    "term_en": "circular",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "cumhurbaşkanlığı kararnamesi",
+    "term_en": "presidential decree",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 8
+      }
+    ]
+  },
+  {
+    "term_tr": "torba yasa",
+    "term_en": "omnibus bill",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "meclis",
+    "term_en": "parliament",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "geopolitical",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "yasa tasarısı",
+    "term_en": "draft law",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "düzenleyici kurum",
+    "term_en": "regulatory authority",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "enerji piyasası düzenleme kurumu",
+    "term_en": "energy market regulator",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "bilgi teknolojileri kurumu",
+    "term_en": "information technologies authority",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "tarım bakanlığı",
+    "term_en": "ministry of agriculture",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ticaret bakanlığı",
+    "term_en": "ministry of trade",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "hazine ve maliye bakanlığı",
+    "term_en": "ministry of treasury",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "ek vergi",
+    "term_en": "additional tax",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "özel tüketim vergisi",
+    "term_en": "special consumption tax",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "katma değer vergisi",
+    "term_en": "value added tax",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "kurumlar vergisi",
+    "term_en": "corporate tax",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "gelir vergisi",
+    "term_en": "income tax",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "vergi affı",
+    "term_en": "tax amnesty",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "ruhsat",
+    "term_en": "license",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "izin belgesi",
+    "term_en": "permit",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "teknik standart",
+    "term_en": "technical standard",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "akreditasyon",
+    "term_en": "accreditation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "yaptırım uyumu",
+    "term_en": "sanctions compliance",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "geopolitical",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "kara para aklama",
+    "term_en": "money laundering",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "mali suçlar kurulu",
+    "term_en": "financial crimes board",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "rekabet ihlali",
+    "term_en": "antitrust violation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "birleşme onayı",
+    "term_en": "merger approval",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 5
+      },
+      {
+        "category": "finance",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "tüketici hakları",
+    "term_en": "consumer rights",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "etiketleme düzenlemesi",
+    "term_en": "labeling regulation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "gıda kodeksi",
+    "term_en": "food codex",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "fmcg",
+        "rating": 6
+      }
+    ]
+  },
+  {
+    "term_tr": "çevre düzenlemesi",
+    "term_en": "environmental regulation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "emisyon düzenlemesi",
+    "term_en": "emissions regulation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "iş kanunu",
+    "term_en": "labor law",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "yatırım teşviki",
+    "term_en": "investment incentive",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 5
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "term_tr": "sermaye kontrolü",
+    "term_en": "capital controls",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "macro",
+        "rating": 6
+      },
+      {
+        "category": "finance",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "term_tr": "genel veri koruma tüzüğü",
+    "term_en": "general data protection regulation",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "regulatory",
+        "rating": 6
+      },
+      {
+        "category": "strategy",
+        "rating": 4
+      }
+    ]
+  }
+]

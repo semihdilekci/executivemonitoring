@@ -44,11 +44,11 @@ async def test_rss_source(database_url: str) -> AsyncIterator[Source]:
         config={
             "feed_url": "https://example.com/feed.xml",
             "ingest_mode": "filtered",
-            "default_category": "turkish_media",
+            "default_category": "macro",
         },
         polling_interval_minutes=15,
         status=SourceStatus.ACTIVE,
-        category=SourceCategory.TURKISH_MEDIA,
+        category=SourceCategory.MACRO,
         target_phase="mvp-0",
     )
     async with session_factory() as session:

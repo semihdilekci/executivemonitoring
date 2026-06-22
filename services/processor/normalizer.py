@@ -62,9 +62,7 @@ def collapse_whitespace(text: str) -> str:
 
 def normalize_text(text: str) -> str:
     """HTML strip → entity decode → NFC → whitespace düzenleme."""
-    return collapse_whitespace(
-        normalize_unicode(unescape_entities(strip_html(text)))
-    )
+    return collapse_whitespace(normalize_unicode(unescape_entities(strip_html(text))))
 
 
 def word_count(text: str) -> int:

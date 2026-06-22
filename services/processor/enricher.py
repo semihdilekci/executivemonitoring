@@ -7,7 +7,12 @@ from typing import Any
 
 from services.processor.base_processor import BaseProcessor
 from services.processor.gate_processor import SourceConfigResolver, resolve_ingest_mode
-from services.processor.keyword_pool import resolve_content_category, resolve_schema_category
+from services.processor.keyword_pool import (
+    KeywordPoolProvider,
+    KeywordPools,
+    resolve_content_category,
+    resolve_schema_category,
+)
 from services.processor.models import ProcessorContext, ProcessorOutput
 
 logger = logging.getLogger("ygip.processor.enricher")
@@ -16,8 +21,19 @@ logger = logging.getLogger("ygip.processor.enricher")
 class EnricherProcessor(BaseProcessor):
     """Keyword tabanlı kategori çözümleme ve tag extraction — sıfır LLM."""
 
-    def __init__(self, source_config_resolver: SourceConfigResolver | None = None) -> None:
+    def __init__(
+        self,
+        source_config_resolver: SourceConfigResolver | None = None,
+        *,
+        keyword_pool_provider: KeywordPoolProvider | None = None,
+    ) -> None:
         self._config_resolver = source_config_resolver
+        self._keyword_pool_provider = keyword_pool_provider
+
+    async def _pools(self) -> KeywordPools:
+        if self._keyword_pool_provider is None:
+            return KeywordPools(category_pool={}, master_pool=())
+        return await self._keyword_pool_provider.get_pools()
 
     async def _load_config(self, ctx: ProcessorContext) -> dict[str, Any]:
         if "source_config" in ctx.data.extras:
@@ -44,19 +60,26 @@ class EnricherProcessor(BaseProcessor):
             else "macro"
         )
 
-        category, matched_keywords = resolve_content_category(
+        pools = await self._pools()
+        category, matched_keywords, scored_keywords = resolve_content_category(
             ctx.data.title,
             ctx.data.content,
             ingest_mode=ingest_mode,
             default_category=default_category,
+            pools=pools,
         )
         schema_category = resolve_schema_category(category)
 
         ctx.data.extras["category"] = category
         ctx.data.extras["schema_category"] = schema_category
+        # `topics` davranışı değişmez: metinde eşleşen TÜM keyword yüzeyleri
+        # (kazanan kategori dışındakiler dahil) yazılmaya devam eder (`Docs/04` §8.4).
         ctx.data.extras["topics"] = list(matched_keywords)
         ctx.data.extras["entities"] = []
         ctx.data.extras["matched_keywords"] = list(matched_keywords)
+        # Skorlama yalnızca kazanan kategorinin rating-taşıyan keyword'leriyle
+        # yapılır; scorer bunu okur.
+        ctx.data.extras["scored_keywords"] = list(scored_keywords)
 
         logger.debug(
             "processor_enrich_success",
@@ -65,6 +88,7 @@ class EnricherProcessor(BaseProcessor):
                 "category": category,
                 "schema_category": schema_category,
                 "topic_count": len(matched_keywords),
+                "scored_keyword_count": len(scored_keywords),
             },
         )
         return ctx.data

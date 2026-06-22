@@ -1,93 +1,57 @@
-"""Master keyword havuzu — gate ve enricher paylaşır (`Docs/04` §8.3–8.4)."""
+"""Keyword havuzu — gate ve enricher paylaşır (`Docs/04` §8.3–8.4).
+
+Faz 6.3: hardcoded `CATEGORY_RULES` kaldırıldı. Aktif keyword havuzu artık
+DB `keywords` + `keyword_category_ratings` tablolarından (`Docs/02` §4.20–4.21)
+`KeywordPoolProvider` ile TTL-cache'li yüklenir. Her keyword `term_tr` + `term_en`
+yüzeyine ve kategori-başına 1–10 rating'e sahiptir.
+
+Bu modül DB'ye **bağımsızdır** (saf eşleşme + havuz mantığı); DB sorgusu
+`services/processor/keyword_repository.py` tarafından yapılır ve `KeywordRecord`
+listesi sağlanır.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import re
+import time
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import NamedTuple
 
-CATEGORY_RULES: dict[str, dict[str, list[str]]] = {
-    "macro": {
-        "keywords": [
-            "tcmb",
-            "faiz",
-            "enflasyon",
-            "büyüme",
-            "gsyih",
-            "imf",
-            "merkez bankası",
-            "cari açık",
-        ],
-    },
-    "fmcg": {
-        "keywords": [
-            "fmcg",
-            "gıda",
-            "perakende",
-            "tüketici",
-            "snack",
-            "dairy",
-            "bakery",
-            "confectionery",
-            "grocery",
-            "cpg",
-            "tüketim",
-            "market",
-            "raf",
-        ],
-    },
-    "finance": {
-        "keywords": [
-            "borsa",
-            "hisse",
-            "kur",
-            "tahvil",
-            "bist",
-            "dolar",
-            "euro",
-            "kap",
-            "halka arz",
-            "bilanço",
-            "faiz oranı",
-        ],
-    },
-    "geopolitical": {
-        "keywords": [
-            "savaş",
-            "yaptırım",
-            "nato",
-            "güvenlik",
-            "jeopolitik",
-            "sanctions",
-            "ambargo",
-            "çatışma",
-        ],
-    },
-    "strategy": {
-        "keywords": [
-            "strateji",
-            "inovasyon",
-            "dijital",
-            "ai",
-            "leadership",
-            "disruption",
-            "transformation",
-            "sürdürülebilirlik",
-        ],
-    },
-    "regulatory": {
-        "keywords": [
-            "resmi gazete",
-            "yönetmelik",
-            "kanun",
-            "mevzuat",
-            "regülasyon",
-            "düzenleme",
-            "kvkk",
-        ],
-    },
-}
+
+class CategoryKeyword(NamedTuple):
+    """Bir kategoriye ait keyword'ün çalışma-zamanı temsili (`Docs/04` §8.4)."""
+
+    term_tr: str
+    term_en: str
+    rating: int
+
+
+@dataclass(frozen=True)
+class KeywordRecord:
+    """DB'den yüklenen tek keyword — tr/en yüzey + kategori→rating haritası.
+
+    `keyword_repository.load_active_keywords` üretir; `KeywordPoolProvider`
+    bunları kategori havuzu + master havuza dönüştürür.
+    """
+
+    term_tr: str
+    term_en: str
+    ratings: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class KeywordPools:
+    """Provider'ın ürettiği çalışma-zamanı havuzları."""
+
+    category_pool: dict[str, list[CategoryKeyword]]
+    master_pool: tuple[str, ...]
+
+
+KeywordLoader = Callable[[], Awaitable[list[KeywordRecord]]]
 
 
 def normalize_for_match(text: str) -> str:
@@ -119,36 +83,39 @@ def count_total_keyword_hits(content: str, keywords: Iterable[str]) -> int:
     )
 
 
-def master_keyword_pool() -> tuple[str, ...]:
-    """Tüm kategori keyword'lerinin birleşimi (dedupe)."""
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for rule in CATEGORY_RULES.values():
-        for keyword in rule["keywords"]:
-            normalized = normalize_for_match(keyword)
-            if normalized not in seen:
-                seen.add(normalized)
-                ordered.append(keyword)
-    return tuple(ordered)
+def count_keyword_hits(content: str, keyword: CategoryKeyword) -> int:
+    """Bir `CategoryKeyword`'ün (tr+en yüzey birleşik) metindeki geçiş sayısı.
 
-
-@lru_cache(maxsize=1)
-def _sorted_master_keywords() -> tuple[str, ...]:
-    """Uzun keyword'ler önce — çok kelimeli ifadeler için."""
-    return tuple(sorted(master_keyword_pool(), key=len, reverse=True))
+    İki yüzey normalize sonrası aynıysa (çevirisiz marka/kurum) tek kez sayılır;
+    aksi halde tr ve en yüzeyleri ayrı kelime-sınırı eşleşmesiyle toplanır.
+    """
+    haystack = normalize_for_match(content)
+    surfaces = {
+        normalized
+        for normalized in (
+            normalize_for_match(keyword.term_tr),
+            normalize_for_match(keyword.term_en),
+        )
+        if normalized
+    }
+    return sum(len(_keyword_pattern(surface).findall(haystack)) for surface in surfaces)
 
 
 def find_matching_keywords(
     title: str,
     content: str,
-    keywords: Iterable[str] | None = None,
+    keywords: Iterable[str],
 ) -> list[str]:
-    """Title + body içinde eşleşen keyword'leri döner (case-insensitive, NFC)."""
+    """Title + body içinde eşleşen keyword yüzeylerini döner (case-insensitive, NFC).
+
+    `keywords` çağıran tarafından sağlanır (master havuz veya kategori yüzeyleri).
+    Çok kelimeli ifadelerin tek kelimeli olanlardan önce denenmesi için çağıran
+    havuzu uzunluğa göre sıralamış olmalıdır (`KeywordPoolProvider.master_pool`).
+    """
     haystack = normalize_for_match(f"{title} {content}")
-    pool = tuple(keywords) if keywords is not None else _sorted_master_keywords()
     matched: list[str] = []
     seen: set[str] = set()
-    for keyword in pool:
+    for keyword in keywords:
         needle = normalize_for_match(keyword)
         if needle not in seen and _keyword_in_haystack(haystack, keyword):
             seen.add(needle)
@@ -156,11 +123,131 @@ def find_matching_keywords(
     return matched
 
 
-def has_master_keyword_match(title: str, content: str) -> bool:
-    """Master havuzda ≥1 eşleşme var mı?"""
-    return bool(find_matching_keywords(title, content))
+def has_master_match(title: str, content: str, master_pool: Iterable[str]) -> bool:
+    """Master havuzda ≥1 eşleşme var mı? Gate kabul/DROP kararı bunu sorar."""
+    haystack = normalize_for_match(f"{title} {content}")
+    return any(_keyword_in_haystack(haystack, keyword) for keyword in master_pool)
 
 
+def _keyword_record_matches(haystack: str, keyword: CategoryKeyword) -> bool:
+    """Keyword'ün tr veya en yüzeyi metinde geçiyor mu?"""
+    return _keyword_in_haystack(haystack, keyword.term_tr) or _keyword_in_haystack(
+        haystack, keyword.term_en
+    )
+
+
+def count_matches_by_category(
+    title: str,
+    content: str,
+    category_pool: dict[str, list[CategoryKeyword]],
+) -> dict[str, list[CategoryKeyword]]:
+    """Kategori başına eşleşen `CategoryKeyword` listesi (boş kategoriler atlanır)."""
+    haystack = normalize_for_match(f"{title} {content}")
+    result: dict[str, list[CategoryKeyword]] = {}
+    for category, keywords in category_pool.items():
+        matched = [kw for kw in keywords if _keyword_record_matches(haystack, kw)]
+        if matched:
+            result[category] = matched
+    return result
+
+
+def build_pools(records: Iterable[KeywordRecord]) -> KeywordPools:
+    """`KeywordRecord` listesinden kategori havuzu + master havuz üretir.
+
+    Master havuz tüm aktif keyword'lerin `term_tr` + `term_en` yüzeylerinin
+    dedupe edilmiş birleşimidir; çok kelimeli ifadeler önce gelsin diye uzunluğa
+    göre azalan sıralanır (`Docs/04` §8.4 — uzun-önce eşleşme).
+    """
+    category_pool: dict[str, list[CategoryKeyword]] = {}
+    master_seen: set[str] = set()
+    master: list[str] = []
+
+    for record in records:
+        for surface in (record.term_tr, record.term_en):
+            normalized = normalize_for_match(surface)
+            if normalized and normalized not in master_seen:
+                master_seen.add(normalized)
+                master.append(surface)
+        for category, rating in record.ratings.items():
+            category_pool.setdefault(category, []).append(
+                CategoryKeyword(record.term_tr, record.term_en, rating)
+            )
+
+    master_sorted = tuple(sorted(master, key=len, reverse=True))
+    return KeywordPools(category_pool=category_pool, master_pool=master_sorted)
+
+
+class KeywordPoolProvider:
+    """Aktif keyword havuzunu TTL-cache ile yükleyen sağlayıcı (`Docs/04` §8.3–8.4).
+
+    `loader` her çağrıldığında DB'den (veya test sahtesinden) güncel
+    `KeywordRecord` listesini döndürür. Provider bunu TTL süresince cache'ler;
+    Lambda soğuk başlangıcında tek sorgu, sonraki çağrılarda cache hit (N+1 yok).
+    """
+
+    def __init__(
+        self,
+        loader: KeywordLoader,
+        *,
+        ttl_seconds: float = 300.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._loader = loader
+        self._ttl = ttl_seconds
+        self._clock = clock
+        self._cache: KeywordPools | None = None
+        self._loaded_at: float | None = None
+        self._lock = asyncio.Lock()
+
+    def _is_fresh(self) -> bool:
+        return (
+            self._cache is not None
+            and self._loaded_at is not None
+            and (self._clock() - self._loaded_at) < self._ttl
+        )
+
+    async def get_pools(self) -> KeywordPools:
+        """Cache taze ise onu, değilse DB'den yeniden yükleyip döner."""
+        if self._is_fresh():
+            assert self._cache is not None
+            return self._cache
+        async with self._lock:
+            if self._is_fresh():
+                assert self._cache is not None
+                return self._cache
+            records = await self._loader()
+            self._cache = build_pools(records)
+            self._loaded_at = self._clock()
+            return self._cache
+
+    async def master_pool(self) -> tuple[str, ...]:
+        """Gate için tüm aktif keyword yüzeylerinin (tr+en) birleşimi."""
+        return (await self.get_pools()).master_pool
+
+    async def category_pool(self) -> dict[str, list[CategoryKeyword]]:
+        """Enricher için kategori → rating taşıyan keyword listesi."""
+        return (await self.get_pools()).category_pool
+
+    def invalidate(self) -> None:
+        """Cache'i boşaltır — sonraki `get_pools` yeniden yükler."""
+        self._cache = None
+        self._loaded_at = None
+
+
+def static_keyword_pool_provider(records: Iterable[KeywordRecord]) -> KeywordPoolProvider:
+    """Sabit `KeywordRecord` listesinden provider — test/dev için (DB yok)."""
+    snapshot = list(records)
+
+    async def _loader() -> list[KeywordRecord]:
+        return list(snapshot)
+
+    return KeywordPoolProvider(_loader)
+
+
+# İçerik kategorisi (`KeywordCategory` / `content_category`) -> PostgreSQL schema.
+# Faz 6.3+ ile kaynak ve içerik kategorileri 6 değere hizalandığından eski
+# SourceCategory alias'ları (turkish_media/official/market/geo) kaldırıldı;
+# bilinmeyen değerler `resolve_schema_category` içinde "news"e düşer.
 CATEGORY_TO_SCHEMA: dict[str, str] = {
     "macro": "news",
     "strategy": "news",
@@ -168,11 +255,6 @@ CATEGORY_TO_SCHEMA: dict[str, str] = {
     "fmcg": "fmcg",
     "finance": "market",
     "geopolitical": "geo",
-    # `default_category` config değerleri (SourceCategory uyumu)
-    "turkish_media": "news",
-    "official": "news",
-    "market": "market",
-    "geo": "geo",
 }
 
 
@@ -181,14 +263,13 @@ def resolve_schema_category(category: str) -> str:
     return CATEGORY_TO_SCHEMA.get(category, "news")
 
 
-def count_matches_by_category(title: str, content: str) -> dict[str, list[str]]:
-    """Kategori başına eşleşen keyword listesi."""
-    result: dict[str, list[str]] = {}
-    for category, rule in CATEGORY_RULES.items():
-        matched = find_matching_keywords(title, content, keywords=rule["keywords"])
-        if matched:
-            result[category] = matched
-    return result
+def category_score(matched: list[CategoryKeyword]) -> int:
+    """Bir kategoride eşleşen keyword'lerin rating toplamı (`Docs/04` §8.4 — K5).
+
+    `count_matches_by_category` zaten distinct `CategoryKeyword` döndürdüğü için
+    tekrar dedupe gerekmez; adet değil, rating toplamı kategori seçimini belirler.
+    """
+    return sum(keyword.rating for keyword in matched)
 
 
 def resolve_content_category(
@@ -197,24 +278,38 @@ def resolve_content_category(
     *,
     ingest_mode: str,
     default_category: str,
-) -> tuple[str, list[str]]:
-    """Kategori çözümleme — `Docs/04` §8.4 sırası."""
-    all_matched = find_matching_keywords(title, content)
+    pools: KeywordPools,
+) -> tuple[str, list[str], list[CategoryKeyword]]:
+    """Kategori çözümleme — **rating-ağırlıklı** (`Docs/04` §8.4 — K5, Faz 6.3).
+
+    Çözümleme sırası:
+    1. `ingest_mode: "all"` → her zaman `default_category` (rating hesaplanmaz).
+    2. `filtered` → her kategori için `category_score` (rating toplamı); **en
+       yüksek toplam** kazanır.
+    3. Eşitlik (≥2 kategori aynı en yüksek toplam) → `default_category`.
+    4. Hiç kategori-keyword eşleşmesi yok → `default_category`.
+
+    Döner: `(content_category, all_matched, scored)`.
+    - `all_matched`: `topics` için tüm master eşleşmeleri (davranış değişmez).
+    - `scored`: yalnızca **kazanan kategoriye** ait eşleşen keyword'ler (rating
+      taşır); scorer bunu rating-ağırlıklı relevance için kullanır. Kazanan
+      kategoride hiç eşleşme yoksa boş liste → skor `0.0`.
+    """
+    all_matched = find_matching_keywords(title, content, pools.master_pool)
+    by_category = count_matches_by_category(title, content, pools.category_pool)
+
+    def _scored_for(category: str) -> list[CategoryKeyword]:
+        return by_category.get(category, [])
 
     if ingest_mode == "all":
-        return default_category, all_matched
+        return default_category, all_matched, _scored_for(default_category)
 
-    by_category = count_matches_by_category(title, content)
     if not by_category:
-        return default_category, all_matched
+        return default_category, all_matched, []
 
-    max_count = max(len(keywords) for keywords in by_category.values())
-    top_categories = [
-        category for category, keywords in by_category.items() if len(keywords) == max_count
-    ]
+    scores = {category: category_score(matched) for category, matched in by_category.items()}
+    max_score = max(scores.values())
+    top_categories = [category for category, score in scores.items() if score == max_score]
 
-    if len(top_categories) == 1:
-        winner = top_categories[0]
-        return winner, all_matched
-
-    return default_category, all_matched
+    winner = top_categories[0] if len(top_categories) == 1 else default_category
+    return winner, all_matched, _scored_for(winner)

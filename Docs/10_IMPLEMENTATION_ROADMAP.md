@@ -1139,6 +1139,180 @@ Oluşturulacaklar:
 
 ---
 
+## Faz 6.3 — Keyword Takibi & Rating-Tabanlı Skorlama
+
+> Öncül: Faz 3 (processor pipeline: gate/enrich/score) + Faz 6 (admin shell + RBAC + data hook'ları)
+> Ardıl: Faz 7
+> Katman: Full-stack dikey (DB + processor algoritma + API + admin ekran)
+
+**Amaç:** Hardcoded `CATEGORY_RULES` keyword havuzunu **admin-yönetilir DB havuzuna** taşımak; her keyword `term_tr` + `term_en` + **kategori-başına 1–10 rating** (çok-kategorili) taşır. Bunun üzerine processor'ın iki algoritması yeniden tasarlanır: (a) `filtered` kategori seçimi artık **rating toplamı en yüksek** kategoriyi seçer (adet değil), (b) relevance score **yalnızca kazanan kategorinin** eşleşen keyword'lerini **rating-ağırlıklı** hesaplar. Admin'in keyword + rating yönetebildiği **`S-ADMIN-KEYWORDS`** ekranı. **Admin only.**
+
+**Mimari kararlar (MVP-0):**
+- Keyword havuzu DB'ye taşınır; processor TTL-cache'li `KeywordPoolProvider` ile okur (mevcut `DbSourceConfigResolver` deseni). Gate'in kabul/DROP iş mantığı **değişmez** (≥1 master eşleşme → kabul) — yalnızca havuz kaynağı DB olur.
+- `keyword_category_enum` = 6 içerik kategorisi (`macro, finance, fmcg, strategy, geopolitical, regulatory`); `content_category` ile birebir uyumlu.
+- Rating 1–10 tamsayı (CHECK). Kategori seçimi = Σ rating; relevance = `0.7·w_cov + 0.3·w_freq` (rating-ağırlıklı, kategori-kapsamlı; `Docs/04` §8.4 K5).
+- Seed `fixtures/keywords.json` **production-grade**: her kategoride haber-editörü kalitesinde, geniş kapsamlı, çok-kategorili rating'leri düşünülmüş bir havuz (`Docs/02` §8 kalite kriteri).
+
+### 6.3.1 — Keyword DB + Domain + Production Seed
+
+**Çıktı:** `keywords` + `keyword_category_ratings` tabloları, enum, SQLAlchemy modelleri, `007_*` migration, production-grade seed
+
+Oluşturulacaklar:
+- Enum `keyword_category_enum` + `keywords` / `keyword_category_ratings` tabloları (`Docs/02` §3, §4.20–4.21)
+- `packages/shared/models/keyword.py` — `Keyword`, `KeywordCategoryRating` modelleri + ilişki
+- `alembic/versions/007_keyword_tracking.py` — `down_revision` `006_content_category`
+- `fixtures/keywords.json` — **6 kategorinin her biri için production-ready keyword + rating havuzu** (tr/en, çok-kategorili); `scripts/seed*.py` yükleme
+- `tests/unit/processor/test_keyword_seed.py` — seed bütünlük (her kategori dolu, rating 1–10, tr/en unique)
+
+**Cursor context:** `packages/shared/models/processed_item.py`, `alembic/versions/006_content_category.py`, `Docs/02` §4.20–4.21
+
+---
+
+### 6.3.2 — Processor: DB-Backed Keyword Pool Provider
+
+**Çıktı:** `KeywordPoolProvider` — kategori kuralları (tr/en + rating) DB'den TTL-cache ile; matching helper'ları rating taşır; gate uyumu korunur
+
+Oluşturulacaklar:
+- `services/processor/keyword_pool.py` — `KeywordPoolProvider` (DB load + TTL cache); `category_pool` (kategori → `[(term_tr, term_en, rating)]`), `master_pool`; `find_matching_keywords` / `count_matches_by_category` rating taşır
+- `services/processor/keyword_repository.py` — aktif keyword + rating sorgusu (async session)
+- Gate (`gate_processor.py`) master eşleşmeyi provider'dan alır — karar mantığı değişmez
+- `tests/unit/processor/test_keyword_pool.py` — DB load, cache, tr+en eşleşme, master union
+
+**Cursor context:** `services/processor/source_config_resolver.py` (DB resolver kalıbı), `services/processor/gate_processor.py`, `Docs/04` §8.3–8.4
+
+---
+
+### 6.3.3 — Processor: Rating-Ağırlıklı Kategori Seçimi + Relevance
+
+**Çıktı:** `resolve_content_category` (rating toplamı kazanan) + kategori-kapsamlı rating-ağırlıklı `scorer`; enricher wire + unit testler
+
+Oluşturulacaklar:
+- `services/processor/keyword_pool.py` — `resolve_content_category` rating toplamı en yüksek kategori (eşitlik → `default_category`)
+- `services/processor/scorer.py` — `calculate_relevance_score(content, scored)` rating-ağırlıklı coverage + freq; yalnızca kazanan kategori keyword'leri
+- `services/processor/enricher.py` — kazanan kategorinin scored keyword'lerini `extras` üzerinden scorer'a aktarır
+- `tests/unit/processor/test_enricher.py`, `test_scorer.py` — rating senaryoları (zayıf çok keyword vs güçlü az keyword; kategori-kapsam izolasyonu)
+
+**Cursor context:** 6.3.2 çıktıları, `Docs/04` §8.4 (K5 formül + çözümleme sırası)
+
+---
+
+### 6.3.4 — Keyword CRUD API
+
+**Çıktı:** `GET/POST/PUT/DELETE /api/v1/admin/keywords` — rating yönetimi dahil, admin-only, audit, integration test
+
+Oluşturulacaklar:
+- `apps/api/repositories/keyword_repository.py` — list (filtre/pagination), get, create, update (categories replace), delete
+- `apps/api/services/keyword_service.py` — CRUD + duplicate kontrol + audit (`keyword.created/updated/deleted`)
+- `apps/api/schemas/keyword.py` — request/response (categories[] rating)
+- `apps/api/routers/keyword.py` — `require_admin` guard; `apps/api/main.py` include
+- `tests/integration/test_keyword_api.py` — admin CRUD, viewer 403, duplicate 409, rating 422
+
+**Cursor context:** `apps/api/routers/content_archive.py` (admin router kalıbı), `Docs/03` §11.7, `Docs/07` §9
+
+---
+
+### 6.3.5 — FE: Keyword Takibi Ekranı
+
+**Çıktı:** `S-ADMIN-KEYWORDS` — tablo + form modal (tr/en + çok-kategori rating editörü) + hook + sidebar link
+
+Oluşturulacaklar:
+- `app/(dashboard)/admin/keywords/page.tsx` + `components/admin/keyword-table.tsx`, `keyword-form-modal.tsx`, `keyword-filters.tsx`
+- `hooks/use-keywords.ts` — list + create + update + delete (React Query)
+- `lib/keyword-labels.ts` — kategori TR label map; `lib/constants.ts` sidebar "Keyword Takibi" linki
+- `types/api.ts` — keyword tipleri
+
+**Cursor context:** `apps/web/app/(dashboard)/admin/content-archive/page.tsx`, `Docs/06` S-ADMIN-KEYWORDS, `Docs/05` §4
+
+---
+
+## Faz 6.4 — Haber Schema Konsolidasyonu
+
+> Öncül: Faz 6.2 (İçerik Arşivi) + Faz 6.3 (keyword havuzu — `keyword_pool.py` çakışması önlemek için **6.3 ardıllığı önerilir**)
+> Ardıl: Faz 7
+> Katman: DB migration + processor + API + digest + FE sadeleştirme + regresyon
+
+**Amaç:** MVP-0'da toplanan tüm haber/makale içeriklerini `news.processed_items` altında birleştirmek; `content_category` (6 keyword kategorisi) aynen kalmak; `market`/`fmcg`/`geo`/`transport` schema'larını gelecek yapılandırılmış veri tipleri için rezerve etmek. ADR: `Docs/adr/0002-news-schema-consolidation.md`.
+
+**Mimari kararlar:**
+- Processor persist: yalnızca `news.processed_items`; `schema_category` sabit `"news"`
+- Eski kategori→schema routing (`finance→market`, `fmcg→fmcg`) kaldırılır
+- İçerik Arşivi: cross-schema `UNION ALL` kalkar
+- Digest: `news` + `content_category` / `source.category` / topic filtreleri
+- Opsiyonel (İter 6): `content_chunks.processed_item_id` → `news.processed_items` native FK
+
+### 6.4.1 — ADR + Docs Semantik Güncellemesi
+
+**Çıktı:** ADR-0002, `mimari-kararlar` [DB-001], `Docs/01/02/03/04/06/08/10` schema semantiği (kod yok)
+
+---
+
+### 6.4.2 — Migration + Veri Taşıma
+
+**Çıktı:** `alembic/versions/008_news_consolidation.py` — `market`/`fmcg`/`geo` haberlerini `news`'e taşı; `schema_category='news'` normalize; integration migration test
+
+Oluşturulacaklar:
+- `008_news_consolidation.py` — `down_revision` `007_keyword_tracking` (veya mevcut head)
+- `tests/integration/test_news_consolidation_migration.py` — upgrade + veri bütünlüğü + downgrade round-trip
+
+**Cursor context:** `alembic/versions/006_content_category.py`, `Docs/02` §2, §4.4, ADR-0002
+
+---
+
+### 6.4.3 — Processor + Persistence
+
+**Çıktı:** `resolve_schema_category` → sabit `news`; `persistence.py` tek model; unit testler
+
+Oluşturulacaklar:
+- `services/processor/keyword_pool.py` — `resolve_schema_category` sadeleştirme (kategori→schema map kaldır)
+- `services/processor/persistence.py` — yalnızca `NewsProcessedItem`
+- `tests/unit/processor/test_enricher.py`, `test_persistence.py` güncelle
+
+**Cursor context:** `Docs/04` §8.4 haber depolama; gate/enrich algoritması **değişmez**
+
+---
+
+### 6.4.4 — API Repository + Digest + Chunk
+
+**Çıktı:** `processed_item_repository` UNION kalkar; `digest_models` `news` filtreleri; chunk repo sadeleşir; integration test
+
+Oluşturulacaklar:
+- `apps/api/repositories/processed_item_repository.py` — tek schema sorgu
+- `services/ai_engine/digest_models.py` — `DIGEST_TYPE_QUERY_CONFIG` güncelle
+- `services/ai_engine/processed_item_repository.py`, `chunk_repository.py`
+- `tests/integration/test_content_archive_api.py`, `test_pipeline_e2e.py` güncelle
+
+**Cursor context:** `Docs/03` §11.6, `Docs/04` §8.8
+
+---
+
+### 6.4.5 — FE İçerik Arşivi Sadeleştirme
+
+**Çıktı:** Schema filtresi/ badge UX; detay hook varsayılan `news`; `types/api.ts` uyumu
+
+Oluşturulacaklar:
+- `apps/web/lib/content-archive-labels.ts` — schema filtre seçenekleri
+- `apps/web/hooks/use-content-archive.ts` — detay `schema_category` varsayılan
+- `apps/web/components/admin/content-archive-filters.tsx`, `content-archive-table.tsx`
+
+**Cursor context:** `Docs/06` S-ADMIN-CONTENT-ARCHIVE
+
+---
+
+### 6.4.6 — Regresyon + FK (opsiyonel)
+
+**Çıktı:** Tüm migration/integration testleri yeşil; `content_chunks` → `news.processed_items` FK migration; seed script güncellemesi
+
+Oluşturulacaklar:
+- `packages/shared/models/processed_item.py` — `PROCESSED_ITEM_MODELS` sadeleştirme (haber: `news` only active)
+- `packages/shared/enums.py` — `ARTICLE_SCHEMA` vs `RESERVED_SCHEMAS` ayrımı
+- `scripts/seed_content_archive.py` — yalnızca `news`
+- `tests/integration/test_*migration*.py`, `test_data_models.py` güncelle
+- Opsiyonel: `009_content_chunks_fk.py` veya `008` içinde FK
+
+**Cursor context:** `Docs/08` §3.9, `Docs/02` §4.5 FK notu
+
+---
+
 ## Faz 7 — Mobil Uygulama
 
 > Öncül: Faz 6 (API kontratları web'de valide edilmiş)

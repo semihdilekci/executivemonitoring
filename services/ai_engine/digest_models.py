@@ -62,9 +62,12 @@ class DigestTypeQueryConfig:
 
 
 DIGEST_TYPE_QUERY_CONFIG: dict[str, DigestTypeQueryConfig] = {
+    # NOT (Faz 6.3+): kaynak kategorileri 6 içerik kategorisine hizalandığından
+    # "turkish_media" kaynak kategorisi kalktı. Bu digest artık `news` şemasındaki
+    # tüm haftalık içeriği kapsar; "yalnızca Türk medyası" filtresi için ayrı bir
+    # mekanizma (örn. language=tr) gerekir.
     "turkish_media_weekly": DigestTypeQueryConfig(
         schema="news",
-        source_category="turkish_media",
     ),
     "fmcg_weekly": DigestTypeQueryConfig(
         schema="fmcg",

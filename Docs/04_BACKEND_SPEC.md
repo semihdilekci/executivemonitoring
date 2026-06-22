@@ -722,7 +722,9 @@ Makale geldi (normalize edilmiş title + body)
         → HAYIR: DROP → processed_items / content_chunks yazılmaz
 ```
 
-**Master keyword havuzu:** `CATEGORY_RULES` (§8.4) içindeki tüm keyword'lerin birleşimi. Gate yalnızca “en az bir eşleşme var mı?” sorusunu sorar; kategori çözümlemesi enricher'da yapılır.
+**Master keyword havuzu:** Aktif `keywords` (§8.4, `Docs/02` §4.20) satırlarının tüm `term_tr` + `term_en` yüzeylerinin birleşimi. Gate yalnızca “en az bir eşleşme var mı?” sorusunu sorar; kategori çözümlemesi ve rating ağırlıklandırması enricher/scorer'da yapılır. Gate'in kabul/DROP mantığı **rating'den bağımsızdır** (≥1 eşleşme → kabul); rating yalnızca kategori seçimi ve relevance skorunu etkiler.
+
+> **Faz 6.3 değişikliği:** Master havuz artık hardcoded `CATEGORY_RULES` sabitinden değil, DB `keywords` tablosundan TTL-cache'li `KeywordPoolProvider` ile yüklenir. Gate'in karar mantığı aynı kalır — yalnızca havuzun kaynağı DB olur.
 
 **`ingest_mode` seçim kriteri:**
 
@@ -739,68 +741,85 @@ Gate DROP path: pipeline `None` döner (skip); metrik `processor.gate.dropped` l
 
 `EnricherProcessor` gate'i geçen makalelerde kategori çözümler, `topics` yazar ve `relevance_score` hesaplar (`ScorerProcessor` aynı iterasyonda veya enricher içinde çağrılabilir).
 
-#### Kategori çözümleme (`CATEGORY_RULES`)
+#### Keyword havuzu kaynağı (DB — Faz 6.3)
+
+Kategori kuralları artık DB'de yönetilir (`keywords` + `keyword_category_ratings`, `Docs/02` §4.20–4.21). Processor bunları `KeywordPoolProvider` ile TTL-cache'li yükler:
 
 ```python
-CATEGORY_RULES = {
-    "macro":        {"keywords": ["tcmb", "faiz", "enflasyon", "büyüme", "gsyih", "imf", "merkez bankası", "cari açık"]},
-    "fmcg":         {"keywords": ["fmcg", "gıda", "perakende", "tüketici", "snack", "dairy", "bakery", "confectionery", "grocery", "cpg", "tüketim", "market", "raf"]},
-    "finance":      {"keywords": ["borsa", "hisse", "kur", "tahvil", "bist", "dolar", "euro", "kap", "halka arz", "bilanço", "faiz oranı"]},
-    "geopolitical": {"keywords": ["savaş", "yaptırım", "nato", "güvenlik", "jeopolitik", "sanctions", "ambargo", "çatışma"]},
-    "strategy":     {"keywords": ["strateji", "inovasyon", "dijital", "ai", "leadership", "disruption", "transformation", "sürdürülebilirlik"]},
-    "regulatory":   {"keywords": ["resmi gazete", "yönetmelik", "kanun", "mevzuat", "regülasyon", "düzenleme", "kvkk"]},
-}
+# Provider'ın ürettiği çalışma-zamanı yapısı (kavramsal)
+CategoryKeyword = namedtuple("CategoryKeyword", "term_tr term_en rating")
+category_pool: dict[str, list[CategoryKeyword]]   # "macro" -> [(…, …, 9), …]
+# master_pool: tüm aktif keyword'lerin term_tr + term_en birleşimi (gate için)
+```
+
+Her keyword'ün `term_tr` ve `term_en` yüzeyi de havuza girer; eşleşme iki dilde de kelime-sınırı (`\b`) + NFC + casefold ile aranır. Bir keyword birden çok kategoride farklı rating ile bulunabilir (çok-kategorili).
+
+#### Kategori çözümleme — **rating-ağırlıklı** (K5, Faz 6.3)
+
+Eski "en çok **adet** eşleşen kategori kazanır" mantığı kaldırıldı. Yeni: kategori başına **eşleşen keyword'lerin rating toplamı** hesaplanır; en yüksek toplam kazanır. Gerekçe: kategoriyle alakasız ama çok sayıda zayıf keyword, az sayıda güçlü (yüksek-rating) keyword'ü ezmemeli.
+
+```python
+def category_score(cat: str, matched: list[CategoryKeyword]) -> int:
+    # cat kategorisinde eşleşen keyword'lerin rating toplamı (distinct keyword)
+    return sum(k.rating for k in matched if k in category_pool[cat])
 ```
 
 **Çözümleme sırası:**
 
-1. Keyword match (title + body, case-insensitive) → en çok eşleşen kategori kazanır.
-2. Eşitlik → `sources.config.default_category` kazanır.
-3. `ingest_mode: "all"` → her zaman `sources.config.default_category` (domain-specific kaynak).
+1. `ingest_mode: "all"` → her zaman `sources.config.default_category` (domain-specific kaynak); rating hesaplanmaz.
+2. `filtered` → her kategori için `category_score` (rating toplamı); **en yüksek toplam** kazanır.
+3. Eşitlik (aynı en yüksek toplam ≥2 kategori) → `sources.config.default_category` kazanır.
+4. Hiç kategori-keyword eşleşmesi yoksa → `default_category`.
 
-**Schema routing** — kategori → PostgreSQL schema (`schema_category`):
+**Haber depolama (Faz 6.4, ADR-0002):** Tüm haber niteliği içerik `news.processed_items`'a yazılır. `content_category` ince sınıflandırmadır; schema seçimini **belirlemez**. Processor persist'te `schema_category` sabit `"news"`.
 
-| Kategori | Schema |
-| -------- | ------ |
-| `macro` | `news` |
-| `fmcg` | `fmcg` |
-| `finance` | `market` |
-| `geopolitical` | `geo` |
-| `strategy` | `news` |
-| `regulatory` | `news` |
+**Kaldırılan schema routing:** Eski `content_category` → `market`/`fmcg`/`geo` eşlemesi kaldırıldı. `market`, `fmcg`, `geo`, `transport` schema'ları MVP-0'da haber almaz — MVP-1+ yapılandırılmış veri için rezerve.
+
+**Digest sorgu filtresi** — bülten tipine göre `news.processed_items` üzerinde:
+
+| `digest_type` | Filtre |
+| ------------- | ------ |
+| `turkish_media_weekly` | `source.category = turkish_media` |
+| `fmcg_weekly` | `content_category = fmcg` veya `source.category = fmcg` |
+| `strategy_weekly` | `topics` ∩ strategy/macro keyword seti |
 
 `transport` schema'sı MVP-0'da kullanılmaz (AIS/OpenSky MVP-2).
 
 **Tag extraction:** Eşleşen keyword'ler `topics` JSONB dizisine eklenir (duplicate yok). `entities` MVP-0'da boş `[]` kalır.
 
-#### `relevance_score` (K4)
+#### `relevance_score` — **rating-ağırlıklı + kategori-kapsamlı** (K4 + K5, Faz 6.3)
 
-Gate'i geçen makaleler arasında **saf konu-ilgisi** sıralama skoru — **deterministik**, admin müdahalesi yok. `source_reliability_weight` kaldırıldı (K3); **güncellik (freshness) skordan kaldırıldı (K4)** — bültenler zaten tarih-pencereli seçildiği için tüm adaylar aynı güncellik bandındadır ve freshness konu-ilgisini bastırıyordu (taze ama alakasız haber, eski ama çok-alakalı haberi geçiyordu).
+Gate'i geçen makaleler arasında **konu-ilgisi** sıralama skoru — **deterministik**, admin müdahalesi yok. `source_reliability_weight` kaldırıldı (K3); **güncellik (freshness) skordan kaldırıldı (K4)**. **Faz 6.3 (K5):** skor artık tüm master havuza değil, **yalnızca kazanan kategoriye ait** eşleşen keyword'lere bakar ve her keyword'ü **kategorideki rating'iyle ağırlıklar**.
+
+Gerekçe: Eski formül master havuzdaki her eşleşmeyi eşit sayıyordu; kategoriyle alakasız bir keyword bile (örn. finance haberinde tek bir "ai" geçişi) skoru şişiriyordu. Yeni formül, seçilen kategori için **önemli** (yüksek-rating) keyword'leri ödüllendirir; alakasız/zayıf keyword'ler skoru artırmaz.
 
 ```python
-COVERAGE_WEIGHT, FREQ_WEIGHT = 0.7, 0.3
-DISTINCT_SATURATION, FREQ_NORMALIZE_CAP = 5.0, 3.0
+REL_COVERAGE_WEIGHT, REL_FREQ_WEIGHT = 0.7, 0.3
+RATING_SATURATION  = 18.0   # 1–10 ölçek: ~2–3 yüksek-önem keyword → tam coverage
+FREQ_NORMALIZE_CAP = 3.0    # keyword başına ort. 3+ geçiş → tam frekans kredisi
 
-def calculate_relevance_score(article: ProcessedArticle) -> float:
-    distinct = len(article.matched_keywords)
-    if distinct == 0:
+def calculate_relevance_score(content: str, scored: list[CategoryKeyword]) -> float:
+    # scored = KAZANAN kategoride eşleşen keyword'ler (term + o kategorideki rating)
+    if not scored:
         return 0.0
-    coverage = min(distinct / DISTINCT_SATURATION, 1.0)
-    avg_hits = _total_keyword_hits(article.content, article.matched_keywords) / distinct
-    freq = min(avg_hits / FREQ_NORMALIZE_CAP, 1.0)
-    return min(COVERAGE_WEIGHT * coverage + FREQ_WEIGHT * freq, 1.0)
+    rating_sum = sum(k.rating for k in scored)
+    coverage = min(rating_sum / RATING_SATURATION, 1.0)
+    # rating-ağırlıklı ortalama frekans
+    weighted_hits = sum(k.rating * _keyword_hits(content, k) for k in scored)
+    freq = min(weighted_hits / (rating_sum * FREQ_NORMALIZE_CAP), 1.0)
+    return round(min(REL_COVERAGE_WEIGHT * coverage + REL_FREQ_WEIGHT * freq, 1.0), 4)
 ```
 
 | Bileşen | Ağırlık | Hesaplama |
 | ------- | ------- | --------- |
-| Keyword coverage | %70 | `min(eşleşen farklı keyword / 5, 1.0)` — doyumlu sayım (master havuz büyüklüğüne **bölünmez**) |
-| Keyword frekansı | %30 | `min(ortalama geçiş / 3, 1.0)` — keyword'lerin metindeki yoğunluğu |
+| Rating-ağırlıklı coverage | %70 | `min(Σ rating(k) / 18, 1.0)` — kazanan kategorideki eşleşen keyword'lerin rating toplamı doyumu |
+| Rating-ağırlıklı frekans | %30 | `min(Σ(rating(k)·geçiş(k)) / (Σrating · 3), 1.0)` — önemli keyword'lerin metindeki yoğunluğu |
 
-> **Eşleşme:** kelime-sınırı (`\b`) bazlı, case-insensitive + NFC. Substring eşleşme kaldırıldı (`ai`→`hair`, `kur`→`kurul` yanlış-pozitiflerini önlemek için). Frekans sayımı da aynı kelime-sınırı kuralını kullanır.
->
-> **Neden havuz büyüklüğüne bölünmüyordu sorunu:** Eski formül `eşleşen / 55` kullandığından keyword katkısı en fazla ~0.18'e eziliyordu; bu yüzden 1000+ haberin hiçbiri %40'ı geçemiyordu ve sıralama freshness'e teslim oluyordu.
+**Kapsam kuralı:** `scored` listesi yalnızca **kazanan `content_category`'ye** ait eşleşen keyword'leri içerir. `ingest_mode: "all"` kaynaklarda kazanan kategori `default_category` olduğundan skor o kategorinin keyword'leri üzerinden hesaplanır; o kategoride hiç eşleşme yoksa skor `0.0` olur (içerik kabul edilir ama düşük öncelikli sıralanır).
 
-Sonuç: `{schema}.processed_items.relevance_score` (0.0–1.0; `Docs/02` CHECK).
+> **Eşleşme:** kelime-sınırı (`\b`) bazlı, case-insensitive + NFC; `term_tr` ve `term_en` ayrı ayrı aranır. Substring eşleşme kullanılmaz (`ai`→`hair`, `kur`→`kurul` yanlış-pozitifleri önlenir). Frekans sayımı da aynı kelime-sınırı kuralını kullanır.
+
+Sonuç: `{schema}.processed_items.relevance_score` (0.0–1.0; `Docs/02` CHECK). `topics` JSONB davranışı **değişmez** — metinde eşleşen tüm keyword yüzeyleri (kazanan kategori dışındakiler dahil) `topics`'e yazılmaya devam eder; yalnızca **skorlama** kazanan kategoriyle sınırlıdır.
 
 **`relevance_score` kullanım yerleri:**
 

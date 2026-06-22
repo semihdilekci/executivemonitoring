@@ -206,6 +206,7 @@ const VIEWER_NAV_ITEMS = [
 | `/admin/pipeline` | Pipeline izleme (kokpit) — Faz 6.1 | Admin | Auth + Role guard |
 | `/admin/pipeline/[id]` | Pipeline run detayı (canlı timeline) — Faz 6.1 | Admin | Auth + Role guard |
 | `/admin/content-archive` | İçerik Arşivi — işlenmiş haber gezgini — Faz 6.2 | Admin | Auth + Role guard |
+| `/admin/keywords` | Keyword Takibi — kategori keyword + rating yönetimi — Faz 6.3 | Admin | Auth + Role guard |
 | `/admin/chat-history` | Chatbot sohbet geçmişi | Admin | Auth + Role guard |
 | `/admin/audit-logs` | Audit log | Admin | Auth + Role guard |
 

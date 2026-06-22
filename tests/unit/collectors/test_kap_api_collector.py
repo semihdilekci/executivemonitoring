@@ -37,7 +37,7 @@ def _make_kap_source(**config_overrides: object) -> Source:
         config=config,
         polling_interval_minutes=30,
         status=SourceStatus.ACTIVE,
-        category=SourceCategory.OFFICIAL,
+        category=SourceCategory.REGULATORY,
         target_phase="mvp-0",
     )
 

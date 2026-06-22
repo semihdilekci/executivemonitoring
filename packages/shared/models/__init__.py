@@ -8,6 +8,7 @@ from packages.shared.models.chat_history import ChatHistory
 from packages.shared.models.content_chunk import EMBEDDING_DIMENSION, ContentChunk
 from packages.shared.models.digest import Digest
 from packages.shared.models.digest_section import DigestSection
+from packages.shared.models.keyword import Keyword, KeywordCategoryRating
 from packages.shared.models.notification_log import NotificationLog
 from packages.shared.models.notification_preference import NotificationPreference
 from packages.shared.models.password_reset_token import PasswordResetToken
@@ -41,6 +42,8 @@ __all__ = [
     "EMBEDDING_DIMENSION",
     "FmcgProcessedItem",
     "GeoProcessedItem",
+    "Keyword",
+    "KeywordCategoryRating",
     "MarketProcessedItem",
     "NewsProcessedItem",
     "NotificationLog",

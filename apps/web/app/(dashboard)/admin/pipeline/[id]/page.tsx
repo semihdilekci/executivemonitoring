@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RoleGate } from "@/components/auth/role-gate";
 import { DigestUpdateModal } from "@/components/admin/digest-update-modal";
+import { PipelineRunItems } from "@/components/admin/pipeline-run-items";
 import { PipelineRunTimeline } from "@/components/admin/pipeline-run-timeline";
 import { PipelineStatusBadge } from "@/components/admin/pipeline-run-table";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
@@ -21,7 +22,11 @@ import {
   isActiveRun,
 } from "@/lib/pipeline-labels";
 import { cn } from "@/lib/utils";
-import type { PipelineRunDetail, PipelineStage } from "@/types/api";
+import type {
+  PipelineRunDetail,
+  PipelineStage,
+  RunItemsResponse,
+} from "@/types/api";
 
 interface PipelineDetailPageProps {
   params: { id: string };
@@ -89,9 +94,20 @@ export default function PipelineDetailPage({ params }: PipelineDetailPageProps) 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [digestOpen, setDigestOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [itemsSummary, setItemsSummary] = useState<RunItemsResponse | null>(null);
 
   const run = runQuery.data;
   const active = run ? isActiveRun(run.status) : false;
+  const showItems = run?.run_type === "collect_pipeline";
+
+  // İşleme adımı için doğru Elendi/Hatalı ayrımı (DB-türetimli özetten).
+  const processCounts = itemsSummary
+    ? {
+        processed: itemsSummary.processed,
+        filtered: itemsSummary.filtered,
+        failed: itemsSummary.failed,
+      }
+    : null;
 
   // Çalışan run'da süre sayaçlarını canlı tut (1 sn tick); terminal'de durur.
   useEffect(() => {
@@ -240,7 +256,13 @@ export default function PipelineDetailPage({ params }: PipelineDetailPageProps) 
               steps={run.steps}
               now={now}
               auditHref={AUDIT_HREF}
+              processCounts={processCounts}
             />
+
+            {/* Okunan kaynaklar + elenen içerik drilldown (yalnızca collect run) */}
+            {showItems ? (
+              <PipelineRunItems runId={runId} onSummary={setItemsSummary} />
+            ) : null}
 
             {/* Bülten güncelleme tetiği detaydan da erişilebilir (`Docs/06`) */}
             <div className="flex justify-end">

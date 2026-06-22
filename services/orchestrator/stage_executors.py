@@ -323,6 +323,12 @@ class ProcessedItemCounter(Protocol):
     async def count_processed(self, run: PipelineRun) -> int: ...
 
 
+class RawItemFailedCounter(Protocol):
+    """Bu run'da `FAILED` işaretli `raw_items` (gerçek hata) sayım sözleşmesi."""
+
+    async def count_failed(self, run: PipelineRun) -> int: ...
+
+
 class ProcessStageExecutor:
     """SQS drain + `processed_items` artışı ile process aşamasını tamamlar (`Docs/04` §10.5).
 
@@ -331,8 +337,15 @@ class ProcessStageExecutor:
     sayısı 0 **ve** `processed_items` artışı `stable_polls` boyunca durana kadar poll eder;
     yalnız queue sayısına güvenmez — at-least-once `Approximate*` yaklaşıktır, processed
     delta ile **çapraz doğrulanır** (`Docs/04` §8 risk). `max_polls`/timeout ile sonsuz
-    bekleme yok. items_out = işlenen; items_failed = beklenen (ingested) − işlenen; DLQ
-    derinliği + eksik = `degraded` (run `partial`). Kritik değil → `abort` etmez.
+    bekleme yok.
+
+    Sayaç anlamı (`Docs/04` §10.5): items_out = işlenen (`processed_items` yazılan);
+    items_failed = **gerçek hata** (raw_items `FAILED` + DLQ) — filtreleme dahil DEĞİL.
+    Beklenen (ingested) − işlenen − hata farkı, gate/dedup ile **elenen** içeriktir ve
+    `detail["filtered"]`'a yazılır (hata değil; `Docs/04` §8.3 keyword gate). Drain
+    olmadan timeout olursa fark "elendi" değil `detail["pending"]`'dir (akıbeti belirsiz).
+    `degraded` yalnızca gerçek hata / DLQ / timeout'ta True — filtreleme tek başına run'ı
+    `partial` yapmaz. Kritik değil → `abort` etmez.
     """
 
     stage = PipelineStage.PROCESS
@@ -342,6 +355,7 @@ class ProcessStageExecutor:
         *,
         observer: SqsObserver,
         counter: ProcessedItemCounter,
+        failed_counter: RawItemFailedCounter | None = None,
         poll_interval: float = 5.0,
         max_polls: int = 60,
         stable_polls: int = 2,
@@ -349,6 +363,7 @@ class ProcessStageExecutor:
     ) -> None:
         self._observer = observer
         self._counter = counter
+        self._failed_counter = failed_counter
         self._poll_interval = poll_interval
         self._max_polls = max_polls
         self._stable_polls = stable_polls
@@ -406,11 +421,26 @@ class ProcessStageExecutor:
             await self._sleep(self._poll_interval)
 
         dlq_total = sum(d.dlq for d in depths.values())
-        items_failed = max(0, expected - processed) if expected else 0
         timed_out = not drained
+
+        # Gerçek hata = processor exception/persist hatası (raw_items FAILED) + DLQ.
+        real_failed = 0
+        if self._failed_counter is not None:
+            real_failed = await self._failed_counter.count_failed(run)
+        errors = real_failed + dlq_total
+
+        # Kalan fark: drain olduysa gate/dedup ile **elendi**; timeout'ta akıbeti
+        # belirsiz → "pending" (elendi sayma — yanıltıcı olur).
+        remainder = max(0, expected - processed - errors) if expected else 0
+        filtered = 0 if timed_out else remainder
+        pending = remainder if timed_out else 0
+
         detail: dict[str, Any] = {
             "expected": expected,
             "processed": processed,
+            "filtered": filtered,
+            "errors": errors,
+            "pending": pending,
             "drain_polls": polls,
             "drained": drained,
             "dlq": dlq_total,
@@ -422,9 +452,9 @@ class ProcessStageExecutor:
         return StepResult.completed(
             items_in=expected,
             items_out=processed,
-            items_failed=items_failed,
+            items_failed=errors,
             detail=detail,
-            degraded=items_failed > 0 or dlq_total > 0 or timed_out,
+            degraded=errors > 0 or timed_out,
         )
 
 
@@ -535,17 +565,23 @@ def build_collect_ingest_executors(
     active_types_resolver: Callable[[], Awaitable[list[str]]] | None = None,
     sqs_observer: SqsObserver | None = None,
     processed_counter: ProcessedItemCounter | None = None,
+    failed_counter: RawItemFailedCounter | None = None,
     digest_runner: DigestRunner | None = None,
 ) -> dict[PipelineStage, StageExecutor]:
     """Gerçek Collect+Ingest+Process+Digest aşama haritası.
 
     `sqs_observer` ve `processed_counter` verilirse gerçek `ProcessStageExecutor`
-    bağlanır; aksi halde Process stub kalır (geriye uyumlu). `digest_runner`
-    verilirse gerçek `DigestStageExecutor` bağlanır; aksi halde Digest stub kalır
-    (İter 2 davranışı).
+    bağlanır; aksi halde Process stub kalır (geriye uyumlu). `failed_counter`
+    verilirse Process adımı "Hatalı" (gerçek hata) ile "Elendi" (filtreleme) ayrımını
+    yapar. `digest_runner` verilirse gerçek `DigestStageExecutor` bağlanır; aksi halde
+    Digest stub kalır (İter 2 davranışı).
     """
     process_executor: StageExecutor = (
-        ProcessStageExecutor(observer=sqs_observer, counter=processed_counter)
+        ProcessStageExecutor(
+            observer=sqs_observer,
+            counter=processed_counter,
+            failed_counter=failed_counter,
+        )
         if sqs_observer is not None and processed_counter is not None
         else StubStageExecutor(PipelineStage.PROCESS)
     )

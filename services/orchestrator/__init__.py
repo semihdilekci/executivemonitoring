@@ -18,6 +18,7 @@ from services.orchestrator.db_observers import (
     DbActiveTypesResolver,
     DbProcessedItemCounter,
     DbRawItemCounter,
+    DbRawItemFailedCounter,
 )
 from services.orchestrator.digest_runner import AiEngineDigestRunner, GeneratorFactory
 from services.orchestrator.local_runtime import LocalCollectorInvoker, LocalSqsObserver
@@ -34,6 +35,7 @@ from services.orchestrator.stage_executors import (
     ProcessedItemCounter,
     ProcessStageExecutor,
     RawItemCounter,
+    RawItemFailedCounter,
     StageExecutor,
     StepResult,
     StubStageExecutor,
@@ -50,6 +52,7 @@ __all__ = [
     "DbActiveTypesResolver",
     "DbProcessedItemCounter",
     "DbRawItemCounter",
+    "DbRawItemFailedCounter",
     "DigestRequest",
     "DigestRunResult",
     "DigestRunner",
@@ -66,6 +69,7 @@ __all__ = [
     "ProcessedItemCounter",
     "QueueDepth",
     "RawItemCounter",
+    "RawItemFailedCounter",
     "RunRepository",
     "SqsObserver",
     "StageExecutor",

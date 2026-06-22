@@ -234,7 +234,9 @@ Detay: `Docs/04_BACKEND_SPEC.md` §8.3–8.4; `Docs/10_IMPLEMENTATION_ROADMAP.md
 
 **Karar [TS-001]:** Backend dili Python'dur. Collector worker'lar, processor pipeline ve AI/RAG katmanı için ekosistem olgunluğu (feedparser, trafilatura, imaplib, SQLAlchemy, LangChain) nedeniyle tercih edilmiştir.
 
-**Karar [TS-002]:** Birincil veritabanı PostgreSQL'dir. `pgvector` extension MVP-0 kurulumunda yüklenir (kullanılmasa da); schema bölümleme: `news`, `market`, `geo`, `transport`, `fmcg`. [X-INF-002]
+**Karar [TS-002]:** Birincil veritabanı PostgreSQL'dir. `pgvector` extension MVP-0 kurulumunda yüklenir (kullanılmasa da). Haber makaleleri `news.processed_items`; `market`/`geo`/`transport`/`fmcg` schema'ları gelecek yapılandırılmış veri tipleri için rezerve (ADR-0002, Faz 6.4). [X-INF-002] [X-DB-001]
+
+**Karar [DB-001]:** MVP-0 haber içerikleri yalnızca `news` schema'sında tutulur; `content_category` (6 değer) ince sınıflandırmadır. Eski `content_category`→`market`/`fmcg`/`geo` schema routing kaldırıldı. Yeni veri tipi (entity shape) → yeni schema; yeni bülten → `digest_type` + filtre. ADR: `Docs/adr/0002-news-schema-consolidation.md`.
 
 **Karar [TS-003]:** Cache katmanı Redis'tir. MVP-0'da Upstash serverless ücretsiz tier yeterlidir; dedup hash seti, rate-limit sayaçları ve scheduler kilitleri için kullanılır.
 
@@ -370,6 +372,7 @@ Detay: `Docs/04_BACKEND_SPEC.md` §8.3–8.4; `Docs/10_IMPLEMENTATION_ROADMAP.md
 |----------|-------|----------|
 | 0.1 | 2026-06-11 | İlk taslak. P-001..007, S-001..006, A-001..003, AUTH-001..003, R-001..002, AP-001..005, SEC-001..007, AUD-001..003, I-001..005, N-001..006, TS-001..013, INF-001..007, TEST-001..003, CODE-001..005 kararları alındı. §6, §7, §8 kapsam dışı bırakıldı. 8 açık karar §18'de bekliyor. |
 | 0.2 | 2026-06-17 | AP-002 güncellendi; AP-006 eklendi — rol bazlı navigasyon (viewer: PillNav, admin: sidebar). `/digests` bülten listesi route'u. |
+| 0.3 | 2026-06-22 | [DB-001] haber schema konsolidasyonu; [TS-002] güncellendi. ADR-0002. Faz 6.4. |
 
 ---
 

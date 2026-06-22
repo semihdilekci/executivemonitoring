@@ -28,10 +28,10 @@ def _valid_rss_payload(*, name: str | None = None) -> dict[str, object]:
         "config": {
             "feed_url": "https://example.com/feed.xml",
             "ingest_mode": "filtered",
-            "default_category": "turkish_media",
+            "default_category": "macro",
         },
         "polling_interval_minutes": 15,
-        "category": "turkish_media",
+        "category": "macro",
         "target_phase": "mvp-0",
     }
 

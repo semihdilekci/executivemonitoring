@@ -29,15 +29,36 @@ class SourceStatus(StrEnum):
 
 
 class SourceCategory(StrEnum):
-    """Kaynak kategorisi (`source_category_enum`)."""
+    """Kaynak kategorisi (`source_category_enum`).
 
-    TURKISH_MEDIA = "turkish_media"
+    Faz 6.3+ ile içerik arşivi kategorileriyle (`KeywordCategory`) birebir
+    hizalandı: kaynaklar artık ürettikleri içerik kategorisine göre sınıflanır.
+    Eski değerler (`turkish_media`, `official`, `market`, `geo`, `transport`)
+    008 migration ile bu 6 değere taşındı.
+    """
+
+    MACRO = "macro"
+    FINANCE = "finance"
     FMCG = "fmcg"
     STRATEGY = "strategy"
-    OFFICIAL = "official"
-    MARKET = "market"
-    GEO = "geo"
-    TRANSPORT = "transport"
+    GEOPOLITICAL = "geopolitical"
+    REGULATORY = "regulatory"
+
+
+class KeywordCategory(StrEnum):
+    """Keyword içerik kategorisi (`keyword_category_enum`).
+
+    Değerler `processed_items.content_category` ile birebir aynıdır
+    (enricher kategori anahtarları, `Docs/04` §8.4). Source-seviyesi
+    `SourceCategory`'den farklıdır; ikisi karıştırılmaz.
+    """
+
+    MACRO = "macro"
+    FINANCE = "finance"
+    FMCG = "fmcg"
+    STRATEGY = "strategy"
+    GEOPOLITICAL = "geopolitical"
+    REGULATORY = "regulatory"
 
 
 class RawItemStatus(StrEnum):

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -23,12 +23,14 @@ if str(ROOT) not in sys.path:
 from apps.api.core.config import Settings, get_settings  # noqa: E402
 from packages.shared.enums import (  # noqa: E402
     DigestType,
+    KeywordCategory,
     SourceCategory,
     SourceStatus,
     SourceType,
     UserRole,
 )
 from packages.shared.env_loader import load_dotenv_file  # noqa: E402
+from packages.shared.models.keyword import Keyword, KeywordCategoryRating  # noqa: E402
 from packages.shared.models.notification_preference import NotificationPreference  # noqa: E402
 from packages.shared.models.prompt_template import PromptTemplate  # noqa: E402
 from packages.shared.models.source import Source  # noqa: E402
@@ -59,6 +61,7 @@ class SeedResult:
     system_settings: SeedStats
     prompt_templates: SeedStats
     sources: SeedStats
+    keywords: SeedStats
 
     def as_dict(self) -> dict[str, dict[str, int]]:
         return {
@@ -67,6 +70,7 @@ class SeedResult:
             "system_settings": self.system_settings.as_dict(),
             "prompt_templates": self.prompt_templates.as_dict(),
             "sources": self.sources.as_dict(),
+            "keywords": self.keywords.as_dict(),
         }
 
 
@@ -229,6 +233,39 @@ async def seed_sources(db: AsyncSession, *, settings: Settings | None = None) ->
     return stats
 
 
+async def seed_keywords(db: AsyncSession) -> SeedStats:
+    """Production-grade keyword havuzu — `term_tr` (lower) anahtarıyla idempotent.
+
+    Mevcut keyword'ler korunur (admin sonradan panelden düzenler); yalnızca
+    eksikler oluşturulur. Rating satırları keyword ile birlikte eklenir.
+    """
+    stats = SeedStats()
+    for item in _load_fixture("keywords.json"):
+        term_tr = item["term_tr"]
+        existing = await db.execute(
+            select(Keyword).where(func.lower(Keyword.term_tr) == term_tr.lower())
+        )
+        if existing.scalar_one_or_none() is not None:
+            stats = SeedStats(created=stats.created, skipped=stats.skipped + 1)
+            continue
+
+        keyword = Keyword(
+            term_tr=term_tr,
+            term_en=item["term_en"],
+            is_active=item.get("is_active", True),
+            categories=[
+                KeywordCategoryRating(
+                    category=KeywordCategory(rating["category"]),
+                    rating=rating["rating"],
+                )
+                for rating in item["categories"]
+            ],
+        )
+        db.add(keyword)
+        stats = SeedStats(created=stats.created + 1, skipped=stats.skipped)
+    return stats
+
+
 async def run_seed(db: AsyncSession, *, settings: Settings | None = None) -> SeedResult:
     """Tüm fixture'ları idempotent şekilde yükler."""
     resolved_settings = settings or get_settings()
@@ -236,12 +273,14 @@ async def run_seed(db: AsyncSession, *, settings: Settings | None = None) -> See
     settings_stats = await seed_system_settings(db)
     template_stats = await seed_prompt_templates(db)
     source_stats = await seed_sources(db, settings=resolved_settings)
+    keyword_stats = await seed_keywords(db)
     return SeedResult(
         users=user_stats,
         notification_preferences=pref_stats,
         system_settings=settings_stats,
         prompt_templates=template_stats,
         sources=source_stats,
+        keywords=keyword_stats,
     )
 
 

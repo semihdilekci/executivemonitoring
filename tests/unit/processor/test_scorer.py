@@ -1,102 +1,129 @@
-"""ScorerProcessor unit testleri — saf-keyword relevance_score (freshness yok)."""
+"""ScorerProcessor unit testleri — rating-ağırlıklı + kategori-kapsamlı skor.
+
+Faz 6.3 İter 3 (`Docs/04` §8.4 — K5): skor yalnızca kazanan kategoriye ait
+`scored` keyword'lerle, her keyword rating'iyle ağırlıklı hesaplanır.
+"""
 
 from __future__ import annotations
 
 import uuid
 
 import pytest
+from services.processor.keyword_pool import CategoryKeyword
 from services.processor.models import ProcessorContext, ProcessorInput, ProcessorOutput
 from services.processor.scorer import (
-    DISTINCT_SATURATION,
+    RATING_SATURATION,
     ScorerProcessor,
-    calc_keyword_intensity,
     calculate_relevance_score,
 )
 
-_CONTENT = (
-    "TCMB faiz kararı enflasyon büyüme merkez bankası cari açık gsyih imf "
-    "piyasa analistleri bu hafta sonu gelişmeleri yakından izliyor "
-    "ve yatırımcılar farklı senaryolar üzerinde değerlendirme yapıyor."
-)
-_KEYWORDS = ["tcmb", "faiz", "enflasyon", "büyüme", "merkez bankası"]
+
+def _kw(term_tr: str, rating: int, term_en: str | None = None) -> CategoryKeyword:
+    return CategoryKeyword(term_tr, term_en or term_tr, rating)
 
 
-def _ctx(**overrides: object) -> ProcessorContext:
-    defaults: dict[str, object] = {
-        "source_id": uuid.uuid4(),
-        "source_type": "rss",
-        "title": "Makro",
-        "content": _CONTENT,
-        "content_hash": "sha256:abc",
-        "published_at": None,
-        "raw_metadata": {},
-    }
-    defaults.update(overrides)
-    item = ProcessorInput(**defaults)  # type: ignore[arg-type]
+def _ctx(scored: list[CategoryKeyword], content: str) -> ProcessorContext:
+    item = ProcessorInput(
+        source_id=uuid.uuid4(),
+        source_type="rss",
+        title="Makro",
+        content=content,
+        content_hash="sha256:abc",
+        published_at=None,
+        raw_metadata={},
+    )
     ctx = ProcessorContext(input=item, data=ProcessorOutput.from_input(item))
-    ctx.data.extras["matched_keywords"] = list(_KEYWORDS)
+    ctx.data.extras["scored_keywords"] = list(scored)
     return ctx
 
 
-def test_relevance_score_within_zero_one() -> None:
-    score = calculate_relevance_score(_CONTENT, _KEYWORDS)
+def test_empty_scored_returns_zero() -> None:
+    assert calculate_relevance_score("herhangi bir metin", []) == 0.0
+
+
+def test_score_within_zero_one() -> None:
+    scored = [_kw("enflasyon", 9, "inflation"), _kw("büyüme", 9, "growth")]
+    score = calculate_relevance_score("enflasyon büyüme enflasyon", scored)
     assert 0.0 <= score <= 1.0
 
 
-def test_relevance_score_higher_with_more_keywords() -> None:
-    few = calculate_relevance_score(_CONTENT, ["faiz"])
-    many = calculate_relevance_score(_CONTENT, _KEYWORDS)
-    assert many > few
+def test_single_low_rating_keyword_yields_low_score() -> None:
+    """Tek düşük-rating keyword → düşük skor."""
+    score = calculate_relevance_score("kvkk haberi geldi", [_kw("kvkk", 2)])
+    assert score < 0.25
 
 
-def test_keyword_intensity_zero_without_matches() -> None:
-    assert calc_keyword_intensity(_CONTENT, []) == 0.0
+def test_few_high_rating_keywords_yield_high_score() -> None:
+    """Az sayıda yüksek-rating keyword → yüksek skor (rating doyumu)."""
+    scored = [_kw("enflasyon", 9, "inflation"), _kw("büyüme", 9, "growth")]
+    score = calculate_relevance_score("enflasyon büyüme enflasyon büyüme", scored)
+    assert score >= 0.8
 
 
-def test_score_is_independent_of_freshness() -> None:
-    """Aynı içerik + keyword → published_at ne olursa olsun aynı skor."""
-    score = calculate_relevance_score(_CONTENT, _KEYWORDS)
-    assert score == calculate_relevance_score(_CONTENT, _KEYWORDS)
+def test_high_rating_beats_low_rating() -> None:
+    low = calculate_relevance_score("kvkk haberi", [_kw("kvkk", 2)])
+    high = calculate_relevance_score(
+        "enflasyon büyüme", [_kw("enflasyon", 9, "inflation"), _kw("büyüme", 9, "growth")]
+    )
+    assert high > low
 
 
-def test_coverage_saturates_at_distinct_threshold() -> None:
-    """DISTINCT_SATURATION (5) kadar farklı keyword → coverage tam (1.0).
+def test_out_of_category_keyword_does_not_affect_score() -> None:
+    """Kazanan kategori dışı keyword skoru DEĞİŞTİRMEZ — scorer yalnızca scored'a bakar.
 
-    5 keyword her biri 1 kez geçer: coverage=1.0, freq=min(1/3,1)=0.333.
-    intensity = 0.7*1.0 + 0.3*0.333 = 0.8.
+    İçerikte alakasız (scored'da olmayan) keyword'ler bulunsa da skor, yalnızca
+    scored listesindeki keyword'lerden hesaplandığı için aynı kalır.
     """
-    content = " ".join(["tcmb", "faiz", "enflasyon", "büyüme", "kvkk"])
-    keywords = ["tcmb", "faiz", "enflasyon", "büyüme", "kvkk"]
-    assert len(keywords) == int(DISTINCT_SATURATION)
-    score = calculate_relevance_score(content, keywords)
+    scored = [_kw("enflasyon", 9, "inflation")]
+    isolated = calculate_relevance_score("enflasyon", scored)
+    with_noise = calculate_relevance_score("enflasyon hisse borsa tahvil temettü", scored)
+    assert isolated == with_noise
+
+
+def test_coverage_saturates_at_rating_threshold() -> None:
+    """Σ rating = RATING_SATURATION (18) → coverage tam (1.0).
+
+    Tek geçişli iki 9-rating keyword: coverage=1.0, freq=min(18/(18*3),1)=0.3333.
+    score = 0.7*1.0 + 0.3*0.3333 = 0.8.
+    """
+    scored = [_kw("enflasyon", 9, "inflation"), _kw("büyüme", 9, "growth")]
+    assert sum(kw.rating for kw in scored) == int(RATING_SATURATION)
+    score = calculate_relevance_score("enflasyon büyüme", scored)
     assert score == pytest.approx(0.8, abs=1e-3)
 
 
 def test_frequency_boosts_repeated_keyword() -> None:
-    """Tek keyword ama çok tekrar → freq doyumu skoru yükseltir."""
-    once = calculate_relevance_score("faiz haberi geldi", ["faiz"])
-    many = calculate_relevance_score("faiz faiz faiz faiz", ["faiz"])
+    once = calculate_relevance_score("enflasyon haberi", [_kw("enflasyon", 9, "inflation")])
+    many = calculate_relevance_score(
+        "enflasyon enflasyon enflasyon", [_kw("enflasyon", 9, "inflation")]
+    )
     assert many > once
 
 
-def test_many_keywords_beat_single_keyword_high_freq() -> None:
-    """Çok farklı keyword'lü haber, tek-keyword'lü haberi geçmeli (inversiyon fix)."""
-    single = calculate_relevance_score("faiz faiz faiz faiz faiz", ["faiz"])
-    multi_content = "tcmb faiz enflasyon büyüme merkez bankası cari açık"
-    multi = calculate_relevance_score(
-        multi_content, ["tcmb", "faiz", "enflasyon", "büyüme", "merkez bankası"]
-    )
-    assert multi > single
+def test_zero_rating_returns_zero() -> None:
+    """Rating toplamı 0 (savunma) → sıfıra bölme yerine 0.0."""
+    assert calculate_relevance_score("enflasyon", [_kw("enflasyon", 0)]) == 0.0
 
 
 @pytest.mark.asyncio
-async def test_scorer_processor_writes_extras() -> None:
+async def test_scorer_processor_reads_scored_keywords() -> None:
     processor = ScorerProcessor()
-    ctx = _ctx()
+    scored = [_kw("enflasyon", 9, "inflation"), _kw("büyüme", 9, "growth")]
+    ctx = _ctx(scored, "enflasyon büyüme enflasyon")
 
     result = await processor.process(ctx)
 
     assert result is not None
     assert isinstance(result.extras["relevance_score"], float)
-    assert 0.0 <= result.extras["relevance_score"] <= 1.0
-    assert result.extras["relevance_score"] > 0.0
+    assert 0.0 < result.extras["relevance_score"] <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_scorer_processor_zero_without_scored() -> None:
+    processor = ScorerProcessor()
+    ctx = _ctx([], "alakasız metin")
+
+    result = await processor.process(ctx)
+
+    assert result is not None
+    assert result.extras["relevance_score"] == 0.0

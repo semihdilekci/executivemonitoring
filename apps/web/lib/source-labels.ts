@@ -23,13 +23,12 @@ export const SOURCE_STATUS_LABELS: Record<SourceStatus, string> = {
 };
 
 export const SOURCE_CATEGORY_LABELS: Record<SourceCategory, string> = {
-  turkish_media: "Türk Medyası",
+  macro: "Makroekonomi",
+  finance: "Finans",
   fmcg: "FMCG",
   strategy: "Strateji",
-  official: "Resmi",
-  market: "Piyasa",
-  geo: "Coğrafya",
-  transport: "Ulaşım",
+  geopolitical: "Jeopolitik",
+  regulatory: "Regülasyon",
 };
 
 export const POLLING_INTERVAL_OPTIONS = [

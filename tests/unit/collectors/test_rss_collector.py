@@ -21,7 +21,7 @@ def _make_rss_source(**config_overrides: object) -> Source:
     config: dict[str, object] = {
         "feed_url": "https://example.com/feed.xml",
         "ingest_mode": "filtered",
-        "default_category": "turkish_media",
+        "default_category": "macro",
         "language": "tr",
         # Generic parse testleri tarih/ağ'dan bağımsız olsun:
         "max_age_days": 3650,
@@ -35,7 +35,7 @@ def _make_rss_source(**config_overrides: object) -> Source:
         config=config,
         polling_interval_minutes=15,
         status=SourceStatus.ACTIVE,
-        category=SourceCategory.TURKISH_MEDIA,
+        category=SourceCategory.MACRO,
         target_phase="mvp-0",
     )
 
@@ -135,7 +135,7 @@ async def test_rss_collector_decodes_iso8859_turkish_chars(
 async def test_rss_collector_missing_feed_url_returns_empty() -> None:
     collector = RSSCollector()
     source = _make_rss_source()
-    source.config = {"ingest_mode": "filtered", "default_category": "turkish_media"}
+    source.config = {"ingest_mode": "filtered", "default_category": "macro"}
 
     articles = await collector.collect(source)
 

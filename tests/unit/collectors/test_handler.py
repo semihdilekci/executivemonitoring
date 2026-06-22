@@ -27,7 +27,7 @@ def _make_source(**overrides: object) -> Source:
         "polling_interval_minutes": 15,
         "status": SourceStatus.ACTIVE,
         "error_count": 0,
-        "category": SourceCategory.TURKISH_MEDIA,
+        "category": SourceCategory.MACRO,
         "target_phase": "mvp-0",
     }
     defaults.update(overrides)

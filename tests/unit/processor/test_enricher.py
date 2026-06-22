@@ -1,4 +1,8 @@
-"""EnricherProcessor unit testleri — kategori, schema routing, topics."""
+"""EnricherProcessor unit testleri — rating-ağırlıklı kategori + scored keyword.
+
+Faz 6.3 İter 3 (`Docs/04` §8.4 — K5): kategori seçimi adet değil **rating
+toplamı** ile yapılır; `scored_keywords` yalnızca kazanan kategoriye aittir.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,15 @@ from datetime import UTC, datetime
 
 import pytest
 from services.processor.enricher import EnricherProcessor
-from services.processor.keyword_pool import resolve_content_category, resolve_schema_category
+from services.processor.keyword_pool import (
+    CategoryKeyword,
+    KeywordPoolProvider,
+    KeywordRecord,
+    build_pools,
+    resolve_content_category,
+    resolve_schema_category,
+    static_keyword_pool_provider,
+)
 from services.processor.models import ProcessorContext, ProcessorInput, ProcessorOutput
 
 _FILLER = (
@@ -15,6 +27,27 @@ _FILLER = (
     "ve yatırımcılar farklı senaryolar üzerinde değerlendirme yapıyor "
     "çünkü küresel ekonomide belirsizlik devam ediyor."
 )
+
+
+def _keyword_records() -> list[KeywordRecord]:
+    """Rating-vs-adet senaryosu: macro az+yüksek-rating, finance çok+düşük-rating.
+
+    `enflasyon` bilinçli çok-kategorili (macro 9, finance 5) — kapsam izolasyon
+    testi için kazanan kategorideki rating ile scored'a girmeli.
+    """
+    return [
+        KeywordRecord("enflasyon", "inflation", {"macro": 9, "finance": 5}),
+        KeywordRecord("büyüme", "growth", {"macro": 9}),
+        KeywordRecord("faiz oranı", "interest rate", {"macro": 8}),
+        KeywordRecord("hisse", "share", {"finance": 3}),
+        KeywordRecord("tahvil", "bond", {"finance": 3}),
+        KeywordRecord("temettü", "dividend", {"finance": 3}),
+        KeywordRecord("borsa", "stock market", {"finance": 3}),
+    ]
+
+
+def _provider() -> KeywordPoolProvider:
+    return static_keyword_pool_provider(_keyword_records())
 
 
 def _ctx(**overrides: object) -> ProcessorContext:
@@ -45,27 +78,77 @@ def _with_config(
 
 
 @pytest.mark.asyncio
-async def test_enricher_finance_keywords_routes_to_market_schema() -> None:
-    processor = EnricherProcessor()
+async def test_rating_sum_wins_over_match_count() -> None:
+    """Adet çoğunluğu finance'te (5 vs 3) ama rating toplamı macro'da (26 vs 17)."""
+    processor = EnricherProcessor(keyword_pool_provider=_provider())
     ctx = _with_config(
-        _ctx(title="BIST hisse analizi", content=f"Borsa ve tahvil piyasası {_FILLER}"),
+        _ctx(
+            title="Ekonomi",
+            content=f"enflasyon büyüme faiz oranı hisse tahvil temettü borsa {_FILLER}",
+        ),
         "filtered",
-        "macro",
+        "fmcg",
     )
 
     result = await processor.process(ctx)
 
     assert result is not None
-    assert result.extras["category"] == "finance"
-    assert result.extras["schema_category"] == "market"
-    assert "borsa" in result.extras["topics"] or "hisse" in result.extras["topics"]
+    assert result.extras["category"] == "macro"
+    assert result.extras["schema_category"] == "news"
 
 
 @pytest.mark.asyncio
-async def test_enricher_ingest_mode_all_uses_default_category() -> None:
-    processor = EnricherProcessor()
+async def test_scored_keywords_only_winning_category() -> None:
+    """`scored_keywords` yalnızca kazanan (macro) kategori keyword'lerini taşır.
+
+    Çok-kategorili `enflasyon` macro rating'iyle (9) girer; finance-only
+    keyword'ler (hisse/tahvil/...) scored'da bulunmaz.
+    """
+    processor = EnricherProcessor(keyword_pool_provider=_provider())
     ctx = _with_config(
-        _ctx(title="TCMB faiz kararı", content=f"Merkez bankası enflasyon {_FILLER}"),
+        _ctx(
+            title="Ekonomi",
+            content=f"enflasyon büyüme faiz oranı hisse tahvil temettü borsa {_FILLER}",
+        ),
+        "filtered",
+        "fmcg",
+    )
+
+    result = await processor.process(ctx)
+
+    assert result is not None
+    scored = result.extras["scored_keywords"]
+    assert all(isinstance(kw, CategoryKeyword) for kw in scored)
+    tr_terms = {kw.term_tr for kw in scored}
+    assert tr_terms == {"enflasyon", "büyüme", "faiz oranı"}
+    assert all(kw.term_tr != "hisse" for kw in scored)
+    # `topics` ise TÜM eşleşmeleri içerir (finance keyword'leri dahil)
+    assert "hisse" in result.extras["topics"]
+    enflasyon_kw = next(kw for kw in scored if kw.term_tr == "enflasyon")
+    assert enflasyon_kw.rating == 9
+
+
+@pytest.mark.asyncio
+async def test_tie_break_uses_default_category() -> None:
+    """Eşit rating toplamı (macro 9 = finance 9) → default_category kazanır."""
+    category, _, scored = resolve_content_category(
+        "Haber",
+        f"büyüme hisse tahvil temettü {_FILLER}",
+        ingest_mode="filtered",
+        default_category="fmcg",
+        pools=build_pools(_keyword_records()),
+    )
+
+    assert category == "fmcg"
+    # fmcg'de eşleşen keyword yok → scored boş → skor 0.0
+    assert scored == []
+
+
+@pytest.mark.asyncio
+async def test_ingest_mode_all_uses_default_category() -> None:
+    processor = EnricherProcessor(keyword_pool_provider=_provider())
+    ctx = _with_config(
+        _ctx(title="Makro", content=f"enflasyon büyüme faiz oranı {_FILLER}"),
         "all",
         "fmcg",
     )
@@ -75,28 +158,33 @@ async def test_enricher_ingest_mode_all_uses_default_category() -> None:
     assert result is not None
     assert result.extras["category"] == "fmcg"
     assert result.extras["schema_category"] == "fmcg"
+    # all-mode: kazanan kategori (fmcg) keyword'ü eşleşmediği için scored boş
+    assert result.extras["scored_keywords"] == []
 
 
 @pytest.mark.asyncio
-async def test_enricher_tie_break_uses_default_category() -> None:
-    tie_content = f"tcmb faiz borsa hisse {_FILLER}"
-    category, _ = resolve_content_category(
+async def test_no_category_match_uses_default() -> None:
+    """Hiç kategori-keyword eşleşmesi yoksa default_category, scored boş."""
+    category, all_matched, scored = resolve_content_category(
         "Haber",
-        tie_content,
+        f"sadece alakasız metin {_FILLER}",
         ingest_mode="filtered",
-        default_category="finance",
+        default_category="strategy",
+        pools=build_pools(_keyword_records()),
     )
 
-    assert category == "finance"
+    assert category == "strategy"
+    assert all_matched == []
+    assert scored == []
 
 
 @pytest.mark.asyncio
-async def test_enricher_topics_deduped_and_entities_empty() -> None:
-    processor = EnricherProcessor()
+async def test_topics_deduped_and_entities_empty() -> None:
+    processor = EnricherProcessor(keyword_pool_provider=_provider())
     ctx = _with_config(
         _ctx(
             title="Faiz faiz",
-            content=f"Faiz kararı faiz oranı enflasyon büyüme {_FILLER}",
+            content=f"enflasyon enflasyon büyüme faiz oranı {_FILLER}",
         ),
         "filtered",
         "macro",

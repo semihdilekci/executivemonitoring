@@ -22,6 +22,7 @@ from services.orchestrator import (
     DbActiveTypesResolver,
     DbProcessedItemCounter,
     DbRawItemCounter,
+    DbRawItemFailedCounter,
     DigestRequest,
     LambdaInvoker,
     LocalCollectorInvoker,
@@ -95,6 +96,7 @@ def _build_orchestrator(
         active_types_resolver=DbActiveTypesResolver(session_factory),
         sqs_observer=sqs_observer,
         processed_counter=DbProcessedItemCounter(session_factory),
+        failed_counter=DbRawItemFailedCounter(session_factory),
         digest_runner=AiEngineDigestRunner(
             session_factory=session_factory,
             generator_factory=generator_factory,

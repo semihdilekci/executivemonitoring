@@ -8,6 +8,7 @@ import pytest
 from apps.api.main import create_app
 from apps.api.middleware.rate_limiter import InMemoryRateLimiterBackend
 from httpx import ASGITransport, AsyncClient
+from packages.shared.models.keyword import Keyword
 from packages.shared.models.notification_preference import NotificationPreference
 from packages.shared.models.prompt_template import PromptTemplate
 from packages.shared.models.source import Source
@@ -30,6 +31,7 @@ async def seed_database(database_url: str) -> AsyncIterator[None]:
         await session.execute(delete(SystemSetting))
         await session.execute(delete(PromptTemplate))
         await session.execute(delete(Source))
+        await session.execute(delete(Keyword))
         await session.commit()
 
     yield
@@ -40,6 +42,7 @@ async def seed_database(database_url: str) -> AsyncIterator[None]:
         await session.execute(delete(SystemSetting))
         await session.execute(delete(PromptTemplate))
         await session.execute(delete(Source))
+        await session.execute(delete(Keyword))
         await session.commit()
     await engine.dispose()
 

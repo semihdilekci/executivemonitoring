@@ -31,7 +31,13 @@ from packages.shared.models.processed_item import (  # noqa: E402
     PROCESSED_ITEM_MODELS,
     ProcessedItem,
 )
-from services.processor.keyword_pool import find_matching_keywords  # noqa: E402
+from services.processor.keyword_pool import (  # noqa: E402
+    KeywordPools,
+    build_pools,
+    count_matches_by_category,
+    find_matching_keywords,
+)
+from services.processor.keyword_repository import load_active_keywords  # noqa: E402
 from services.processor.scorer import calculate_relevance_score  # noqa: E402
 
 logger = logging.getLogger("ygip.backfill_relevance")
@@ -39,10 +45,23 @@ logger = logging.getLogger("ygip.backfill_relevance")
 _SCORE_EPSILON = 1e-4
 
 
-def _recompute(item: ProcessedItem) -> tuple[list[str], float]:
-    """Title + clean_content'ten kelime-sınırlı keyword'leri ve yeni skoru üretir."""
-    matched = find_matching_keywords(item.title or "", item.clean_content or "")
-    score = calculate_relevance_score(item.clean_content or "", matched)
+def _recompute(item: ProcessedItem, pools: KeywordPools) -> tuple[list[str], float]:
+    """Title + clean_content'ten kelime-sınırlı keyword'leri ve yeni skoru üretir.
+
+    `topics` master havuzdan türetilir (davranış değişmez); `relevance_score`
+    ise yalnızca kalıcı `content_category`'ye ait eşleşen keyword'lerle
+    rating-ağırlıklı hesaplanır (`Docs/04` §8.4 — K5). Kategori yoksa veya o
+    kategoride eşleşme yoksa skor `0.0`.
+    """
+    title = item.title or ""
+    content = item.clean_content or ""
+    matched = find_matching_keywords(title, content, pools.master_pool)
+
+    scored = []
+    if item.content_category:
+        by_category = count_matches_by_category(title, content, pools.category_pool)
+        scored = by_category.get(item.content_category, [])
+    score = calculate_relevance_score(content, scored)
     return matched, score
 
 
@@ -51,6 +70,7 @@ async def backfill_schema(
     schema: str,
     model_cls: type[ProcessedItem],
     *,
+    pools: KeywordPools,
     dry_run: bool,
 ) -> tuple[int, int]:
     """Tek schema tablosunu yeniden skorlar → (güncellenen, değişmeyen)."""
@@ -58,7 +78,7 @@ async def backfill_schema(
     updated = 0
     unchanged = 0
     for item in rows:
-        matched, new_score = _recompute(item)
+        matched, new_score = _recompute(item, pools)
         score_changed = abs(float(item.relevance_score) - new_score) > _SCORE_EPSILON
         topics_changed = list(item.topics or []) != matched
         if not score_changed and not topics_changed:
@@ -82,9 +102,13 @@ async def backfill_schema(
 
 
 async def run_backfill(session: AsyncSession, *, dry_run: bool) -> dict[str, tuple[int, int]]:
+    """Aktif keyword havuzunu DB'den yükler, tüm schema tablolarını yeniden skorlar."""
+    pools = build_pools(await load_active_keywords(session))
     summary: dict[str, tuple[int, int]] = {}
     for schema, model_cls in PROCESSED_ITEM_MODELS.items():
-        summary[schema] = await backfill_schema(session, schema, model_cls, dry_run=dry_run)
+        summary[schema] = await backfill_schema(
+            session, schema, model_cls, pools=pools, dry_run=dry_run
+        )
     return summary
 
 

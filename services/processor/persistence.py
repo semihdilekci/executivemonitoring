@@ -115,9 +115,7 @@ async def persist_pipeline_output(
 
     category_raw = output.extras.get("category")
     content_category = (
-        category_raw.strip()
-        if isinstance(category_raw, str) and category_raw.strip()
-        else None
+        category_raw.strip() if isinstance(category_raw, str) and category_raw.strip() else None
     )
 
     processed_item = model_cls(

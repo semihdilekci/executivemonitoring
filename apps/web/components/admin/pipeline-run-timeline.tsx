@@ -12,21 +12,71 @@ import {
 import { cn } from "@/lib/utils";
 import type { PipelineStep } from "@/types/api";
 
+/** İşleme adımı için doğru içerik kırılımı (DB-türetimli; eski run'larda da net). */
+export interface ProcessStepCounts {
+  processed: number;
+  filtered: number;
+  failed: number;
+}
+
 interface PipelineRunTimelineProps {
   steps: PipelineStep[];
   /** Çalışan aşama sürelerini canlı tutmak için yeniden render zaman damgası. */
   now: number;
   /** "Denetim loguna git" linki için hedef route. */
   auditHref: string;
+  /**
+   * İşleme adımının "Elendi" (gate/dedup) vs "Hatalı" (gerçek hata) ayrımı.
+   * Verilirse process adımı bu sayaçlarla render edilir — `items_failed`'in
+   * filtrelemeyi hata sayan eski davranışını ezer (`Docs/04` §8.3).
+   */
+  processCounts?: ProcessStepCounts | null;
 }
 
-function CounterPill({ label, value }: { label: string; value: number }) {
+function CounterPill({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "filtered" | "error";
+}) {
+  const toneClass =
+    tone === "error" && value > 0
+      ? "bg-red-50 text-red-700"
+      : tone === "filtered" && value > 0
+        ? "bg-amber-50 text-amber-700"
+        : "bg-gray-50 text-gray-800";
   return (
-    <span className="inline-flex items-baseline gap-1 rounded-md bg-gray-50 px-2 py-1 text-xs">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-semibold tabular-nums text-gray-800">{value}</span>
+    <span
+      className={cn(
+        "inline-flex items-baseline gap-1 rounded-md px-2 py-1 text-xs",
+        toneClass,
+      )}
+    >
+      <span className="opacity-70">{label}</span>
+      <span className="font-semibold tabular-nums">{value}</span>
     </span>
   );
+}
+
+/**
+ * İşleme adımı sayaçlarını çözer: önce dışarıdan gelen (canlı, DB-türetimli)
+ * `processCounts`, yoksa `step.detail.filtered`/`errors` (yeni run'lar), o da
+ * yoksa `null` (eski davranışa düş — Elendi gösterilmez).
+ */
+function resolveProcessCounts(
+  step: PipelineStep,
+  override: ProcessStepCounts | null | undefined,
+): ProcessStepCounts | null {
+  if (override) return override;
+  const filtered = step.detail?.filtered;
+  const errors = step.detail?.errors;
+  if (typeof filtered === "number" && typeof errors === "number") {
+    return { processed: step.items_out, filtered, failed: errors };
+  }
+  return null;
 }
 
 function CollectBreakdown({ step }: { step: PipelineStep }) {
@@ -93,14 +143,18 @@ function TimelineStep({
   isLast,
   now,
   auditHref,
+  processCounts,
 }: {
   step: PipelineStep;
   isLast: boolean;
   now: number;
   auditHref: string;
+  processCounts?: ProcessStepCounts | null;
 }) {
   const meta = PIPELINE_STEP_STATUS_META[step.status];
   const isSkipped = step.status === "skipped";
+  const processSplit =
+    step.stage === "process" ? resolveProcessCounts(step, processCounts) : null;
 
   return (
     <li className="relative flex gap-4 pb-6 last:pb-0">
@@ -140,8 +194,30 @@ function TimelineStep({
         {!isSkipped ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <CounterPill label="Giren" value={step.items_in} />
-            <CounterPill label="Çıkan" value={step.items_out} />
-            <CounterPill label="Hatalı" value={step.items_failed} />
+            {processSplit ? (
+              <>
+                <CounterPill label="İşlenen" value={processSplit.processed} />
+                <CounterPill
+                  label="Elendi"
+                  value={processSplit.filtered}
+                  tone="filtered"
+                />
+                <CounterPill
+                  label="Hatalı"
+                  value={processSplit.failed}
+                  tone="error"
+                />
+              </>
+            ) : (
+              <>
+                <CounterPill label="Çıkan" value={step.items_out} />
+                <CounterPill
+                  label="Hatalı"
+                  value={step.items_failed}
+                  tone="error"
+                />
+              </>
+            )}
           </div>
         ) : null}
 
@@ -169,6 +245,7 @@ export function PipelineRunTimeline({
   steps,
   now,
   auditHref,
+  processCounts,
 }: PipelineRunTimelineProps) {
   // `sequence` sırasında — backend zaten sıralı döner; FE'de garanti altına al.
   const ordered = [...steps].sort((a, b) => {
@@ -189,6 +266,7 @@ export function PipelineRunTimeline({
           isLast={index === ordered.length - 1}
           now={now}
           auditHref={auditHref}
+          processCounts={processCounts}
         />
       ))}
     </ol>

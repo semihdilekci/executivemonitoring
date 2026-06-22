@@ -23,13 +23,15 @@ SQS mesajlarını tüketen Lambda zinciri: **dedup → normalize → gate → en
 | Dedup | `content_hash` + `source_id`; Redis SETNX (TTL 7 gün); duplicate skip |
 | Normalize | HTML strip, Unicode NFC, tarih/dil, min 10 kelime |
 | Gate | `ingest_mode` + master keyword havuzu; DROP → işlenmiş veri yazılmaz |
-| Enrich | Kategori çözümleme + schema routing → `schema_category`, `topics` |
+| Enrich | Kategori çözümleme → `content_category`, `topics`; haber persist `news` + `schema_category=news` |
 | Score | Deterministik `relevance_score` 0.0–1.0 (`Docs/04` §8.4) |
 | Chunk | Metin parçalama + embedding → `content_chunks` (1536 dim) |
 
-## Schema routing (MVP-0)
+## Haber depolama (Faz 6.4, ADR-0002)
 
-Kategori çözümleme: en çok keyword eşleşmesi → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category`. Mapping: `macro`/`strategy`/`regulatory` → `news`; `fmcg` → `fmcg`; `finance` → `market`; `geopolitical` → `geo`. `transport` MVP-0'da kullanılmaz.
+Tüm haber niteliği içerik `news.processed_items`'a yazılır. `content_category` (6 değer) ince sınıflandırmadır; `schema_category` haberlerde sabit `"news"`. Eski kategori→`market`/`fmcg`/`geo` routing kaldırıldı. Rezerve schema'lar MVP-1+ yapılandırılmış veri için.
+
+Kategori çözümleme: rating toplamı en yüksek → `default_category` tie-break → `ingest_mode: "all"` her zaman `default_category` (Faz 6.3 K5).
 
 ## İdempotency
 
@@ -57,4 +59,4 @@ Processor ≥%80 coverage. Her aşama için:
 
 ---
 
-Detay: `Docs/04_BACKEND_SPEC.md` §8; `Docs/01_DOMAIN_MODEL.md` pipeline bölümü; faz iterasyonları: `@53-phase-03-processor`
+Detay: `Docs/04_BACKEND_SPEC.md` §8; `Docs/01_DOMAIN_MODEL.md` pipeline bölümü; faz iterasyonları: `@53-phase-03-processor`, `@62-phase-064-news-schema-consolidation`

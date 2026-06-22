@@ -1,0 +1,403 @@
+---
+description: "[Faz 6.3] Keyword Takibi & Rating-Tabanlı Skorlama — admin-yönetilir keyword havuzu + processor algoritma revizyonu — 5 iterasyon/chat (DB+seed → DB-backed pool provider → rating-ağırlıklı kategori+relevance → keyword CRUD API → FE keyword ekranı). Mesajda \"Faz 6.3 — İterasyon M\" belirt."
+---
+
+# Faz 6.3: Keyword Takibi & Rating-Tabanlı Skorlama
+
+## Goal
+
+Hardcoded `CATEGORY_RULES` keyword havuzunu **admin-yönetilir DB havuzuna** taşımak: her keyword `term_tr` + `term_en` + **kategori-başına 1–10 rating** (çok-kategorili) taşır. Bu havuz üzerine processor'ın iki algoritması yeniden tasarlanır — (a) `filtered` kategori seçimi **rating toplamı en yüksek** kategoriyi seçer (adet değil), (b) relevance score **yalnızca kazanan kategorinin** eşleşen keyword'lerini **rating-ağırlıklı** hesaplar (alakasız keyword artık skoru şişirmez). Admin keyword + rating'leri **`S-ADMIN-KEYWORDS`** ekranından yönetir. **Admin only.** Detay: `Docs/10` Faz 6.3.
+
+## Feature branch (zorunlu)
+
+Bu faz **kendi feature branch'inde**: `feature/f63-keyword-tracking` (`48-git-phase-branch.mdc`). MVP-0'a bilinçli operasyonel ekleme; `main`'de faz kodu yok.
+
+**Stop (İterasyon 1, kod öncesi):** [ ] `main` güncel; [ ] `feature/f63-keyword-tracking` oluşturuldu; [ ] `git push -u origin HEAD`; [ ] Faz 0–6.2 migration'ları local'de `alembic upgrade head` ile uygulanmış (`006_content_category` dahil; `alembic current` = 006).
+
+## Bu fazın çalışma modeli
+
+- Tek sohbet fazı bitirmez. Her chat: `@61-phase-063-keyword-tracking` + **「Faz 6.3 — İterasyon M」**.
+- Katman sırası: **DB + seed → processor pool provider → processor algoritma → API → FE** — karıştırma.
+- Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil. Plan moduna geçme — iterasyon blueprint yeterli.
+- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Gate'in kabul/DROP iş mantığı **değişmez** (≥1 master eşleşme → kabul); rating yalnızca kategori seçimini ve relevance skorunu etkiler. `topics` JSONB davranışı değişmez.
+
+## Required Context
+
+- Keyword DB modeli (`Docs/02` §4.20–4.21, §3 enum)
+- Rating-ağırlıklı algoritma (`Docs/04` §8.3–8.4 — K5)
+- Keyword CRUD kontratları (`Docs/03` §11.7, §12 yetki matrisi)
+- Keyword ekranı (`Docs/06` S-ADMIN-KEYWORDS, S-ADMIN-KEYWORD-CREATE/EDIT)
+- RBAC admin-only (`Docs/07` §2), audit (`Docs/07` §9)
+
+## Done Definition
+
+- [ ] Eski hardcoded `CATEGORY_RULES` kaldırılmış; processor keyword havuzunu DB'den (`KeywordPoolProvider`) yükler
+- [ ] `filtered` kategori seçimi rating toplamı en yüksek kategoriyi seçer; eşitlikte `default_category`
+- [ ] `relevance_score` yalnızca kazanan kategorinin keyword'lerini rating-ağırlıklı hesaplar; alakasız keyword skoru artırmaz
+- [ ] Admin `GET/POST/PUT/DELETE /api/v1/admin/keywords` ile keyword + rating yönetir; viewer → `403`
+- [ ] `S-ADMIN-KEYWORDS` ekranı: liste + form modal (tr/en + çok-kategori rating); sidebar linki yalnızca admin
+- [ ] `fixtures/keywords.json` **production-grade**: 6 kategorinin her biri dolu, çok-kategorili rating'ler, tr/en doğru eşlenmiş
+- [ ] `pytest` unit + integration yeşil; `ruff` + `mypy` yeşil; `npm run build` (apps/web) yeşil
+
+## Explicit Don'ts
+
+- Gate kabul/DROP eşiğine rating eşiği eklemek (≥1 eşleşme → kabul mantığı **aynı kalır**)
+- `topics` JSONB semantiğini değiştirmek (tüm eşleşen keyword'ler yazılmaya devam eder; yalnızca **skorlama** kategori-kapsamlı)
+- Keyword stemming/lemmatization, eş-anlamlı genişletme, AI keyword önerisi
+- `relevance_score` formül sabitlerini system_settings'e taşımak (sabit kalır; MVP-1)
+- Viewer erişimi; mobil ekran (Faz 7); CSV/Excel import-export
+- Kategori enum'una yeni kategori eklemek (6 kategori sabit)
+
+---
+
+### İterasyon 1 — Keyword DB + Domain + Production Seed (6.3.1)
+
+**Hedef:** `keywords` + `keyword_category_ratings` tabloları, `keyword_category_enum` ve modeller migration ile gelir; `fixtures/keywords.json` **production-grade** havuzu seed eder; migration round-trip + seed bütünlük testi yeşil.
+
+**Teslim çıktısı:**
+- `alembic/versions/007_keyword_tracking.py` — enum + 2 tablo + index; `down_revision` `006_content_category`
+- `packages/shared/enums.py` — `KeywordCategory` StrEnum (`macro/finance/fmcg/strategy/geopolitical/regulatory`)
+- `packages/shared/models/keyword.py` — `Keyword`, `KeywordCategoryRating` modelleri + `relationship`
+- `fixtures/keywords.json` — 6 kategorinin her biri için production-ready keyword + rating havuzu (tr/en, çok-kategorili)
+- `scripts/seed*.py` — `keywords.json` idempotent yükleme (mevcut seed kalıbı)
+- `tests/unit/processor/test_keyword_seed.py` — seed bütünlük + `tests/integration/test_keyword_migration.py` — upgrade/downgrade (PG yoksa skip)
+
+**Önkoşullar:**
+- [ ] Feature branch Stop tamam
+- [ ] `006_content_category` uygulanmış (`alembic current` = 006)
+
+**Docs okuma sırası:** (yalnızca bunları oku — sırayla)
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3.1 — kapsam ve Stop
+2. `Docs/02_DATABASE_SCHEMA.md` §3 (enum), §4.20–4.21 (tablo/kolon/index/constraint), §8 (seed kalite kriteri)
+3. `Docs/01_DOMAIN_MODEL.md` §2.20–2.21 — Keyword / KeywordCategoryRating entity kuralları
+4. `Docs/09_DEV_WORKFLOW.md` §8.1–8.2 — migration downgrade zorunluluğu, enum oluşturma kalıbı
+5. `alembic/versions/006_content_category.py` + `packages/shared/models/processed_item.py` — migration + model kalıbı
+
+**Uygulama planı:**
+1. `enums.py` — `KeywordCategory(StrEnum)` 6 değer; mevcut `SourceCategory` kalıbını izle (`Docs/01` §2.21)
+2. `007_keyword_tracking.py` — `op.execute("CREATE TYPE keyword_category_enum …")`; `keywords` (lower-unique index'ler) + `keyword_category_ratings` (`uq_…_keyword_category`, `ck_…_rating BETWEEN 1 AND 10`); `downgrade()` ters sıra + `DROP TYPE` (`Docs/02` §4.20–4.21)
+3. `keyword.py` — `Keyword` (id, term_tr, term_en, is_active, timestamps) + `KeywordCategoryRating` (FK CASCADE, category Enum, rating); `Keyword.categories` relationship (`cascade="all, delete-orphan"`); `packages/shared/models/__init__` export
+4. `fixtures/keywords.json` — **production-grade havuz** (aşağıdaki seed kuralları); `scripts/seed*.py`'de idempotent upsert (term_tr lower key)
+5. `test_keyword_seed.py` — JSON yükle: her 6 kategori ≥1 keyword; tüm rating 1–10; tr/en lower-unique; en az 1 çok-kategorili keyword var
+6. `test_keyword_migration.py` — `upgrade head` tablo+enum var; `downgrade -1` kaldırır; `upgrade head` tekrar
+
+**Seed kuralları (`fixtures/keywords.json` — production-grade, haber-editörü kalitesinde):**
+- Her kategori (macro, finance, fmcg, strategy, geopolitical, regulatory) için **geniş ve gerçek** keyword seti — eski `CATEGORY_RULES` (`Docs/04` §8.4 git geçmişi) **başlangıç**tır, üzerine ciddi genişletme yapılır.
+- Her keyword `term_tr` + `term_en` doğru çevrilmiş (kurum/marka adı gibi çevirisi olmayanlar iki kolona aynı yazılır).
+- Rating 1–10 **anlamlı dağılır**: kategoriyi güçlü temsil eden çekirdek terimler 8–10, destekleyici terimler 4–7, zayıf/bağlamsal terimler 1–3.
+- **Çok-kategorili** örnekler bilinçli: örn. "enflasyon/inflation" → macro 9, finance 6; "tedarik zinciri/supply chain" → fmcg 7, strategy 5; "yaptırım/sanctions" → geopolitical 9, regulatory 5.
+- Türkçe NFC + kelime-sınırı eşleşme gözetilir (substring tuzakları: `ai`, `kur` gibi kısa terimlerde rating'i bilinçli düşük tut veya çok-kelimeli forma çevir).
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `alembic/versions/007_keyword_tracking.py`, `packages/shared/models/keyword.py`, `fixtures/keywords.json`, `tests/unit/processor/test_keyword_seed.py`, `tests/integration/test_keyword_migration.py` |
+| Güncelle | `packages/shared/enums.py`, `packages/shared/models/__init__.py`, `scripts/seed*.py` |
+| Dokunma | `services/processor/*` (İter 2–3), API, FE, `keyword_pool.py` `CATEGORY_RULES` (İter 2'de kaldırılır) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Enum 6 değer | `Docs/02` §3 | `keyword_category_enum` = `content_category` değerleri |
+| keywords tablosu | `Docs/02` §4.20 | `lower()` unique index tr+en; `is_active` default true |
+| rating CHECK | `Docs/02` §4.21 | `ck_…_rating BETWEEN 1 AND 10`; `uq(keyword_id, category)` |
+| Migration zinciri | `Docs/02` §4.20 | `down_revision` = `006_content_category`; `DROP TYPE` downgrade'de |
+| Production seed | `Docs/02` §8 | 6 kategori dolu, çok-kategorili, anlamlı rating |
+
+**Kalite kapıları:** (`Docs/08` + `15-database-alembic`, `35-testing-pytest`)
+- [ ] `alembic upgrade head` + `alembic downgrade -1` + `upgrade head` yeşil
+- [ ] Seed bütünlük testi: 6 kategori dolu, rating 1–10, tr/en unique, çok-kategorili var
+- [ ] `ruff` + `mypy packages/shared` yeşil
+
+**Bu iterasyonda yok:**
+- `keyword_pool.py` provider refactor (İter 2), algoritma (İter 3), API (İter 4), FE (İter 5)
+
+**Risk / dikkat:**
+- Enum `DROP TYPE` downgrade'de tablo drop'tan **sonra** olmalı (bağımlılık) — `005`/`006` enum kalıbını izle
+- `lower()` unique functional index: Alembic `op.create_index(..., postgresql_ops)` veya `op.execute` ile; mevcut migration'larda fonksiyonel index kalıbı yoksa `op.execute` kullan
+- Seed havuzu zayıf/dar olursa DoD karşılanmaz — bu iterasyonun **asıl değeri** seed kalitesidir, kısma yapma
+
+**Stop:**
+- [ ] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`
+- [ ] `python -m scripts.seed_dev` (veya proje seed komutu) — keyword havuzu yüklenir
+- [ ] `pytest tests/unit/processor/test_keyword_seed.py tests/integration/test_keyword_migration.py -v`
+- [ ] PR/onay → İterasyon 2
+
+---
+
+### İterasyon 2 — Processor: DB-Backed Keyword Pool Provider (6.3.2)
+
+**Hedef:** `KeywordPoolProvider` aktif keyword havuzunu (tr/en + kategori-rating) DB'den TTL-cache ile yükler; matching helper'ları rating taşır; gate master eşleşmeyi provider'dan alır ve kabul/DROP mantığı **değişmeden** geçer; eski hardcoded `CATEGORY_RULES` kaldırılır.
+
+**Teslim çıktısı:**
+- `services/processor/keyword_repository.py` — aktif keyword + rating async sorgusu
+- `services/processor/keyword_pool.py` — `KeywordPoolProvider` (DB load + TTL cache), `CategoryKeyword` yapısı, `master_pool` / `category_pool`; matching helper'lar rating taşır
+- `services/processor/gate_processor.py` — master eşleşme provider üzerinden
+- `tests/unit/processor/test_keyword_pool.py` — DB load, cache, tr+en eşleşme, master union; `test_gate.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop (tablolar + seed mevcut; `alembic current` = 007)
+- [ ] `services/processor/source_config_resolver.py` DB resolver kalıbı okunmuş
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3.2 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §8.3 — gate akışı + master havuz DB kaynağı; §8.4 — `KeywordPoolProvider` / `CategoryKeyword` yapısı (kavramsal)
+3. `Docs/02_DATABASE_SCHEMA.md` §4.20–4.21 — sorgulanacak kolonlar + `is_active` filtresi
+4. `services/processor/source_config_resolver.py` — `DbSourceConfigResolver` async DB + cache kalıbı
+5. `services/processor/gate_processor.py` + `keyword_pool.py` (mevcut) — değişecek yüzey
+
+**Uygulama planı:**
+1. `keyword_repository.py` — `load_active_keywords(session) -> list[KeywordRow]`; `Keyword` + `KeywordCategoryRating` join; yalnızca `is_active=true` (`Docs/02` §4.20)
+2. `keyword_pool.py` — `CategoryKeyword(term_tr, term_en, rating)` namedtuple; `KeywordPoolProvider` (resolver enjekte): `category_pool: dict[str, list[CategoryKeyword]]` + `master_pool: tuple[str, ...]` (tüm tr+en yüzeyler, dedupe); TTL cache (ör. 300 sn) — `source_config_resolver` cache kalıbı
+3. Matching helper'lar (`find_matching_keywords`, `count_matches_by_category`, `count_total_keyword_hits`) provider havuzu ile çalışır; tr+en ayrı yüzey aranır; kelime-sınırı (`\b`) + NFC + casefold korunur (`Docs/04` §8.4)
+4. `master_keyword_pool()` / `has_master_keyword_match` provider'dan; **eski `CATEGORY_RULES` sabiti silinir**
+5. `gate_processor.py` — `has_master_keyword_match` çağrısı provider'a; kabul/DROP mantığı aynı
+6. `test_keyword_pool.py` — fake repo ile load; cache hit; "inflation" (en) ve "enflasyon" (tr) ikisi de eşleşir; master union dedupe; `test_gate.py` filtered+match / filtered+no-match / all güncel
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/processor/keyword_repository.py`, `tests/unit/processor/test_keyword_pool.py` |
+| Güncelle | `services/processor/keyword_pool.py`, `services/processor/gate_processor.py`, `tests/unit/processor/test_gate.py` |
+| Dokunma | `enricher.py` / `scorer.py` algoritma (İter 3), API, FE, persistence |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Havuz DB kaynağı | `Docs/04` §8.3 | `KeywordPoolProvider` TTL-cache; `CATEGORY_RULES` kaldırılır |
+| tr+en eşleşme | `Docs/04` §8.4 | `term_tr` ve `term_en` ayrı yüzey; `\b`+NFC+casefold |
+| Gate mantığı sabit | `Docs/04` §8.3 | ≥1 master eşleşme → kabul; rating'den bağımsız |
+| Aktif filtre | `Docs/02` §4.20 | yalnızca `is_active=true` yüklenir |
+| Async DB kalıbı | `services/processor/source_config_resolver.py` | resolver enjeksiyon + cache |
+
+**Kalite kapıları:**
+- [ ] Pozitif: tr+en eşleşme; master union; cache hit
+- [ ] Deny: filtered + no-match → gate DROP korunur (`test_gate.py`)
+- [ ] `pytest tests/unit/processor/test_keyword_pool.py tests/unit/processor/test_gate.py -v`
+- [ ] `ruff` + `mypy services/processor` yeşil
+
+**Bu iterasyonda yok:**
+- Rating-ağırlıklı kategori seçimi + relevance (İter 3) — bu iterasyonda `resolve_content_category`/`scorer` davranışı **şimdilik** mevcut adet-bazlı kalabilir veya geçici uyumlanır; algoritma değişimi İter 3'te
+- API, FE
+
+**Risk / dikkat:**
+- Lambda soğuk başlangıçta DB load — TTL cache + tek sorgu (N+1 yok); provider singleton
+- `master_pool` çok-kelimeli ifadeler için uzun-önce sıralama (mevcut `_sorted_master_keywords` kalıbı) korunmalı
+- `CATEGORY_RULES` import eden başka modül kalmasın — `rg "CATEGORY_RULES"` ile doğrula
+
+**Stop:**
+- [ ] `rg "CATEGORY_RULES" services/ tests/` → yalnızca silinmiş/migrasyon referansı (canlı kullanım yok)
+- [ ] `pytest tests/unit/processor/test_keyword_pool.py tests/unit/processor/test_gate.py -v`
+- [ ] PR/onay → İterasyon 3
+
+---
+
+### İterasyon 3 — Rating-Ağırlıklı Kategori Seçimi + Relevance (6.3.3)
+
+**Hedef:** `resolve_content_category` kategoriyi **rating toplamı en yüksek** olana göre seçer (eşitlik → `default_category`); `scorer` relevance'ı **yalnızca kazanan kategorinin** eşleşen keyword'lerini **rating-ağırlıklı** hesaplar; enricher kazanan kategori scored keyword'lerini scorer'a aktarır. Alakasız keyword skoru artırmaz — unit testlerle kanıtlı.
+
+**Teslim çıktısı:**
+- `services/processor/keyword_pool.py` — `resolve_content_category` rating-toplamı kazanan + scored keyword döner
+- `services/processor/scorer.py` — `calculate_relevance_score(content, scored)` rating-ağırlıklı coverage+freq
+- `services/processor/enricher.py` — kazanan kategori scored keyword'lerini `extras` ile scorer'a aktarır
+- `tests/unit/processor/test_enricher.py`, `tests/unit/processor/test_scorer.py` — rating senaryoları
+
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop (provider + DB havuz çalışır)
+- [ ] `KeywordPoolProvider.category_pool` rating taşıyor
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3.3 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §8.4 — **K5**: çözümleme sırası (rating toplamı), `calculate_relevance_score` formülü + sabitler, kapsam kuralı
+3. `Docs/01_DOMAIN_MODEL.md` §4 ProcessedItem — skor anlamı + `content_category` rating-tabanlı seçim
+4. `services/processor/enricher.py` + `scorer.py` (mevcut) — wire edilecek yüzey
+
+**Uygulama planı:**
+1. `keyword_pool.py` — `count_matches_by_category` rating taşır; `category_score(cat) = Σ rating` (distinct keyword); `resolve_content_category(...) -> (category, all_matched, scored_for_winner)`: `all` → default_category; `filtered` → max rating-toplamı, eşitlik → default_category; hiç eşleşme → default_category (`Docs/04` §8.4 sırası 1–4)
+2. `scorer.py` — sabitler `REL_COVERAGE_WEIGHT=0.7, REL_FREQ_WEIGHT=0.3, RATING_SATURATION=18.0, FREQ_NORMALIZE_CAP=3.0`; `calculate_relevance_score(content, scored)`: boş → 0.0; `coverage=min(Σrating/18,1)`; `freq=min(Σ(rating·hits)/(Σrating·3),1)`; `round(0.7·cov+0.3·freq,4)` (`Docs/04` §8.4 kod)
+3. `enricher.py` — `resolve_content_category`'den kazanan kategori + `scored` al; `extras["scored_keywords"]` (kazanan kategori keyword+rating); `topics` **tüm** `all_matched` (davranış korunur); scorer `extras["scored_keywords"]` okur
+4. `test_scorer.py` — (a) tek düşük-rating keyword → düşük skor; (b) az sayıda yüksek-rating keyword → yüksek skor; (c) kazanan kategori dışı keyword skoru etkilemez; (d) skor 0.0–1.0
+5. `test_enricher.py` — (a) rating-toplamı kazanan kategori seçilir (adet çoğunluğu farklı kategorideyken); (b) eşitlik → default_category; (c) `all` mode → default_category; (d) `scored_keywords` yalnızca kazanan kategori
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `services/processor/keyword_pool.py`, `services/processor/scorer.py`, `services/processor/enricher.py`, `tests/unit/processor/test_enricher.py`, `tests/unit/processor/test_scorer.py` |
+| Dokunma | `gate_processor.py` (İter 2 sabit), `persistence.py`, API, FE |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Kategori = Σ rating | `Docs/04` §8.4 | `category_score`; max toplam; eşitlik → default |
+| Relevance rating-ağırlıklı | `Docs/04` §8.4 | `0.7·w_cov + 0.3·w_freq`; `RATING_SATURATION=18` |
+| Kategori-kapsam | `Docs/04` §8.4 | `scored` yalnızca kazanan kategori keyword'leri |
+| `all` mode | `Docs/04` §8.4 | kategori=default; skor default kategori keyword'leri üzerinden |
+| `topics` korunur | `Docs/04` §8.4 | tüm `all_matched` topics'e yazılır |
+
+**Kalite kapıları:**
+- [ ] Pozitif: rating-kazanan kategori + yüksek-rating yüksek skor
+- [ ] İzolasyon testi: kazanan kategori dışı keyword skoru **değiştirmez**
+- [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_scorer.py -v`
+- [ ] `ruff` + `mypy services/processor` yeşil; processor coverage ≥%80 korunur
+
+**Bu iterasyonda yok:**
+- API, FE; gate mantığı (sabit); `topics` semantiği değişimi (yasak)
+
+**Risk / dikkat:**
+- `Σrating·FREQ_NORMALIZE_CAP` payda — `rating_sum=0` (boş scored) erken `return 0.0` ile korunmalı (sıfıra bölme)
+- Kazanan kategori `default_category` ama o kategoride hiç keyword eşleşmediyse `scored` boş → skor 0.0 (beklenen; `Docs/04` §8.4 kapsam kuralı)
+- `extras` key adları (`scored_keywords`, `category`, `topics`) persistence (`Docs/04` §8.8) ile uyumlu kalmalı — `content_category` persist İter değişmez
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_scorer.py -v`
+- [ ] `pytest tests/unit/processor -q` (regresyon yeşil)
+- [ ] PR/onay → İterasyon 4
+
+---
+
+### İterasyon 4 — Keyword CRUD API (6.3.4)
+
+**Hedef:** `GET/POST/PUT/DELETE /api/v1/admin/keywords` çalışır; admin-only; `categories[]` rating yönetimi (PUT replace semantiği); duplicate `409`, rating `422`; her yazma audit log üretir; integration test admin/viewer RBAC yeşil.
+
+**Teslim çıktısı:**
+- `apps/api/repositories/keyword_repository.py` — list (filtre/pagination), get, create, update, delete
+- `apps/api/services/keyword_service.py` — CRUD + duplicate kontrol + audit
+- `apps/api/schemas/keyword.py` — request/response
+- `apps/api/routers/keyword.py` — `require_admin` guard; `apps/api/main.py` include
+- `tests/integration/test_keyword_api.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop (tablolar mevcut)
+- [ ] `apps/api/routers/content_archive.py` admin router + `Docs/03` §11.7 okunmuş
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3.4 — kapsam
+2. `Docs/03_API_CONTRACTS.md` §11.7 — endpoint'ler, request/response, kurallar, error code; §12 — yetki matrisi satırları
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §2 — `require_admin`; §9 — audit aynı transaction
+4. `apps/api/routers/content_archive.py` + `apps/api/services/` — admin router/service kalıbı
+5. `packages/shared/models/keyword.py` — model + relationship (İter 1)
+
+**Uygulama planı:**
+1. `schemas/keyword.py` — `KeywordCategoryRatingIn/Out` (category enum + rating 1–10), `KeywordCreate`/`KeywordUpdate` (term_tr/en 1–120, categories ≥1, kategori tekrarı yasak → validator), `KeywordResponse`, `KeywordListResponse` (`Docs/03` §11.7)
+2. `keyword_repository.py` — `list_paginated(filters)` (category/q ILIKE/is_active/page); `get`; `create` (keyword + ratings); `update` (categories replace: delete-orphan + upsert); `delete`
+3. `keyword_service.py` — duplicate `term_tr`/`term_en` (lower) kontrol → `KEYWORD_DUPLICATE`; CRUD + `AuditService.log_event` (`keyword.created/updated/deleted`) aynı transaction (`Docs/07` §9)
+4. `routers/keyword.py` — prefix `/admin/keywords`; `Depends(require_admin)`; 404 `KEYWORD_NOT_FOUND`; `main.py` include
+5. `test_keyword_api.py` — admin create/list/update/delete 200/201/204; viewer 403; duplicate 409; rating 0 veya 11 → 422; aynı kategori iki kez → 422; audit yazıldı
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/api/repositories/keyword_repository.py`, `apps/api/services/keyword_service.py`, `apps/api/schemas/keyword.py`, `apps/api/routers/keyword.py`, `tests/integration/test_keyword_api.py` |
+| Güncelle | `apps/api/main.py` (router include) |
+| Dokunma | Processor, FE (İter 5) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Admin-only CRUD | `Docs/03` §11.7 + §12 | `Depends(require_admin)`; viewer 403 |
+| categories replace | `Docs/03` §11.7 | PUT tam set; delete-orphan + upsert |
+| Duplicate | `Docs/03` §11.7 §13 | lower(term_tr/en) → `KEYWORD_DUPLICATE` 409 |
+| Rating/kategori validation | `Docs/03` §11.7 | rating 1–10; kategori tekrarı → 422 |
+| Audit | `Docs/07` §9 | `keyword.created/updated/deleted` aynı transaction |
+
+**Kalite kapıları:**
+- [ ] Pozitif: admin CRUD tam akış
+- [ ] Deny: viewer 403; duplicate 409; rating/kategori 422
+- [ ] `pytest tests/integration/test_keyword_api.py -v`
+- [ ] `ruff` + `mypy apps/api` (yeni modüller) yeşil
+
+**Bu iterasyonda yok:**
+- FE (İter 5); keyword değişiminde processor cache invalidation (TTL yeterli — MVP); bulk import
+
+**Risk / dikkat:**
+- `categories` replace'te eski rating satırlarını sızdırmadan delete-orphan — relationship `cascade` doğrula
+- Duplicate kontrol case-insensitive (`lower()`); DB unique index ile çift güvence
+- Audit `payload` keyword id + değişen alanlar; rating değerleri loglanabilir (hassas değil)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_keyword_api.py -v`
+- [ ] Manuel smoke: admin token → `POST /api/v1/admin/keywords` → 201; viewer → 403
+- [ ] PR/onay → İterasyon 5
+
+---
+
+### İterasyon 5 — FE: Keyword Takibi Ekranı (6.3.5)
+
+**Hedef:** `S-ADMIN-KEYWORDS` canlı — filtre bandı, DataTable (tr/en + kategori-rating chip'leri), "Keyword Ekle" + satır Düzenle/Sil, form modal (tr/en + çok-kategori rating editörü), sidebar "Keyword Takibi" linki yalnızca admin; viewer link görmez.
+
+**Teslim çıktısı:**
+- `apps/web/app/(dashboard)/admin/keywords/page.tsx`
+- `components/admin/keyword-table.tsx`, `keyword-form-modal.tsx`, `keyword-filters.tsx`
+- `hooks/use-keywords.ts` — list + create + update + delete
+- `lib/keyword-labels.ts` — kategori TR label; `apps/web/lib/constants.ts` — sidebar link
+- `apps/web/types/api.ts` — keyword tipleri
+
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop (API integration yeşil)
+- [ ] `apps/web/app/(dashboard)/admin/content-archive/page.tsx` admin liste + modal kalıbı
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.3.5 — kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-KEYWORDS + S-ADMIN-KEYWORD-CREATE/EDIT (kolon, filtre, form, validation, boş durum)
+3. `Docs/05_FRONTEND_SPEC.md` §4 — route `/admin/keywords` admin guard; §9 form yönetimi
+4. `Docs/03_API_CONTRACTS.md` §11.7 — FE query param + request/response eşlemesi
+5. `apps/web/components/admin/source-form-modal.tsx` — form modal + React Query mutation kalıbı
+
+**Uygulama planı:**
+1. `keyword-labels.ts` — `KeywordCategory` → TR label (Makroekonomi/Finans/FMCG/Strateji/Jeopolitik/Regülasyon); rating renk yoğunluğu helper
+2. `use-keywords.ts` — `useQuery` list (filtre queryKey); `useMutation` create/update/delete → invalidate
+3. `keyword-filters.tsx` — kategori dropdown + arama (min 2) + durum; controlled state
+4. `keyword-table.tsx` — kolonlar (tr/en/kategori-rating chip/durum/işlem); chip "Finans · 6"; Düzenle → modal, Sil → `S-CONFIRM-DIALOG`
+5. `keyword-form-modal.tsx` — create/edit; tr/en input + aktif toggle + 6 kategori checkbox + aktifleşince rating (1–10, default 5); duplicate `409` → alan altı uyarı; validation (≥1 kategori, rating 1–10)
+6. `page.tsx` — `RoleGate`/admin guard; filtre + table + "Keyword Ekle"; empty state (`Docs/06` S-EMPTY-STATES)
+7. `constants.ts` — `{ label: "Keyword Takibi", href: "/admin/keywords" }` İçerik Arşivi'nden sonra; `types/api.ts` tipler
+8. Manuel: admin → Keyword Takibi → ekle (çok-kategori rating) → düzenle → sil
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `app/(dashboard)/admin/keywords/page.tsx`, `components/admin/keyword-table.tsx`, `keyword-form-modal.tsx`, `keyword-filters.tsx`, `hooks/use-keywords.ts`, `lib/keyword-labels.ts` |
+| Güncelle | `apps/web/lib/constants.ts`, `apps/web/types/api.ts` |
+| Dokunma | Backend, processor, mobil |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Ekran ID + route | `Docs/06` S-ADMIN-KEYWORDS | `/admin/keywords` admin-only |
+| Çok-kategori rating editör | `Docs/06` S-ADMIN-KEYWORD-EDIT | 6 kategori checkbox + 1–10 rating |
+| Admin-only nav | `Docs/05` §4 + `Docs/06` | sidebar link yalnızca admin layout |
+| Duplicate UI | `Docs/03` §11.7 | 409 → "Bu terim zaten kayıtlı" |
+| Form validation | `Docs/06` | ≥1 kategori, rating 1–10 inline |
+
+**Kalite kapıları:**
+- [ ] Admin UI: filtre + tablo + ekle/düzenle/sil + çok-kategori rating render
+- [ ] Viewer layout'ta nav link DOM'da yok (code review)
+- [ ] `npm run build` (apps/web) yeşil; TypeScript strict — yeni tiplerde `any` yok
+
+**Bu iterasyonda yok:**
+- Mobil RN ekranı, bulk import/export, sürükle-sırala rating
+
+**Risk / dikkat:**
+- Form `categories` tam set gönderilmeli (PUT replace) — kaldırılan kategori chip'i submit'te düşmeli
+- Rating input 1–10 sınırı UI'da zorlanmalı (backend 422 son savunma)
+- Sidebar link admin guard'ı yalnızca UI gizleme — gerçek koruma backend `403` (`Docs/05` §13)
+
+**Stop:**
+- [ ] `npm run build` (apps/web)
+- [ ] Manuel smoke: admin → Keyword Takibi → çok-kategori keyword ekle → düzenle → sil
+- [ ] Faz 6.3 Done Definition checklist
+- [ ] PR/onay → Faz 6.3 tamamlandı; `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 6.3 işareti
+
+---
+
+Phase done → `Docs/10_IMPLEMENTATION_ROADMAP.md` Faz 6.3 işareti.

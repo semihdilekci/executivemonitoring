@@ -28,17 +28,17 @@ export const DEFAULT_CONFIG_TEMPLATES: Record<SourceType, Record<string, unknown
     endpoint_url: "",
     parse_format: "html",
     ingest_mode: "all",
-    default_category: "official",
+    default_category: "regulatory",
   },
   rest_api: {
     endpoint: "",
     ingest_mode: "all",
-    default_category: "market",
+    default_category: "finance",
   },
   websocket: {
     endpoint: "",
     ingest_mode: "all",
-    default_category: "market",
+    default_category: "finance",
   },
 };
 

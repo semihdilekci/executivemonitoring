@@ -30,20 +30,22 @@ Birincil veritabanı PostgreSQL'dir. pgvector extension MVP-0 kurulumunda yükle
 
 ## 2. Schema Bölümleme
 
-PostgreSQL schema'ları veri kategorisine göre ayrılır. Ortak tablolar `public` schema'da kalır; domain-specific processed data kendi schema'sında tutulur.
+PostgreSQL schema'ları **veri tipine** göre ayrılır (haber makalesi vs. yapılandırılmış zaman serisi / sektör ölçümü). Ortak tablolar `public` schema'da kalır.
 
-| Schema | İçerik | Tablolar |
-|--------|--------|---------|
-| `public` | Ortak sistem tabloları | `users`, `sources`, `raw_items`, `content_chunks`, `digests`, `digest_sections`, `prompt_templates`, `api_keys`, `api_usage_logs`, `chat_history`, `audit_logs`, `notification_preferences`, `password_reset_tokens`, `system_settings`, `pipeline_runs`, `pipeline_run_steps`, `alarms`, `alarm_events` |
-| `news` | Haber ve medya verisi | `news.processed_items` |
-| `market` | Piyasa ve finansal veri | `market.processed_items` |
-| `geo` | Jeopolitik veri | `geo.processed_items` |
-| `transport` | Lojistik ve ulaşım verisi | `transport.processed_items` |
-| `fmcg` | FMCG sektör verisi | `fmcg.processed_items` |
+| Schema | Veri tipi | MVP-0 tabloları | Not |
+|--------|-----------|-----------------|-----|
+| `public` | Sistem + ham/işlenmiş ortak | `users`, `sources`, `raw_items`, `content_chunks`, `digests`, … | — |
+| `news` | **Haber/makale** (RSS, mail, gov) | `news.processed_items` | Tüm MVP-0 işlenmiş haberler burada; ince kategori `content_category` kolonu |
+| `market` | Piyasa/finansal **yapılandırılmış veri** | *(rezerve — MVP-0'da boş)* | MVP-1+: Finnhub, FRED, emtia (farklı tablo yapıları planlanır) |
+| `geo` | Jeopolitik **yapılandırılmış veri** | *(rezerve — MVP-0'da boş)* | MVP-2+: ACLED, GDELT vb. |
+| `transport` | Lojistik/izleme verisi | *(rezerve — MVP-0'da boş)* | MVP-2+: AIS, OpenSky |
+| `fmcg` | FMCG sektör **ölçüm verisi** | *(rezerve — MVP-0'da boş)* | MVP-3+: Nielsen, Euromonitor vb. |
 
-Schema bölümleme yalnızca `processed_items` tablosuna uygulanır. Her schema'daki `processed_items` tablosu aynı kolon yapısına sahiptir. Processor pipeline, `schema_category` alanına göre ilgili schema'ya yazar. Sorgularda schema-qualified tablo adı kullanılır: `news.processed_items`, `market.processed_items` vb.
+**Faz 6.4 kararı (ADR-0002):** MVP-0'da processor **yalnızca** `news.processed_items`'a yazar. `content_category` (6 keyword kategorisi) depolama ayrımı değildir — filtreleme ve bülten seçimi için kullanılır. Eski `market`/`fmcg`/`geo` schema'larındaki haber satırları migration ile `news`'e taşınır.
 
-Schema oluşturma migration'ın ilk adımıdır:
+**Yeni veri tipi kuralı:** Yeni entity shape → yeni schema + yeni tablo(lar). Yeni bülten → `digest_type` + sorgu filtresi; haber için ayrı schema açılmaz.
+
+Schema oluşturma migration'ın ilk adımıdır (rezerve schema'lar boş kalabilir):
 
 ```sql
 CREATE SCHEMA IF NOT EXISTS news;
@@ -72,7 +74,10 @@ CREATE TYPE pipeline_run_type_enum AS ENUM ('collect_pipeline', 'digest_update')
 CREATE TYPE pipeline_run_status_enum AS ENUM ('pending', 'running', 'completed', 'partial', 'failed', 'cancelled');
 CREATE TYPE pipeline_stage_enum AS ENUM ('collect', 'ingest', 'process', 'digest');
 CREATE TYPE pipeline_step_status_enum AS ENUM ('pending', 'running', 'completed', 'failed', 'skipped');
+CREATE TYPE keyword_category_enum AS ENUM ('macro', 'finance', 'fmcg', 'strategy', 'geopolitical', 'regulatory');
 ```
+
+> `keyword_category_enum` değerleri `processed_items.content_category` ile **birebir aynıdır** (enricher kategori anahtarları, `Docs/04` §8.4). Source-seviyesi `source_category_enum`'dan farklıdır; ikisi karıştırılmaz.
 
 ---
 
@@ -174,9 +179,11 @@ CREATE INDEX idx_raw_items_content_hash ON raw_items (content_hash);
 
 **ON DELETE davranışı:** Source silindiğinde ilişkili raw_items CASCADE ile silinir. Source silme admin onayı gerektirir.
 
-### 4.4 processed_items (schema-partitioned)
+### 4.4 processed_items (haber — `news` schema)
 
-Her schema (`news`, `market`, `geo`, `transport`, `fmcg`) için aynı yapı:
+MVP-0'da **aktif** tablo yalnızca `news.processed_items`'dır (Faz 6.4, ADR-0002). `market`/`fmcg`/`geo`/`transport` altındaki aynı yapıdaki tablolar migration öncesi legacy'dir; Faz 6.4 sonrası haber içermez.
+
+Tablo yapısı:
 
 ```sql
 CREATE TABLE {schema}.processed_items (
@@ -208,9 +215,11 @@ CREATE INDEX idx_{schema}_processed_items_entities ON {schema}.processed_items U
 CREATE INDEX idx_{schema}_processed_items_content_category ON {schema}.processed_items (content_category);
 ```
 
-`{schema}` yerine `news`, `market`, `geo`, `transport`, `fmcg` gelir. Migration bu 5 tabloyu döngüyle oluşturur.
+İlk migration (`002_data_tables`) 5 schema için aynı tabloyu oluşturur; Faz 6.4 migration (`008_news_consolidation`) haber satırlarını `news`'e taşır ve legacy schema tablolarını boşaltır.
 
-**`content_category` (Faz 6.2):** Enricher'ın keyword kural kategorisi (`macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`; `CATEGORY_RULES` anahtarları). `schema_category`'den farklıdır (DB schema bölümleme vs. iş kuralı kategorisi). Faz 6.2 öncesi kayıtlar için `NULL` kabul edilir; yeni processor persist zorunlu doldurur. Migration: `006_content_category.py` (`down_revision`: `005_pipeline_tables`).
+**`schema_category` (haberler):** MVP-0 haber kayıtlarında sabit `"news"`. Kolon geriye uyum ve digest referansları için kalır; `content_category` ile karıştırılmaz.
+
+**`content_category` (Faz 6.2):** Enricher'ın keyword kategorisi (`macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`; `keyword_category_enum` değerleri — Faz 6.3'ten itibaren DB `keywords` havuzundan). **İnce sınıflandırma** — depolama schema'sını belirlemez. Faz 6.2 öncesi kayıtlar için `NULL` kabul edilir; yeni processor persist zorunlu doldurur. Migration: `006_content_category.py` (`down_revision`: `005_pipeline_tables`).
 
 ### 4.5 content_chunks
 
@@ -230,7 +239,7 @@ CREATE TABLE content_chunks (
 CREATE INDEX idx_content_chunks_processed_item_id ON content_chunks (processed_item_id);
 ```
 
-**FK notu:** `processed_item_id` mantıksal olarak processed_items'a referans verir ancak processed_items 5 ayrı schema'da olduğundan PostgreSQL native FK constraint uygulanamaz. Referential integrity uygulama katmanında (SQLAlchemy relationship) sağlanır.
+**FK notu (Faz 6.4 sonrası):** `processed_item_id` → `news.processed_items(id)` native FK eklenebilir (Faz 6.4 İter 6). Migration öncesi çoklu schema nedeniyle FK yoktu; Faz 6.4 haber konsolidasyonu bunu kapatır.
 
 **pgvector index:** Aşağıda §10'da detaylandırılmıştır.
 
@@ -561,6 +570,56 @@ CREATE INDEX idx_pipeline_run_steps_status ON pipeline_run_steps (status);
 - `digest_update` run'ında `collect/ingest/process` step'leri `skipped`; yalnızca `digest` koşar.
 - Her run için aşama başına en fazla 1 step (`uq_pipeline_run_steps_run_id_stage`).
 
+### 4.20 keywords (Faz 6.3)
+
+Admin tarafından yönetilen keyword takip havuzu. Her keyword hem Türkçe hem İngilizce yüzeye sahiptir (eng/tr içerikli kaynaklar birlikte taranır). Kategori bağlılığı ve önem rating'i `keyword_category_ratings` (§4.21) ile tutulur (çok-kategori, kategori-başına farklı rating). Bu tablo, eski hardcoded `CATEGORY_RULES` (`services/processor/keyword_pool.py`) havuzunun yerini alır.
+
+```sql
+CREATE TABLE keywords (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    term_tr     VARCHAR(120) NOT NULL,
+    term_en     VARCHAR(120) NOT NULL,
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX uq_keywords_term_tr_lower ON keywords (lower(term_tr));
+CREATE UNIQUE INDEX uq_keywords_term_en_lower ON keywords (lower(term_en));
+CREATE INDEX idx_keywords_is_active ON keywords (is_active);
+```
+
+**Alan notları:**
+- `term_tr` / `term_en`: keyword'ün iki dildeki yüzeyi; ikisi de NOT NULL. Eşleşme her ikisinde de kelime-sınırı (`\b`) + NFC + casefold ile aranır (`Docs/04` §8.4). Bir dil için doğal karşılık yoksa aynı terim iki kolona yazılır (örn. marka/kurum adı).
+- `lower()` UNIQUE index: aynı terimin case farkıyla mükerrer girilmesini engeller → `409 KEYWORD_DUPLICATE`.
+- `is_active=false`: keyword havuzdan çıkarılır (silme yerine soft toggle); processor yalnızca aktif keyword'leri yükler.
+
+### 4.21 keyword_category_ratings (Faz 6.3)
+
+Bir keyword'ün bir kategorideki önem rating'i (1–10). Aynı keyword birden çok kategoride farklı rating ile yer alabilir; bu yüzden (keyword, kategori) çifti tekildir.
+
+```sql
+CREATE TABLE keyword_category_ratings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    keyword_id  UUID NOT NULL REFERENCES keywords(id) ON DELETE CASCADE,
+    category    keyword_category_enum NOT NULL,
+    rating      SMALLINT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_keyword_category_ratings_keyword_category UNIQUE (keyword_id, category),
+    CONSTRAINT ck_keyword_category_ratings_rating CHECK (rating BETWEEN 1 AND 10)
+);
+
+CREATE INDEX idx_keyword_category_ratings_keyword_id ON keyword_category_ratings (keyword_id);
+CREATE INDEX idx_keyword_category_ratings_category ON keyword_category_ratings (category);
+```
+
+**Alan notları:**
+- `rating`: 1–10 tamsayı (`ck_…_rating` CHECK). Yüksek rating = kategori için daha güçlü sinyal; kategori seçimi ve relevance skoru bu değeri ağırlık olarak kullanır (`Docs/04` §8.4).
+- `UNIQUE(keyword_id, category)`: aynı keyword aynı kategoride iki rating tutamaz; çok-kategorili rating farklı satırlardır.
+- `ON DELETE CASCADE`: keyword silinince rating'leri de silinir.
+
 ---
 
 ## 5. Index Stratejisi
@@ -592,6 +651,7 @@ AND processed_at > now() - INTERVAL '7 days';
 | `content_chunks` | `uq_content_chunks_processed_item_id_chunk_index` | `(processed_item_id, chunk_index)` | Chunk sıra UNIQUE |
 | `audit_logs` | `idx_audit_logs_target` | `(target_type, target_id)` | Hedef entity bazlı log sorgusu |
 | `digests` | `idx_digests_period` | `(period_start, period_end)` | Dönem bazlı digest sorgusu |
+| `keyword_category_ratings` | `uq_keyword_category_ratings_keyword_category` | `(keyword_id, category)` | Keyword-kategori rating UNIQUE |
 
 ### Index Ekleme Kuralı
 
@@ -852,6 +912,9 @@ Seed dosyaları:
 | `fixtures/system_settings.json` | Tüm varsayılan sistem ayarları |
 | `fixtures/raw_items.json` | 50 örnek ham veri (RSS çıktısı simülasyonu) |
 | `fixtures/processed_items.json` | 50 örnek işlenmiş veri (5 schema'ya dağıtılmış) |
+| `fixtures/keywords.json` | **Production-grade** keyword + kategori-rating havuzu (Faz 6.3) — 6 kategorinin her biri için haber-editörü kalitesinde, geniş kapsamlı keyword seti (tr/en + 1–10 rating). Seed `keywords` + `keyword_category_ratings` tablolarını doldurur. |
+
+> **Faz 6.3 seed kalite kriteri:** `fixtures/keywords.json` dekoratif/örnek veri değildir — her kategoride gerçek izleme yapacak kalitede, çok-kategorili rating'ler düşünülmüş, tr/en yüzeyleri doğru eşlenmiş bir havuz olmalıdır. Prod ortamında bu havuz da yüklenir (admin sonradan panelden düzenler).
 
 Seed yükleme komutu: `python -m scripts.seed_dev` — bu komut yalnızca `dev` ortamında çalışır; `prod` ortamında çalıştırılırsa hata verir.
 
@@ -861,7 +924,8 @@ Seed yükleme komutu: `python -m scripts.seed_dev` — bu komut yalnızca `dev` 
 
 1. **İlk admin kullanıcı:** E-posta ve şifre deploy sırasında environment variable'dan okunur (`INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`). Bu değerler seed sonrası env'den silinir.
 2. **System settings:** Varsayılan değerler (JWT süreleri, cron ifadeleri, embedding ayarları).
-3. **Sources:** Admin panelinden manuel eklenir; seed ile yüklenmez.
+3. **Keyword havuzu (Faz 6.3):** `fixtures/keywords.json` production'da da yüklenir — processor kategori seçimi ve relevance skoru bu havuza bağlıdır (boş havuz → tüm skorlar 0). Admin panelden (S-ADMIN-KEYWORDS) düzenler.
+4. **Sources:** Admin panelinden manuel eklenir; seed ile yüklenmez.
 
 ---
 

@@ -27,6 +27,7 @@ export const ADMIN_NAV_ITEMS: readonly NavItem[] = [
   { label: "Kaynaklar", href: "/admin/sources" },
   { label: "Pipeline İzleme", href: "/admin/pipeline" },
   { label: "İçerik Arşivi", href: "/admin/content-archive" },
+  { label: "Keyword Takibi", href: "/admin/keywords" },
   { label: "Prompt Şablonları", href: "/admin/prompt-templates" },
   { label: "API Anahtarları", href: "/admin/api-keys" },
   { label: "Bildirimler", href: "/admin/notifications" },
@@ -125,6 +126,8 @@ export const queryKeys = {
       limit?: number;
     }) => ["pipeline", "list", filters ?? {}] as const,
     run: (id: string) => ["pipeline", "run", id] as const,
+    items: (id: string, params?: { outcome?: string; page?: number }) =>
+      ["pipeline", "run", id, "items", params ?? {}] as const,
   },
   contentArchive: {
     all: ["content-archive"] as const,
@@ -144,6 +147,16 @@ export const queryKeys = {
     }) => ["content-archive", "list", filters ?? {}] as const,
     detail: (id: string, schemaCategory: string) =>
       ["content-archive", "detail", id, schemaCategory] as const,
+  },
+  keywords: {
+    all: ["keywords"] as const,
+    list: (filters?: {
+      category?: string;
+      q?: string;
+      is_active?: boolean;
+      page?: number;
+      page_size?: number;
+    }) => ["keywords", "list", filters ?? {}] as const,
   },
 } as const;
 

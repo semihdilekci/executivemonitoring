@@ -165,16 +165,12 @@ def test_unescape_double_encoded_entities() -> None:
 
 
 def test_unescape_single_encoded_entities() -> None:
-    assert unescape_entities("emekli &#039;maaş&#039; &quot;zam&quot;") == (
-        "emekli 'maaş' \"zam\""
-    )
+    assert unescape_entities("emekli &#039;maaş&#039; &quot;zam&quot;") == ("emekli 'maaş' \"zam\"")
 
 
 def test_normalize_text_decodes_double_encoded_entities() -> None:
     raw = "Milyonlar TÜİK&amp;#039;ten gelecek veriyi &amp;quot;zam&amp;quot; diye bekliyor."
-    assert normalize_text(raw) == (
-        'Milyonlar TÜİK\'ten gelecek veriyi "zam" diye bekliyor.'
-    )
+    assert normalize_text(raw) == ('Milyonlar TÜİK\'ten gelecek veriyi "zam" diye bekliyor.')
 
 
 def test_normalize_text_decodes_entities_inside_html() -> None:

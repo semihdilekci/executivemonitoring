@@ -27,7 +27,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 def test_data_enums_values() -> None:
     assert SourceType.REST_API.value == "rest_api"
     assert SourceStatus.ACTIVE.value == "active"
-    assert SourceCategory.TURKISH_MEDIA.value == "turkish_media"
+    assert SourceCategory.MACRO.value == "macro"
     assert RawItemStatus.PENDING.value == "pending"
     assert ApiProvider.GROQ.value == "groq"
 

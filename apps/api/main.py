@@ -31,6 +31,7 @@ from apps.api.routers import (
     content_archive,
     digests,
     health,
+    keyword,
     notifications,
     pipeline,
     prompt_templates,
@@ -202,6 +203,7 @@ def create_app(
     app.include_router(notifications.router)
     app.include_router(pipeline.router)
     app.include_router(content_archive.router)
+    app.include_router(keyword.router)
 
     return app
 

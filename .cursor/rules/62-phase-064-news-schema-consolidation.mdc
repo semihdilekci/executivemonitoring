@@ -1,0 +1,411 @@
+---
+description: "[Faz 6.4] Haber schema konsolidasyonu — tüm haberler news.processed_items; rezerve schema'lar — 6 iterasyon/chat (ADR+Docs → migration → processor → API+digest → FE → regresyon+FK). Mesajda \"Faz 6.4 — İterasyon M\" belirt."
+---
+
+# Faz 6.4: Haber Schema Konsolidasyonu
+
+## Goal
+
+MVP-0'da toplanan **tüm haber/makale** içeriklerini `news.processed_items` altında birleştirmek; **`content_category` (6 keyword kategorisi) aynen kalmak**; `market`/`fmcg`/`geo`/`transport` schema'larını gelecek yapılandırılmış veri tipleri için **rezerve** etmek. Cross-schema `UNION ALL`, yanlış semantik routing (`finance→market`) ve `content_chunks` FK boşluğunu kapatmak. ADR: `Docs/adr/0002-news-schema-consolidation.md`. Detay: `Docs/10` Faz 6.4.
+
+## Feature branch (zorunlu)
+
+Bu faz **kendi feature branch'inde**: `feature/f64-news-schema-consolidation` (`48-git-phase-branch.mdc`). MVP-0'a bilinçli mimari düzeltme; `main`'de faz kodu yok.
+
+**Stop (İterasyon 2, kod öncesi — İter 1 Docs tamamlandıysa):** [ ] `main` güncel; [ ] `feature/f64-news-schema-consolidation` oluşturuldu; [ ] `git push -u origin HEAD`; [ ] Faz 6.3 migration'ları uygulanmış (`alembic current` = head, `007_keyword_tracking` dahil).
+
+## Bu fazın çalışma modeli
+
+- Tek sohbet fazı bitirmez. Her chat: `@62-phase-064-news-schema-consolidation` + **「Faz 6.4 — İterasyon M」**.
+- Katman sırası: **ADR+Docs → migration → processor → API+digest → FE → regresyon** — karıştırma.
+- Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil. Plan moduna geçme — iterasyon blueprint yeterli.
+- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Gate/enrich/score **algoritması değişmez** — yalnızca haber depolama schema'sı ve sorgu katmanı.
+
+## Required Context
+
+- ADR-0002 haber vs rezerve schema semantiği
+- `content_category` vs `schema_category` ayrımı (`Docs/01` ProcessedItem, `Docs/02` §4.4)
+- İçerik Arşivi cross-schema repo (`apps/api/repositories/processed_item_repository.py`)
+- Digest sorgu config (`services/ai_engine/digest_models.py`)
+
+## Done Definition
+
+- [ ] Tüm haber kayıtları yalnızca `news.processed_items`'da; legacy schema tabloları boş
+- [ ] Yeni processor çıktısı `market`/`fmcg`/`geo`'ya **yazmıyor**; `schema_category=news`
+- [ ] `content_category` (6 değer) ve keyword havuzu davranışı **değişmedi**
+- [ ] İçerik Arşivi UNION olmadan çalışıyor
+- [ ] 3 bülten digest sorguları `news` + filtre ile üretiliyor
+- [ ] `pytest tests/` + `ruff` + `mypy` yeşil; migration integration testleri var
+- [ ] ADR-0002 + `Docs/` ile kod uyumlu
+
+## Explicit Don'ts
+
+- 6 ayrı haber schema'sı veya 6 yeni bülten (ürün kapsamı dışı)
+- MVP-1 market/FMCG collector veya yeni tablo yapıları (rezerve schema'ya veri yazma)
+- `content_category` enum değerlerini değiştirme
+- Gate/enrich rating algoritmasını bu fazda revize etme (Faz 6.3 kapsamı)
+- Production migration onaysız çalıştırma
+- `schema_category` kolonunu API'den tamamen kaldırma (breaking — sonraki faz)
+
+---
+
+### İterasyon 1 — ADR + Docs Semantik Güncellemesi (6.4.1)
+
+**Hedef:** ADR-0002 kabul edilmiş; `Docs/01/02/03/04/06/08/10` + `mimari-kararlar` schema semantiği güncel; kod değişikliği yok.
+
+**Teslim çıktısı:**
+- `Docs/adr/0002-news-schema-consolidation.md`
+- `Docs/mimari-kararlar.md` — [DB-001], [TS-002] güncelleme
+- `Docs/02` §2, §4.4; `Docs/04` §8.4; `Docs/03` §11.6; `Docs/06` S-ADMIN-CONTENT-ARCHIVE; `Docs/08` §3.9; `Docs/10` Faz 6.4
+
+**Önkoşullar:**
+- [ ] Faz 6.4 taslağı onaylanmış
+- [ ] (Önerilir) Faz 6.3 Docs güncel
+
+**Docs okuma sırası:**
+1. `Docs/adr/0002-news-schema-consolidation.md` — karar özeti
+2. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4.1 — kapsam
+3. `Docs/02_DATABASE_SCHEMA.md` §2 — yeni schema semantiği
+4. `Docs/04_BACKEND_SPEC.md` §8.4 — haber depolama + digest filtre
+5. `45-write-adr.mdc` — ADR formatı (referans)
+
+**Uygulama planı:**
+1. ADR-0002 oluştur — bağlam, karar, reddedilen alternatifler
+2. `mimari-kararlar.md` — [DB-001] + [TS-002] güncelle + versiyon 0.3
+3. Numaralı Docs dosyalarını docs-map minimum set ile güncelle
+4. `CLAUDE.md` faz tablosuna 6.4 satırı ekle
+5. Bu `.mdc` dosyasını oluştur
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `Docs/adr/0002-news-schema-consolidation.md`, `.cursor/rules/62-phase-064-news-schema-consolidation.mdc` |
+| Güncelle | `Docs/01`–`04`, `06`, `08`, `10`, `00`, `mimari-kararlar.md`, `CLAUDE.md` |
+| Dokunma | `apps/`, `services/`, `alembic/` (İter 2+) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Haber tek schema | ADR-0002 | Spec-only bu iterasyonda |
+| 6 content_category kalır | `Docs/01` ProcessedItem | Docs metni güncellendi |
+| Rezerve schema'lar | `Docs/02` §2 | MVP-0 boş tablolar |
+
+**Kalite kapıları:**
+- [ ] Docs tutarlılığı: enum/route/terminoloji çapraz kontrol
+- [ ] `Docs/10` §6.4.1–6.4.6 ↔ bu `.mdc` iterasyon sayısı uyumlu
+
+**Bu iterasyonda yok:**
+- Alembic migration, processor, API, FE
+
+**Risk / dikkat:**
+- İter 1 tamamlandıysa doğrudan İter 2'ye geç — dosyaları tekrar yazma
+
+**Stop:**
+- [ ] ADR-0002 ve `Docs/10` Faz 6.4 mevcut
+- [ ] PR/onay → İterasyon 2
+
+---
+
+### İterasyon 2 — Migration + Veri Taşıma (6.4.2)
+
+**Hedef:** `008_news_consolidation` migration `market`/`fmcg`/`geo` haber satırlarını `news`'e taşır (UUID korunur); `schema_category='news'` normalize; integration migration test yeşil.
+
+**Teslim çıktısı:**
+- `alembic/versions/008_news_consolidation.py` — `down_revision` mevcut head (`007_keyword_tracking` veya sonraki)
+- `tests/integration/test_news_consolidation_migration.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] Feature branch Stop tamam
+- [ ] `alembic current` = 007 (veya güncel head)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4.2
+2. `Docs/02_DATABASE_SCHEMA.md` §2, §4.4 — taşıma hedefi `news`
+3. `Docs/adr/0002-news-schema-consolidation.md` — UUID koruma
+4. `Docs/08_TESTING_STRATEGY.md` §3.9 — migration test senaryoları
+5. `alembic/versions/006_content_category.py` — çoklu schema döngü kalıbı
+
+**Uygulama planı:**
+1. `008_news_consolidation.py` — her kaynak schema (`market`, `fmcg`, `geo`) için: `INSERT INTO news.processed_items SELECT … ON CONFLICT (raw_item_id) DO NOTHING` veya `UPDATE` stratejisi; `schema_category := 'news'`
+2. Kaynak tablolardan taşınan satırları `DELETE`
+3. `downgrade()` — ters taşıma veya dokümante edilmiş kısıtlı downgrade (ADR notu)
+4. `test_news_consolidation_migration.py` — seed çoklu schema → upgrade → assert yalnızca `news` dolu; chunk `processed_item_id` bütünlüğü
+5. `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `alembic/versions/008_news_consolidation.py`, `tests/integration/test_news_consolidation_migration.py` |
+| Güncelle | — |
+| Dokunma | Processor/API/FE (İter 3–5) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| UUID korunur | ADR-0002 | `digest_sections.source_references` kırılmaz |
+| Legacy tablolar boş | `Docs/02` §4.4 | DELETE after INSERT |
+| Migration zinciri | `Docs/09` §8 | `down_revision` doğru head |
+
+**Kalite kapıları:**
+- [ ] Migration round-trip (veya belgelenmiş kısıt) yeşil
+- [ ] Integration test PG service ile yeşil (skip yoksa)
+- [ ] `ruff` + `mypy` (yeni dosya yoksa N/A)
+
+**Bu iterasyonda yok:**
+- Processor routing değişikliği (İter 3 — migration önce veri taşır)
+
+**Risk / dikkat:**
+- `uq_news_processed_items_raw_item_id` — çakışan `raw_item_id` varsa migration önce dedupe stratejisi
+- Production'da migration **kullanıcı onayı** (`01` yasak listesi)
+
+**Stop:**
+- [ ] `alembic upgrade head`
+- [ ] `pytest tests/integration/test_news_consolidation_migration.py -v`
+- [ ] PR/onay → İterasyon 3
+
+---
+
+### İterasyon 3 — Processor + Persistence (6.4.3)
+
+**Hedef:** Yeni haber kayıtları yalnızca `news.processed_items`'a yazılır; `resolve_schema_category` sabit `news` döner; kategori→schema map kaldırılır; unit testler yeşil.
+
+**Teslim çıktısı:**
+- `services/processor/keyword_pool.py` — `resolve_schema_category` sadeleştirme
+- `services/processor/persistence.py` — `NewsProcessedItem` only
+- `tests/unit/processor/test_enricher.py`, `test_persistence.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop (`008` uygulanmış)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4.3
+2. `Docs/04_BACKEND_SPEC.md` §8.4 — haber depolama; schema routing **yok**
+3. `Docs/adr/0002-news-schema-consolidation.md`
+4. `services/processor/persistence.py` + `keyword_pool.py` (mevcut)
+5. `.cursor/rules/17-processor-pipeline.mdc` — gate/enrich değişmez notu
+
+**Uygulama planı:**
+1. `resolve_schema_category(_)` → her zaman `"news"` (veya `CATEGORY_TO_SCHEMA` kaldır)
+2. `persist_pipeline_output` — `PROCESSED_ITEM_MODELS["news"]` sabit; `schema_category` extras `"news"`
+3. `test_enricher` — finance/fmcg kategorileri bile `schema_category == "news"`
+4. `test_persistence` — `NewsProcessedItem` insert; `content_category` hâlâ dolu
+5. `pytest tests/unit/processor/ -q`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `services/processor/keyword_pool.py`, `persistence.py`, `enricher.py` (minimal), unit testler |
+| Dokunma | API repo (İter 4), `processed_item.py` model refactor (İter 6) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Haber → news only | `Docs/04` §8.4 | persist tek tablo |
+| content_category korunur | `Docs/01` | enricher değişmez |
+| schema_category=news | `Docs/02` §4.4 | extras + kolon |
+
+**Kalite kapıları:**
+- [ ] `test_enricher`, `test_persistence` yeşil
+- [ ] Processor ≥%80 coverage korunur (`04-quality-gates`)
+- [ ] `ruff` + `mypy services/processor` yeşil
+
+**Bu iterasyonda yok:**
+- API UNION kaldırma (İter 4)
+
+**Risk / dikkat:**
+- Faz 6.3 `keyword_pool.py` ile merge conflict — 6.3 branch merge önce
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_enricher.py tests/unit/processor/test_persistence.py -v`
+- [ ] `ruff check services/processor && mypy services/processor`
+- [ ] PR/onay → İterasyon 4
+
+---
+
+### İterasyon 4 — API Repository + Digest + Chunk (6.4.4)
+
+**Hedef:** İçerik Arşivi repo cross-schema `UNION ALL` kalkar; digest `DIGEST_TYPE_QUERY_CONFIG` `news` + filtre; chunk repo sadeleşir; integration testler yeşil.
+
+**Teslim çıktısı:**
+- `apps/api/repositories/processed_item_repository.py` — tek `news` sorgu
+- `services/ai_engine/digest_models.py`, `processed_item_repository.py`, `chunk_repository.py`
+- `apps/api/schemas/content_archive.py` — detay `schema_category` varsayılan `news`
+- `tests/integration/test_content_archive_api.py`, `test_pipeline_e2e.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4.4
+2. `Docs/03_API_CONTRACTS.md` §11.6 — schema varsayılan
+3. `Docs/04_BACKEND_SPEC.md` §8.4 digest filtre tablosu
+4. `apps/api/repositories/processed_item_repository.py` (mevcut UNION)
+5. `services/ai_engine/digest_models.py`
+
+**Uygulama planı:**
+1. `_target_schemas` → yalnızca `news` (filtre `schema_category` geçersiz değerler 422 veya ignore)
+2. `encode_cursor` / `decode_cursor` — `news:` prefix korunur
+3. `DIGEST_TYPE_QUERY_CONFIG` — `fmcg_weekly`: `schema=news` + `content_category=fmcg` veya `source.category=fmcg`; `turkish_media_weekly`: `news` + source filter; `strategy_weekly`: `news` + topic filter
+4. `chunk_repository` — cross-schema arama kaldır; `news` only
+5. `content_archive` router — detail `schema_category` default `news`
+6. Integration testler güncelle
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `processed_item_repository.py`, `digest_models.py`, `ai_engine/processed_item_repository.py`, `chunk_repository.py`, `content_archive.py` schemas/router, integration tests |
+| Dokunma | FE (İter 5) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Liste tek schema | `Docs/03` §11.6 | UNION kaldır |
+| Digest fmcg | `Docs/04` §8.4 | news + content_category |
+| Detail default news | `Docs/03` §11.6 | Query optional |
+
+**Kalite kapıları:**
+- [ ] `test_content_archive_api` admin list/detail yeşil
+- [ ] `test_pipeline_e2e` digest adayları `news`'ten
+- [ ] API router ≥%60 coverage korunur
+
+**Bu iterasyonda yok:**
+- FE schema filtresi (İter 5)
+
+**Risk / dikkat:**
+- `fmcg_weekly` eskiden `fmcg` schema'dı — filtre `content_category` veya `source.category` ile doğrula
+
+**Stop:**
+- [ ] `pytest tests/integration/test_content_archive_api.py tests/integration/test_pipeline_e2e.py -v`
+- [ ] PR/onay → İterasyon 5
+
+---
+
+### İterasyon 5 — FE İçerik Arşivi Sadeleştirme (6.4.5)
+
+**Hedef:** Schema filtresi MVP-0 gerçeğini yansıtır; detay hook varsayılan `schema_category=news`; kategori kolonu `content_category` ön planda; `npm run build` yeşil.
+
+**Teslim çıktısı:**
+- `apps/web/lib/content-archive-labels.ts`
+- `apps/web/hooks/use-content-archive.ts`
+- `apps/web/components/admin/content-archive-filters.tsx`, `content-archive-table.tsx`
+- `apps/web/types/api.ts` (gerekirse)
+
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop (API varsayılan `news`)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4.5
+2. `Docs/06_SCREEN_CATALOG.md` S-ADMIN-CONTENT-ARCHIVE — schema filtresi
+3. `Docs/03_API_CONTRACTS.md` §11.6
+4. `apps/web/app/(dashboard)/admin/content-archive/page.tsx`
+5. `.cursor/rules/24-components.mdc` — admin tablo kalıbı
+
+**Uygulama planı:**
+1. `SCHEMA_CATEGORY_FILTER_OPTIONS` — "Tümü" + "Haber (news)" veya schema filtresini kaldır (ürün kararı: filtre basitleştir)
+2. `useContentArchiveDetail` — `schema_category` default `"news"`; drawer açılışında query
+3. Tablo kategori kolonu — üst: `content_category` label; alt badge sabit "Haber"
+4. `types/api.ts` — `SchemaCategory` union korunur (rezerve değerler API uyumu)
+5. `npm run build` (apps/web)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `content-archive-labels.ts`, `use-content-archive.ts`, filters, table, `types/api.ts` |
+| Dokunma | Backend (İter 4 tamam) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Kategori kolonu | `Docs/06` S-ADMIN-CONTENT-ARCHIVE | content_category ön planda |
+| Detail schema | `Docs/03` §11.6 | default news |
+| TR label | `Docs/06` | Makroekonomi / Haber |
+
+**Kalite kapıları:**
+- [ ] `npm run build` apps/web yeşil
+- [ ] TypeScript strict — `any` yok
+
+**Bu iterasyonda yok:**
+- Mobil, yeni ekran
+
+**Risk / dikkat:**
+- Eski cursor `market:uuid` — API 404; kabul edilebilir
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] PR/onay → İterasyon 6
+
+---
+
+### İterasyon 6 — Regresyon + FK + Model Sadeleştirme (6.4.6)
+
+**Hedef:** `PROCESSED_ITEM_MODELS` haber için `news` only active; tüm migration/integration testleri yeşil; opsiyonel `content_chunks` → `news.processed_items` FK; seed script güncel.
+
+**Teslim çıktısı:**
+- `packages/shared/models/processed_item.py`, `packages/shared/enums.py`
+- `scripts/seed_content_archive.py`
+- `tests/integration/test_*migration*.py`, `tests/unit/test_data_models.py` güncel
+- Opsiyonel: FK `009_*` veya `008` içinde
+
+**Önkoşullar:**
+- [ ] İterasyon 5 Stop
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.4.6
+2. `Docs/02_DATABASE_SCHEMA.md` §4.5 — FK notu
+3. `Docs/08_TESTING_STRATEGY.md` §3.9 + §4.1
+4. `packages/shared/models/processed_item.py`
+5. `tests/integration/test_data_migration.py` — mevcut 5-schema testleri
+
+**Uygulama planı:**
+1. `PROCESSED_ITEM_SCHEMAS` → `ARTICLE_SCHEMA = "news"` + `RESERVED_SCHEMAS` tuple ayrımı (veya dokümante sabitler)
+2. `MarketProcessedItem` vb. modeller kalabilir (boş tablolar) veya deprecated comment — migration tabloları silinmez
+3. Tüm `test_*migration*.py` — 5 schema create kalır ama haber yalnızca `news` assert
+4. `seed_content_archive.py` — yalnızca `news.processed_items`
+5. Opsiyonel FK migration — `ALTER TABLE content_chunks ADD CONSTRAINT … REFERENCES news.processed_items(id)`
+6. Full regresyon: `pytest tests/ -q`, `ruff`, `mypy`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Güncelle | `packages/shared/enums.py`, `processed_item.py`, seed script, migration testleri, `17-processor-pipeline.mdc` footer (opsiyonel pointer) |
+| Oluştur | FK migration (opsiyonel) |
+| Dokunma | Yeni feature |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| FK content_chunks | `Docs/02` §4.5 | post-consolidation |
+| Enum ayrımı | ADR-0002 | active vs reserved |
+| CI yeşil | `Docs/08` | full pytest |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/ -q` yeşil
+- [ ] `ruff check . && mypy apps packages services` yeşil
+- [ ] Coverage fail-under=70 korunur
+
+**Bu iterasyonda yok:**
+- MVP-1 market collector
+- Legacy schema tablolarını DROP (rezerve kalır)
+
+**Risk / dikkat:**
+- `assert set(PROCESSED_ITEM_MODELS) == set(PROCESSED_ITEM_SCHEMAS)` — enum refactor'da güncelle
+- Orchestrator `db_observers.py` schema sayımı — `news` only
+
+**Stop:**
+- [ ] `pytest tests/ -q`
+- [ ] `ruff check . && mypy apps packages services`
+- [ ] Faz 6.4 Done Definition tamam; roadmap işareti
+- [ ] PR/onay → Faz 7 veya kullanıcı yönlendirmesi

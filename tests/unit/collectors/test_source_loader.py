@@ -20,7 +20,7 @@ def _make_source(source_type: SourceType) -> Source:
         polling_interval_minutes=15,
         status=SourceStatus.ACTIVE,
         error_count=0,
-        category=SourceCategory.TURKISH_MEDIA,
+        category=SourceCategory.MACRO,
         target_phase="mvp-0",
     )
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from packages.shared.enums import (
@@ -116,3 +116,52 @@ class CancelPipelineResponse(BaseModel):
 
     id: UUID
     status: PipelineRunStatus
+
+
+# --- Run içerik kırılımı (Faz 6.3) — okunan/işlenen/elenen drilldown -----------
+
+ItemOutcomeLiteral = Literal["processed", "filtered", "failed"]
+
+
+class RunItemResponse(BaseModel):
+    """Run penceresindeki tek ham içerik + akıbeti (`processed`/`filtered`/`failed`)."""
+
+    id: UUID
+    source_id: UUID
+    source_name: str
+    title: str | None = None
+    url: str | None = None
+    snippet: str
+    outcome: ItemOutcomeLiteral
+    content_category: str | None = None
+    relevance_score: float | None = None
+    fetched_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RunSourceBreakdownResponse(BaseModel):
+    """Okunan kaynak başına akıbet kırılımı (`Docs/06` pipeline detay)."""
+
+    source_id: UUID
+    source_name: str
+    collected: int
+    processed: int
+    filtered: int
+    failed: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RunItemsResponse(BaseModel):
+    """`GET /runs/{id}/items` yanıtı — özet sayaçlar + kaynak kırılımı + içerik sayfası."""
+
+    collected: int
+    processed: int
+    filtered: int
+    failed: int
+    by_source: list[RunSourceBreakdownResponse] = Field(default_factory=list)
+    items: list[RunItemResponse] = Field(default_factory=list)
+    page: int
+    page_size: int
+    total: int

@@ -73,7 +73,7 @@ MVP-0 bülten zamanlaması:
 | ORM | SQLAlchemy | Raw SQL yasak, parametrik sorgu zorunlu |
 | Web Frontend | Next.js | SSR, responsive |
 | Mobil | React Native | iOS + Android tek codebase, enterprise dağıtım |
-| Veritabanı | PostgreSQL + pgvector | Schema bölümleme: `news`, `market`, `geo`, `transport`, `fmcg` |
+| Veritabanı | PostgreSQL + pgvector | Haber: `news.processed_items`; rezerve schema'lar (`market`, `geo`, `transport`, `fmcg`) gelecek veri tipleri için (ADR-0002) |
 | Cache | Redis (Upstash serverless) | Dedup hash, rate-limit sayaçları, scheduler kilitleri |
 | Message Queue | AWS SQS Standard | Topic-per-type, dead-letter queue zorunlu |
 | Scheduler | AWS EventBridge | Cron trigger'lar |

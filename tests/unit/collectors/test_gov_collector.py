@@ -21,7 +21,7 @@ def _make_gov_source(**config_overrides: object) -> Source:
         "endpoint_url": "https://www.tcmb.gov.tr/feed",
         "gov_subtype": "tcmb",
         "ingest_mode": "all",
-        "default_category": "official",
+        "default_category": "regulatory",
         # Generic parse testleri tarih'ten bağımsız olsun:
         "max_age_days": 3650,
     }
@@ -33,7 +33,7 @@ def _make_gov_source(**config_overrides: object) -> Source:
         config=config,
         polling_interval_minutes=30,
         status=SourceStatus.ACTIVE,
-        category=SourceCategory.OFFICIAL,
+        category=SourceCategory.REGULATORY,
         target_phase="mvp-0",
     )
 
@@ -146,7 +146,7 @@ async def test_gov_collector_missing_endpoint_url_returns_empty() -> None:
     source.config = {
         "gov_subtype": "tcmb",
         "ingest_mode": "all",
-        "default_category": "official",
+        "default_category": "regulatory",
     }
 
     articles = await collector.collect(source)

@@ -224,6 +224,25 @@ Processor E2E testlerinde manuel `_seed_raw_item` kaldırılır — ingest wire 
 
 AWS dev smoke (`scripts/smoke_pipeline_dev.sh`) CI dışı manuel kapı; Faz 8 Done Definition parçası.
 
+- Detay: `GET /api/v1/admin/processed-items/{id}?schema_category=news` (varsayılan `news`)
+
+### 3.9 Haber Schema Konsolidasyonu Testleri (Faz 6.4)
+
+`tests/integration/test_news_consolidation_migration.py`:
+
+| Senaryo | Beklenen |
+|---------|----------|
+| Migration upgrade | `market`/`fmcg`/`geo` haber satırları `news`'te; legacy tablolar boş |
+| Migration downgrade | Round-trip (dev ortamı) |
+| Processor persist | Yeni kayıt yalnızca `news.processed_items`; `schema_category=news` |
+| Digest query | `fmcg_weekly` `news` + filtre ile aday bulur |
+
+`tests/integration/test_content_archive_api.py` güncellemesi: cross-schema UNION kalktıktan sonra liste/detay `news` ile yeşil.
+
+Fixture: migration öncesi çoklu schema seed → migration → assert tek schema.
+
+---
+
 ### 3.8 İçerik Arşivi API Testleri (Faz 6.2)
 
 `tests/integration/test_content_archive_api.py`:
@@ -275,7 +294,7 @@ Test edilecek DB senaryoları:
 - Unique constraint ihlali (`uq_users_email`, `uq_raw_items_source_id_content_hash`)
 - CASCADE silme (source silindiğinde raw_items silinir)
 - pgvector similarity search (embedding insert → cosine distance sorgu → doğru sıralama)
-- Schema-partitioned processed_items yazma (`news.processed_items`, `market.processed_items`)
+- Haber `processed_items` yazma yalnızca `news.processed_items` (Faz 6.4)
 
 ### 4.2 API Endpoint Testleri
 

@@ -33,6 +33,10 @@ from apps.api.core.exceptions import (
     PipelineAlreadyRunningException,
     PipelineNotCancellableException,
 )
+from apps.api.repositories.pipeline_items_repository import (
+    ItemOutcome,
+    pipeline_items_repository,
+)
 from apps.api.schemas.common import PaginationMeta
 from apps.api.schemas.pipeline import (
     CancelPipelineResponse,
@@ -40,6 +44,9 @@ from apps.api.schemas.pipeline import (
     PipelineRunListResponse,
     PipelineRunSummary,
     PipelineStepResponse,
+    RunItemResponse,
+    RunItemsResponse,
+    RunSourceBreakdownResponse,
     TriggerPipelineRequest,
     TriggerPipelineResponse,
 )
@@ -218,6 +225,40 @@ class PipelineService:
                 error_code="PIPELINE_RUN_NOT_FOUND",
             )
         return _to_detail(run)
+
+    async def get_run_items(
+        self,
+        db: AsyncSession,
+        *,
+        run_id: uuid.UUID,
+        outcome: ItemOutcome | None = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> RunItemsResponse:
+        """Run penceresindeki okunan/işlenen/elenen içerik kırılımı (`Docs/04` §8.3)."""
+        run = await self._runs.get_run(db, run_id)
+        if run is None:
+            raise NotFoundException(
+                message="Pipeline çalıştırması bulunamadı.",
+                error_code="PIPELINE_RUN_NOT_FOUND",
+            )
+        result = await pipeline_items_repository.get_run_items(
+            db, run=run, outcome=outcome, page=page, page_size=page_size
+        )
+        return RunItemsResponse(
+            collected=result.collected,
+            processed=result.processed,
+            filtered=result.filtered,
+            failed=result.failed,
+            by_source=[
+                RunSourceBreakdownResponse.model_validate(item)
+                for item in result.by_source
+            ],
+            items=[RunItemResponse.model_validate(item) for item in result.items],
+            page=page,
+            page_size=page_size,
+            total=result.total,
+        )
 
     async def cancel_run(
         self,

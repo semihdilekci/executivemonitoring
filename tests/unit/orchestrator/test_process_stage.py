@@ -180,25 +180,54 @@ async def test_process_timeout_marks_partial_when_queue_never_drains() -> None:
     result = await executor.run(run, _process_step(run))
 
     assert result.status == PipelineStepStatus.COMPLETED  # step completed, run partial
-    assert result.degraded is True
+    assert result.degraded is True  # timeout → degraded
     assert result.detail["drained"] is False
     assert result.detail["drain_polls"] == 4
     assert result.items_out == 2
-    assert result.items_failed == 3
+    # Timeout'ta fark "elendi" değil "pending"; gerçek hata yok → items_failed 0.
+    assert result.items_failed == 0
+    assert result.detail["pending"] == 3
+    assert result.detail["filtered"] == 0
 
 
-async def test_process_zero_processed_but_drained_is_degraded() -> None:
+async def test_process_zero_processed_but_drained_is_filtered_not_failed() -> None:
     run = _build_run(collect_detail={"rss": {"ok": True}}, ingested=4)
-    observer = _SequenceObserver({"rss": [_depth()]})  # baştan boş
-    counter = _SequenceCounter([0])  # hiçbir şey işlenmedi
+    observer = _SequenceObserver({"rss": [_depth()]})  # baştan boş (drain)
+    counter = _SequenceCounter([0])  # hiçbiri işlenmedi (hepsi gate'te elendi)
     executor = _executor(observer, counter, max_polls=6, stable_polls=2)
 
     result = await executor.run(run, _process_step(run))
 
     assert result.status == PipelineStepStatus.COMPLETED
-    assert result.degraded is True
+    # Filtreleme hata değil → degraded False, items_failed 0, elendi 4.
+    assert result.degraded is False
     assert result.items_out == 0
-    assert result.items_failed == 4
+    assert result.items_failed == 0
+    assert result.detail["filtered"] == 4
+    assert result.detail["errors"] == 0
+
+
+async def test_process_splits_real_errors_from_filtered() -> None:
+    run = _build_run(collect_detail={"rss": {"ok": True}}, ingested=10)
+    observer = _SequenceObserver({"rss": [_depth()]})  # drain
+    counter = _SequenceCounter([3])  # 3 işlendi
+
+    class _FailedCounter:
+        async def count_failed(self, _run: PipelineRun) -> int:
+            return 2  # 2 gerçek hata (raw_items FAILED)
+
+    executor = _executor(
+        observer, counter, max_polls=6, stable_polls=2, failed_counter=_FailedCounter()
+    )
+
+    result = await executor.run(run, _process_step(run))
+
+    assert result.status == PipelineStepStatus.COMPLETED
+    assert result.items_out == 3
+    assert result.items_failed == 2  # yalnızca gerçek hata
+    assert result.detail["errors"] == 2
+    assert result.detail["filtered"] == 5  # 10 - 3 - 2
+    assert result.degraded is True  # gerçek hata var
 
 
 async def test_process_dlq_depth_marks_degraded() -> None:

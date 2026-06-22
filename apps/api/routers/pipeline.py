@@ -7,7 +7,7 @@ asenkron tetikler; ilerleme `GET /runs/{id}` polling ile izlenir.
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -26,6 +26,7 @@ from apps.api.schemas.pipeline import (
     CancelPipelineResponse,
     PipelineRunDetail,
     PipelineRunListResponse,
+    RunItemsResponse,
     TriggerPipelineRequest,
     TriggerPipelineResponse,
 )
@@ -93,6 +94,22 @@ async def get_pipeline_run(
     _: Annotated[User, Depends(require_admin)],
 ) -> PipelineRunDetail:
     return await pipeline_service.get_run(db, run_id=run_id)
+
+
+@router.get("/runs/{run_id}/items", response_model=RunItemsResponse)
+async def get_pipeline_run_items(
+    run_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(require_admin)],
+    outcome: Annotated[
+        Literal["processed", "filtered", "failed"] | None, Query()
+    ] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> RunItemsResponse:
+    return await pipeline_service.get_run_items(
+        db, run_id=run_id, outcome=outcome, page=page, page_size=page_size
+    )
 
 
 @router.post("/runs/{run_id}/cancel", response_model=CancelPipelineResponse)

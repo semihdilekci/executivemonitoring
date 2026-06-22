@@ -1144,7 +1144,7 @@ Admin'in processor çıktısını (`processed_items`) listeleyip filtrelediği a
 | `cursor` | string | Hayır | Önceki sayfa `next_cursor` (`{schema}:{uuid}` formatı) |
 | `limit` | integer | Hayır | Varsayılan 20, max 100 |
 | `source_id` | uuid | Hayır | Kaynak filtresi |
-| `schema_category` | string | Hayır | `news` \| `market` \| `geo` \| `transport` \| `fmcg` |
+| `schema_category` | string | Hayır | Varsayılan davranış: yalnızca `news` (MVP-0 haber arşivi). `market`/`geo`/`fmcg`/`transport` MVP-0'da boş — filtre geçersiz değer `422` |
 | `content_category` | string | Hayır | `macro` \| `fmcg` \| `finance` \| `geopolitical` \| `strategy` \| `regulatory` |
 | `published_from` | date | Hayır | `published_at` alt sınır (dahil) |
 | `published_to` | date | Hayır | `published_at` üst sınır (dahil) |
@@ -1191,13 +1191,13 @@ Geçersiz `schema_category` / `content_category` → `422 VALIDATION_ERROR`. `q`
 
 ### GET /api/v1/admin/processed-items/{processed_item_id} _(Admin only)_
 
-Tek işlenmiş içeriğin detayı. **`schema_category` query zorunlu** (cross-schema PK çakışması riski yoktur ancak hangi tabloda aranacağını belirtir).
+Tek işlenmiş içeriğin detayı. **`schema_category` query** varsayılan `news` (Faz 6.4); MVP-0'da tüm haberler `news.processed_items`'dadır.
 
 **Query parametreleri:**
 
 | Parametre | Tip | Zorunlu | Açıklama |
 |-----------|-----|---------|----------|
-| `schema_category` | string | Evet | `news` \| `market` \| `geo` \| `transport` \| `fmcg` |
+| `schema_category` | string | Hayır | Varsayılan `news` |
 
 **Response (200):**
 ```json
@@ -1230,6 +1230,85 @@ Tek işlenmiş içeriğin detayı. **`schema_category` query zorunlu** (cross-sc
 ```
 
 Bulunamaz → `404 PROCESSED_ITEM_NOT_FOUND`.
+
+---
+
+## 11.7 Keyword Takibi Endpoint'leri (Faz 6.3)
+
+Admin'in kategori-bazlı keyword havuzunu (tr/en + 1–10 rating, çok-kategorili) yönettiği endpoint'ler (S-ADMIN-KEYWORDS). **Admin only.** Viewer → `403 FORBIDDEN`. Her yazma işlemi audit log üretir (`Docs/07` §9).
+
+### GET /api/v1/admin/keywords _(Admin only)_
+
+Keyword havuzunu listeler (offset pagination — havuz küçük, cursor gerekmez).
+
+**Query parametreleri:**
+
+| Parametre | Tip | Zorunlu | Açıklama |
+|-----------|-----|---------|----------|
+| `category` | string | Hayır | Tek kategoriye göre filtre (`macro`\|`finance`\|`fmcg`\|`strategy`\|`geopolitical`\|`regulatory`) |
+| `q` | string | Hayır | `term_tr`/`term_en` ILIKE arama (min 2 karakter) |
+| `is_active` | boolean | Hayır | Aktiflik filtresi |
+| `page` | integer | Hayır | Varsayılan 1 |
+| `page_size` | integer | Hayır | Varsayılan 50, max 200 |
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "aa0e8400-e29b-41d4-a716-446655440010",
+      "term_tr": "enflasyon",
+      "term_en": "inflation",
+      "is_active": true,
+      "categories": [
+        { "category": "macro", "rating": 9 },
+        { "category": "finance", "rating": 6 }
+      ],
+      "created_at": "2026-06-20T08:00:00Z",
+      "updated_at": "2026-06-20T08:00:00Z"
+    }
+  ],
+  "pagination": { "page": 1, "page_size": 50, "total": 142 }
+}
+```
+
+### POST /api/v1/admin/keywords _(Admin only)_
+
+Yeni keyword + kategori rating'leri oluşturur.
+
+**Request:**
+```json
+{
+  "term_tr": "tedarik zinciri",
+  "term_en": "supply chain",
+  "is_active": true,
+  "categories": [
+    { "category": "fmcg", "rating": 7 },
+    { "category": "strategy", "rating": 5 }
+  ]
+}
+```
+
+**Kurallar:**
+- `term_tr`, `term_en`: zorunlu, 1–120 karakter, trim sonrası boş olamaz.
+- `categories`: en az 1 öğe; her `rating` 1–10 tamsayı; aynı `category` iki kez verilemez → `422 VALIDATION_ERROR`.
+- `term_tr` veya `term_en` (case-insensitive) zaten varsa → `409 KEYWORD_DUPLICATE`.
+
+**Response (201):** Oluşan keyword (GET ile aynı şema).
+
+### PUT /api/v1/admin/keywords/{keyword_id} _(Admin only)_
+
+Keyword'ü ve kategori rating setini günceller. `categories` **tam set** olarak gönderilir (eksik kategoriler silinir, yeni olanlar eklenir, var olanların rating'i güncellenir — upsert/replace semantiği).
+
+**Request:** POST ile aynı gövde (kısmi alanlar opsiyonel; `categories` verilirse tam set).
+
+**Response (200):** Güncel keyword. Bulunamaz → `404 KEYWORD_NOT_FOUND`. Duplicate term → `409 KEYWORD_DUPLICATE`.
+
+### DELETE /api/v1/admin/keywords/{keyword_id} _(Admin only)_
+
+Keyword'ü ve bağlı rating'lerini siler (CASCADE). Bulunamaz → `404 KEYWORD_NOT_FOUND`. **Response (204).**
+
+> **Not:** Kalıcı silme yerine pasifleştirme için `PUT … {"is_active": false}` tercih edilir; processor yalnızca aktif keyword'leri yükler. Silme audit log'da `keyword.deleted` olarak kaydedilir.
 
 ---
 
@@ -1283,6 +1362,10 @@ Tüm endpoint'lerin rol bazlı erişim tablosu. ✅ = erişim var, ❌ = erişim
 | `/pipeline/runs/{id}/cancel` | POST | ✅ | ❌ | Evet |
 | `/admin/processed-items` | GET | ✅ | ❌ | Evet |
 | `/admin/processed-items/{id}` | GET | ✅ | ❌ | Evet |
+| `/admin/keywords` | GET | ✅ | ❌ | Evet |
+| `/admin/keywords` | POST | ✅ | ❌ | Evet |
+| `/admin/keywords/{id}` | PUT | ✅ | ❌ | Evet |
+| `/admin/keywords/{id}` | DELETE | ✅ | ❌ | Evet |
 
 Guard implementasyonu: FastAPI dependency injection ile `get_current_user` ve `require_admin` dependency'leri kullanılır. Her endpoint fonksiyonunda `Depends(require_admin)` veya `Depends(get_current_user)` belirtilir.
 
@@ -1377,6 +1460,9 @@ Tüm API hataları aşağıdaki formatta döner:
 | `RESOURCE_NOT_FOUND` | 404 | İstenen kaynak bulunamadı |
 | `BRIEF_NOT_READY` | 404 | Günün özeti (Executive Brief) henüz üretilmedi |
 | `PIPELINE_RUN_NOT_FOUND` | 404 | İstenen pipeline çalıştırması bulunamadı |
+| `PROCESSED_ITEM_NOT_FOUND` | 404 | İstenen işlenmiş içerik bulunamadı (İçerik Arşivi) |
+| `KEYWORD_NOT_FOUND` | 404 | İstenen keyword bulunamadı (Keyword Takibi) |
+| `KEYWORD_DUPLICATE` | 409 | `term_tr` veya `term_en` (case-insensitive) zaten kayıtlı |
 | `USER_EMAIL_EXISTS` | 409 | E-posta adresi zaten kayıtlı |
 | `SOURCE_DUPLICATE_URL` | 409 | Aynı URL'li kaynak zaten var |
 | `PIPELINE_ALREADY_RUNNING` | 409 | Aynı tipte koşan/bekleyen bir pipeline çalıştırması var |

@@ -11,7 +11,7 @@
     },
     "polling_interval_minutes": 15,
     "status": "active",
-    "category": "turkish_media",
+    "category": "finance",
     "target_phase": "mvp-0"
   },
   {
@@ -26,7 +26,7 @@
     },
     "polling_interval_minutes": 15,
     "status": "active",
-    "category": "turkish_media",
+    "category": "finance",
     "target_phase": "mvp-0"
   },
   {
@@ -41,7 +41,7 @@
     },
     "polling_interval_minutes": 15,
     "status": "active",
-    "category": "turkish_media",
+    "category": "macro",
     "target_phase": "mvp-0"
   },
   {
@@ -71,7 +71,7 @@
     },
     "polling_interval_minutes": 15,
     "status": "active",
-    "category": "turkish_media",
+    "category": "strategy",
     "target_phase": "mvp-0"
   },
   {
@@ -86,7 +86,7 @@
     },
     "polling_interval_minutes": 15,
     "status": "active",
-    "category": "turkish_media",
+    "category": "finance",
     "target_phase": "mvp-0"
   },
   {
@@ -373,7 +373,7 @@
     },
     "polling_interval_minutes": 30,
     "status": "active",
-    "category": "official",
+    "category": "regulatory",
     "target_phase": "mvp-0"
   },
   {
@@ -391,7 +391,7 @@
     },
     "polling_interval_minutes": 30,
     "status": "active",
-    "category": "official",
+    "category": "regulatory",
     "target_phase": "mvp-0"
   },
   {
@@ -408,7 +408,7 @@
     },
     "polling_interval_minutes": 30,
     "status": "active",
-    "category": "official",
+    "category": "regulatory",
     "target_phase": "mvp-0"
   },
   {
@@ -529,7 +529,7 @@
     },
     "polling_interval_minutes": 60,
     "status": "active",
-    "category": "turkish_media",
+    "category": "macro",
     "target_phase": "mvp-0"
   },
   {
@@ -593,6 +593,411 @@
     "polling_interval_minutes": 60,
     "status": "active",
     "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000037-0000-4000-8000-000000000037",
+    "name": "Federal Reserve — Monetary Policy",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.federalreserve.gov/feeds/press_monetary.xml",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000038-0000-4000-8000-000000000038",
+    "name": "ECB — Press",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.ecb.europa.eu/rss/press.html",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000039-0000-4000-8000-000000000039",
+    "name": "BIS — Central Bankers' Speeches",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.bis.org/doclist/cbspeeches.rss",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000040-0000-4000-8000-000000000040",
+    "name": "CNBC — Economy",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.cnbc.com/id/20910258/device/rss/rss.html",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000041-0000-4000-8000-000000000041",
+    "name": "BBC — Economy",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://feeds.bbci.co.uk/news/business/economy/rss.xml",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000042-0000-4000-8000-000000000042",
+    "name": "Anadolu Ajansı — Ekonomi",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.aa.com.tr/tr/rss/default?cat=ekonomi",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000043-0000-4000-8000-000000000043",
+    "name": "TRT Haber — Ekonomi",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.trthaber.com/ekonomi_articles.rss",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000044-0000-4000-8000-000000000044",
+    "name": "WSJ — Markets",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000045-0000-4000-8000-000000000045",
+    "name": "CNBC — Finance",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000046-0000-4000-8000-000000000046",
+    "name": "MarketWatch — Top Stories",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://feeds.marketwatch.com/marketwatch/topstories/",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000047-0000-4000-8000-000000000047",
+    "name": "Investing.com — Markets",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.investing.com/rss/news_25.rss",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000048-0000-4000-8000-000000000048",
+    "name": "The Economist — Finance & Economics",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.economist.com/finance-and-economics/rss.xml",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000049-0000-4000-8000-000000000049",
+    "name": "NTV — Ekonomi",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.ntv.com.tr/ekonomi.rss",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000050-0000-4000-8000-000000000050",
+    "name": "Habertürk — Ekonomi",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.haberturk.com/rss/ekonomi.xml",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000051-0000-4000-8000-000000000051",
+    "name": "Foreign Policy",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://foreignpolicy.com/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000052-0000-4000-8000-000000000052",
+    "name": "International Crisis Group",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.crisisgroup.org/rss.xml",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000053-0000-4000-8000-000000000053",
+    "name": "ECFR",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://ecfr.eu/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000054-0000-4000-8000-000000000054",
+    "name": "Atlantic Council",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.atlanticcouncil.org/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000055-0000-4000-8000-000000000055",
+    "name": "War on the Rocks",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://warontherocks.com/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000056-0000-4000-8000-000000000056",
+    "name": "The Diplomat",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://thediplomat.com/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000057-0000-4000-8000-000000000057",
+    "name": "RAND — National Security",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.rand.org/topics/national-security.xml",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000058-0000-4000-8000-000000000058",
+    "name": "Daily Sabah — Opinion",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.dailysabah.com/rssfeed/opinion",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "geopolitical"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "geopolitical",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000059-0000-4000-8000-000000000059",
+    "name": "Knowledge at Wharton",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://knowledge.wharton.upenn.edu/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000060-0000-4000-8000-000000000060",
+    "name": "HBS Working Knowledge",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://hbswk.hbs.edu/rss/all.xml",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000061-0000-4000-8000-000000000061",
+    "name": "CB Insights Research",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.cbinsights.com/research/feed/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 30,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000062-0000-4000-8000-000000000062",
+    "name": "Fast Company",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://feeds.feedburner.com/fastcompany/headlines",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "strategy",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000063-0000-4000-8000-000000000063",
+    "name": "Quartz",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://qz.com/rss",
+      "language": "en",
+      "ingest_mode": "filtered",
+      "default_category": "strategy"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "strategy",
     "target_phase": "mvp-0"
   }
 ]

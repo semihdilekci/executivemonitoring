@@ -273,7 +273,7 @@ async def test_generate_turkish_media_weekly_uses_media_query_config(
     assert processed_repo.last_config == expected
     assert processed_repo.last_config is not None
     assert processed_repo.last_config.schema == "news"
-    assert processed_repo.last_config.source_category == "turkish_media"
+    assert processed_repo.last_config.source_category is None
     assert digest.status == DigestStatus.READY
     assert len(digest_repo.sections) == 2
 

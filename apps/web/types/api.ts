@@ -198,13 +198,12 @@ export type SourceType =
 export type SourceStatus = "active" | "inactive" | "error";
 
 export type SourceCategory =
-  | "turkish_media"
+  | "macro"
+  | "finance"
   | "fmcg"
   | "strategy"
-  | "official"
-  | "market"
-  | "geo"
-  | "transport";
+  | "geopolitical"
+  | "regulatory";
 
 export interface SourceListItem {
   id: string;
@@ -520,6 +519,51 @@ export interface PipelineRunDetail extends PipelineRunSummary {
   steps: PipelineStep[];
 }
 
+// --- Run içerik kırılımı (Faz 6.3) — `Docs/03` §11.5 ---
+
+/** Bir ham içeriğin run penceresindeki akıbeti. */
+export type RunItemOutcome = "processed" | "filtered" | "failed";
+
+export interface RunItem {
+  id: string;
+  source_id: string;
+  source_name: string;
+  title: string | null;
+  url: string | null;
+  snippet: string;
+  outcome: RunItemOutcome;
+  content_category: ContentCategory | null;
+  relevance_score: number | null;
+  fetched_at: string;
+}
+
+export interface RunSourceBreakdown {
+  source_id: string;
+  source_name: string;
+  collected: number;
+  processed: number;
+  filtered: number;
+  failed: number;
+}
+
+export interface RunItemsResponse {
+  collected: number;
+  processed: number;
+  filtered: number;
+  failed: number;
+  by_source: RunSourceBreakdown[];
+  items: RunItem[];
+  page: number;
+  page_size: number;
+  total: number;
+}
+
+export interface RunItemsParams {
+  outcome?: RunItemOutcome;
+  page?: number;
+  page_size?: number;
+}
+
 export interface PipelineRunListParams {
   cursor?: string;
   limit?: number;
@@ -642,4 +686,62 @@ export interface ProcessedItemListParams {
   has_digest?: boolean;
   sort_by?: ProcessedItemSortField;
   sort_dir?: SortDirection;
+}
+
+// --- Keyword Takibi (Faz 6.3) — `Docs/03` §11.7 ---
+
+/**
+ * Keyword havuzu kategori enum'u (`keyword_category_enum`). Değerler
+ * `content_category` ile birebir aynı (`Docs/02` §3) — alias kullanılır.
+ */
+export type KeywordCategory = ContentCategory;
+
+export interface KeywordCategoryRating {
+  category: KeywordCategory;
+  rating: number;
+}
+
+export interface KeywordResponse {
+  id: string;
+  term_tr: string;
+  term_en: string;
+  is_active: boolean;
+  categories: KeywordCategoryRating[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Offset pagination meta — keyword havuzu küçük olduğu için cursor kullanılmaz. */
+export interface KeywordPaginationMeta {
+  page: number;
+  page_size: number;
+  total: number;
+}
+
+export interface KeywordListResponse {
+  data: KeywordResponse[];
+  pagination: KeywordPaginationMeta;
+}
+
+export interface KeywordListParams {
+  category?: KeywordCategory;
+  q?: string;
+  is_active?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface KeywordCreateRequest {
+  term_tr: string;
+  term_en: string;
+  is_active: boolean;
+  categories: KeywordCategoryRating[];
+}
+
+/** Kısmi güncelleme — `categories` verilirse tam set (replace semantiği). */
+export interface KeywordUpdateRequest {
+  term_tr?: string;
+  term_en?: string;
+  is_active?: boolean;
+  categories?: KeywordCategoryRating[];
 }
