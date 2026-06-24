@@ -776,7 +776,7 @@ Zod schema'ları frontend'de tanımlanır. Backend Pydantic validation ile aynı
 |------|---------|--------------|
 | Kullanıcı oluşturma | email, full_name, role, password | Şifre politikası göstergesi |
 | Kaynak ekleme | name, type (select), url/config, active toggle | Type'a göre dinamik alan (RSS: URL, Email: sender address, Gov: endpoint) |
-| Prompt şablon düzenleme | title, body (textarea — monospace font), digest_type | Önceki versiyonu readonly göster, diff görünümü |
+| Bülten şablonu düzenleme (S-ADMIN-NEWSLETTERS) | ad, slug, açıklama, date_range_days, min_content_score (0–100), summary system/user prompt, model + sınırsız bölüm (ad, section system/user prompt, impact prompt) | Tek ekran; slug yeni bültende serbest, düzenlemede salt-okunur; bölüm ekle/sil/sırala; kaydette nested sections replace |
 | API key ekleme | provider (Groq/Gemini), key (masked input) | Eklendikten sonra key gösterilmez, yalnızca son 4 karakter |
 | Sistem ayarları | JWT access/refresh süreleri, bildirim zamanlaması, embedding model seçimi | Değişiklik anında uygulanmaz — kaydet butonu ile onay |
 

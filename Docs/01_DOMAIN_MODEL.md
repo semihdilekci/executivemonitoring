@@ -326,7 +326,7 @@ Admin'in manuel tetiklediği bir pipeline çalıştırması. `collect_pipeline` 
 | `run_type` | ENUM | NOT NULL | `collect_pipeline` \| `digest_update` |
 | `status` | ENUM | NOT NULL, DEFAULT `pending` | `pending`/`running`/`completed`/`partial`/`failed`/`cancelled` |
 | `source_types` | JSONB | NOT NULL, DEFAULT `[]` | Seçilen kaynak tipleri (`["rss","email","gov"]` veya `["all"]`) |
-| `params` | JSONB | NOT NULL, DEFAULT `{}` | Run parametreleri (digest_type, period, send_notification) |
+| `params` | JSONB | NOT NULL, DEFAULT `{}` | Run parametreleri (newsletter_template_id, period, send_notification) |
 | `stats` | JSONB | NOT NULL, DEFAULT `{}` | Toplulaştırılmış sayaçlar (collected/ingested/processed/digest_id) |
 | `triggered_by` | UUID | FK → users.id, NULL | Tetikleyen admin (silinirse NULL) |
 | `error_summary` | TEXT | NULL | Run düzeyi hata özeti |
@@ -852,15 +852,17 @@ Embedding modeli değiştiğinde tüm mevcut chunk embedding'leri yeniden hesapl
 
 ## 8. Digest Üretim ve Servis Modeli
 
-Digest üretimi tek bir atomik işlemdir:
+Digest üretimi **3 aşamalı** atomik bir işlemdir (Faz 6.5, ayrıntı §6.2 ve `Docs/04` §9.2):
 
-1. EventBridge cron tetikler → AI Engine `generating` statüsünde yeni Digest kaydı oluşturur.
-2. İlgili dönemin (period_start – period_end) ProcessedItem'ları sorgulanır. Kategori ve relevance_score filtresi uygulanır.
-3. Her bölüm için ilgili PromptTemplate alınır. Template'deki placeholder'lar context verisi ile doldurulur.
+1. EventBridge cron veya manuel tetikleme → AI Engine `generating` statüsünde yeni Digest kaydı oluşturur (`newsletter_template_id` + denormalize `newsletter_slug`).
+2. **Aşama 1 — Editör LLM (bülten başına 1):** `min_content_score` üstü + `date_range_days` aralığındaki ProcessedItem'lar editöre verilir. Editör bültene-uygun haberleri seçer, bölümlere dağıtır, alakasızı eler ve haftalık **Bülten Özeti**'ni (`digests.summary`) üretir.
+3. **Aşama 2 — Bölüm LLM (bölüm başına 1):** Editörün o `newsletter_section`'a atadığı haberlerden bölüm özeti (`ai_summary`) + Yıldız etki notu (`impact_note`) + `source_references` üretilir. Atama boşsa bölüm atlanır. Prompt'lar `newsletter_templates` + `newsletter_sections`'tan gelir.
 4. LLM API'ye çağrı yapılır (Groq/Gemini, round-robin fallback). Token kullanımı `api_usage_logs`'a yazılır.
-5. Tüm section'lar başarılıysa tek transaction'da `digest_sections` tablosuna yazılır ve Digest `status = ready` olur.
-6. HTML snapshot S3'e arşiv amaçlı yazılır (`s3://prod-ygip-digests/{digest_type}/{YYYY}/{MM}/{digest_id}.html`).
+5. Tüm section'lar başarılıysa tek transaction'da `digests.summary` + `digest_sections` yazılır ve Digest `status = ready` olur; herhangi bölüm fail → tüm digest `failed` (kısmi yayın yok).
+6. HTML snapshot S3'e arşiv amaçlı yazılır (`s3://prod-ygip-digests/{newsletter_slug}/{YYYY}/{MM}/{digest_id}.html`).
 7. Bildirim tetiklenir — tüm aktif kullanıcılara (notification_preference'a göre) SMTP mail + FCM push gönderilir.
+
+> **Aşama 3 — Anlık etki (runtime):** kullanıcı digest detayında "Yıldız'ı nasıl etkiler?" butonuna basınca tek haber için anlık LLM analizi (`POST /digests/news-impact`, tek global prompt) yapılır; sonuç DB'ye kalıcılaştırılmaz.
 
 Frontend, digest içeriğini her zaman API üzerinden (`GET /api/v1/digests/{id}`) alır ve `digest_sections` JSON yapısından render eder. S3'teki HTML hiçbir zaman doğrudan serve edilmez.
 

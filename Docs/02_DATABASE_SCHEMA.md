@@ -559,7 +559,7 @@ CREATE INDEX idx_pipeline_runs_triggered_by ON pipeline_runs (triggered_by);
 
 **Alan notları:**
 - `source_types`: `collect_pipeline` için seçilen kaynak tipleri (`["rss","email","gov"]`); `["all"]` veya boş → tüm aktif tipler. `digest_update` için `[]`.
-- `params`: run tipine bağlı parametreler — `digest_update` için `{"digest_type": "...", "period_start": "...", "period_end": "...", "send_notification": true}`.
+- `params`: run tipine bağlı parametreler — `digest_update` için `{"newsletter_template_id": "...", "period_start": "...", "period_end": "...", "send_notification": true}`.
 - `stats`: tamamlanınca toplulaştırılmış sayaçlar — `{"collected": 120, "ingested": 118, "processed": 95, "digest_id": "..."}`.
 - `status = partial`: bazı aşamalar/kaynaklar başarısız ama run ilerledi (örn. RSS toplandı, email kaynağı hata verdi).
 - `triggered_by`: kullanıcı silinince `SET NULL` (kayıt korunur).

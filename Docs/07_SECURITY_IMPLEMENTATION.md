@@ -367,7 +367,7 @@ class CreateUserRequest(BaseModel):
 Doğrulama kuralları:
 - Email formatı `EmailStr` ile kontrol edilir.
 - String alanlar `min_length` / `max_length` ile sınırlandırılır.
-- Enum alanlar (`role`, `source_type`, `digest_type`) yalnızca tanımlı değerleri kabul eder.
+- Enum alanlar (`role`, `source_type`) yalnızca tanımlı değerleri kabul eder. Bülten tipi serbest `slug`'dır (enum değil; Faz 6.5) — uzunluk/format validasyonu uygulanır.
 - JSONB alanlar (config, payload) Pydantic nested model ile yapılandırılır.
 - Path parametreleri (`{id}`) UUID formatında doğrulanır.
 
@@ -543,7 +543,7 @@ CREATE INDEX idx_audit_logs_actor_user_id ON audit_logs (actor_user_id);
 - `user.login_failed`: `{"ip": "192.168.1.1", "email_attempted": "test@..."}`
 - `source.deleted`: `{"source_name": "HBR Feed", "source_type": "rss"}`
 - `settings.updated`: `{"key": "jwt_access_token_minutes", "old_value": 60, "new_value": 120}`
-- `digest.completed`: `{"digest_type": "fmcg_weekly", "article_count": 42, "duration_ms": 8500}`
+- `digest.completed`: `{"newsletter_slug": "fmcg_weekly", "article_count": 42, "duration_ms": 8500}`
 
 ### 9.3 Retention ve Arşivleme
 

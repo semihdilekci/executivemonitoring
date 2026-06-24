@@ -851,11 +851,11 @@ API mapping: `GET /api/v1/chat-history/{id}` → `{ user, question, answer, sour
 **Görsel yapı:**
 ConfirmDialog varyantı. Başlık: "Manuel Bülten Tetikleme". Açıklama: "Seçilen digest tipini şimdi üretmek üzeresiniz. Bu işlem LLM token harcayacak ve bildirim gönderecektir."
 
-Ek alan: Digest tipi seçici (FMCG Haftalık / Strateji Haftalık / Türk Medyası Haftalık / Günlük Özet).
+Ek alan: Bülten seçici — tanımlı bültenler (`newsletter_templates`) listesinden seçim (sabit enum değil; admin'in tanımladığı serbest bültenler dinamik gelir).
 
 Checkbox: "Bildirim gönder" (varsayılan: checked). Unchecked yapılırsa digest üretilir ama mail/push gönderilmez (test amaçlı).
 
-Footer: "İptal" + "Üret" (primary). "Üret" tıklanınca loading state, backend `POST /api/v1/digests/trigger` `{ digest_type, send_notification }` → başarılı: Toast "Bülten üretimi başlatıldı. Birkaç dakika içinde hazır olacak." Modal kapanır.
+Footer: "İptal" + "Üret" (primary). "Üret" tıklanınca loading state, backend `POST /api/v1/digests/trigger` `{ newsletter_template_id, send_notification }` → başarılı: Toast "Bülten üretimi başlatıldı. Birkaç dakika içinde hazır olacak." Modal kapanır.
 
 ---
 

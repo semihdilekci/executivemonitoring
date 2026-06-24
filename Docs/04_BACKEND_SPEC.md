@@ -1216,7 +1216,7 @@ Tüm loglar JSON formatında üretilir. CloudWatch'a otomatik parse edilir.
   "request_id": "550e8400-e29b-41d4-a716-446655440000",
   "message": "Digest üretimi tamamlandı",
   "extra": {
-    "digest_type": "fmcg",
+    "newsletter_slug": "fmcg_weekly",
     "article_count": 42,
     "duration_ms": 8500
   }

@@ -1050,7 +1050,7 @@ Yeni bir pipeline çalıştırması tetikler. `collect_pipeline` collect→inges
 ```json
 {
   "run_type": "digest_update",
-  "digest_type": "fmcg_weekly",
+  "newsletter_template_id": "aa0e8400-e29b-41d4-a716-446655440010",
   "period_start": "2026-06-09",
   "period_end": "2026-06-15",
   "send_notification": true
@@ -1059,7 +1059,7 @@ Yeni bir pipeline çalıştırması tetikler. `collect_pipeline` collect→inges
 
 **Alan kuralları:**
 - `source_types`: yalnızca `collect_pipeline` için; izinli değerler `rss` | `email` | `gov` | `all`. `["all"]` → tüm aktif kaynak tipleri. `digest_update` için gönderilmez/yok sayılır.
-- `digest_type`, `period_start`, `period_end`, `send_notification`: yalnızca `digest_update` için (kurallar `Docs/03` §7 `/digests/generate` ile aynı).
+- `newsletter_template_id`, `period_start`, `period_end`, `send_notification`: yalnızca `digest_update` için (kurallar `Docs/03` §7 `/digests/generate` ile aynı).
 
 **Response (202 Accepted):**
 ```json
@@ -1205,7 +1205,7 @@ Admin'in processor çıktısını (`processed_items`) listeleyip filtrelediği a
       "digest_usages": [
         {
           "digest_id": "cc0e8400-e29b-41d4-a716-446655440003",
-          "digest_type": "strategy_weekly",
+          "newsletter_slug": "strategy_weekly",
           "digest_title": "Strateji Haftalık — 9–15 Haziran 2026",
           "period_start": "2026-06-09",
           "period_end": "2026-06-15"
@@ -1252,7 +1252,7 @@ Tek işlenmiş içeriğin detayı. **`schema_category` query** varsayılan `news
   "digest_usages": [
     {
       "digest_id": "cc0e8400-e29b-41d4-a716-446655440003",
-      "digest_type": "strategy_weekly",
+      "newsletter_slug": "strategy_weekly",
       "digest_title": "Strateji Haftalık — 9–15 Haziran 2026",
       "period_start": "2026-06-09",
       "period_end": "2026-06-15",
