@@ -118,8 +118,10 @@ AI tarafından üretilen bülten.
 | Attribute | Tip | Kısıt | Açıklama |
 |-----------|-----|-------|----------|
 | `id` | UUID | PK | Tekil tanımlayıcı |
-| `digest_type` | ENUM('turkish_media_weekly', 'fmcg_weekly', 'strategy_weekly') | NOT NULL | Bülten tipi |
+| `newsletter_template_id` | UUID | FK → newsletter_templates.id, NULLABLE, ON DELETE SET NULL | Üretildiği bülten şablonu |
+| `newsletter_slug` | VARCHAR(100) | NOT NULL | Bülten tipi (denormalize; template silinse de korunur) |
 | `title` | VARCHAR(500) | NOT NULL | Bülten başlığı |
+| `summary` | TEXT | NULLABLE | Haftalık **Bülten Özeti** (editör LLM çıktısı, en tepede) |
 | `status` | ENUM('generating', 'ready', 'failed') | NOT NULL, DEFAULT 'generating' | Üretim durumu |
 | `period_start` | DATE | NOT NULL | Kapsanan dönem başlangıcı |
 | `period_end` | DATE | NOT NULL | Kapsanan dönem sonu |
@@ -139,29 +141,49 @@ Bültenin içindeki her bölüm. Bir digest birden çok section içerir.
 | `id` | UUID | PK | Tekil tanımlayıcı |
 | `digest_id` | UUID | FK → digests.id, NOT NULL, ON DELETE CASCADE | Ait olduğu bülten |
 | `section_order` | INTEGER | NOT NULL | Bölüm sırası |
-| `section_title` | VARCHAR(500) | NOT NULL | Bölüm başlığı |
-| `ai_summary` | TEXT | NOT NULL | AI tarafından üretilen özet metin |
-| `impact_note` | TEXT | NULLABLE | "Yıldız için" etki notu |
-| `source_references` | JSONB | NOT NULL, DEFAULT '[]' | Kullanılan haber/kaynak referansları (processed_item_id + URL + başlık) |
-| `prompt_template_id` | UUID | FK → prompt_templates.id, NULLABLE | Kullanılan prompt şablonu |
+| `section_title` | VARCHAR(500) | NOT NULL | Bölüm başlığı (newsletter_section.name snapshot) |
+| `ai_summary` | TEXT | NOT NULL | Bölüm LLM özeti |
+| `impact_note` | TEXT | NULLABLE | "Yıldız Holding İçin Etki" notu (bölüm LLM çıktısı) |
+| `source_references` | JSONB | NOT NULL, DEFAULT '[]' | Editörün bu bölüme atadığı haber referansları (processed_item_id + URL + başlık) |
+| `newsletter_section_id` | UUID | FK → newsletter_sections.id, NULLABLE, ON DELETE SET NULL | Üretildiği bölüm şablonu |
 
-### 2.8 PromptTemplate
+### 2.8 NewsletterTemplate
 
-Bülten bölümü için AI prompt şablonu. Admin panelinden düzenlenir.
+Serbest bülten konfigürasyonu (bülten-seviyesi). Admin tek ekrandan yönetir. **Editör LLM** çağrısını besler.
 
 | Attribute | Tip | Kısıt | Açıklama |
 |-----------|-----|-------|----------|
 | `id` | UUID | PK | Tekil tanımlayıcı |
-| `name` | VARCHAR(255) | NOT NULL, UNIQUE | Şablon adı (örn: "FMCG Haftalık — Global Trendler") |
-| `digest_type` | ENUM('turkish_media_weekly', 'fmcg_weekly', 'strategy_weekly') | NOT NULL | Hangi bülten tipi |
-| `section_key` | VARCHAR(100) | NOT NULL | Bölüm tanımlayıcı (örn: "global_trends", "local_developments") |
-| `system_prompt` | TEXT | NOT NULL | LLM system prompt |
-| `user_prompt_template` | TEXT | NOT NULL | LLM user prompt şablonu (placeholder'lı) |
+| `slug` | VARCHAR(100) | NOT NULL, UNIQUE | Serbest bülten tanımlayıcı (örn `fmcg_weekly`) |
+| `name` | VARCHAR(255) | NOT NULL | TR UI bülten adı |
+| `description` | TEXT | NOT NULL, DEFAULT '' | Bülten açıklaması (editör LLM'e gider) |
+| `date_range_days` | INTEGER | NOT NULL, DEFAULT 7 | İçerik tarih aralığı (kaç gün geriye) |
+| `summary_system_prompt` | TEXT | NOT NULL | Editör (özet) system prompt |
+| `summary_user_prompt` | TEXT | NOT NULL | Editör (özet) user prompt |
+| `min_content_score` | INTEGER | NOT NULL, DEFAULT 50, CHECK 0–100 | LLM'e giden içeriklerin min skoru |
 | `model_preference` | VARCHAR(50) | NULLABLE | Tercih edilen model (null ise round-robin) |
 | `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Aktif/pasif |
-| `version` | INTEGER | NOT NULL, DEFAULT 1 | Versiyon numarası (her düzenlemede artar) |
 | `created_at` | TIMESTAMPTZ | NOT NULL | — |
 | `updated_at` | TIMESTAMPTZ | NOT NULL | — |
+
+### 2.9 NewsletterSection
+
+Bülten altındaki kullanıcı-adlandırmalı bölüm (sınırsız). **Bölüm LLM** çağrısını besler.
+
+| Attribute | Tip | Kısıt | Açıklama |
+|-----------|-----|-------|----------|
+| `id` | UUID | PK | Tekil tanımlayıcı |
+| `newsletter_template_id` | UUID | FK → newsletter_templates.id, NOT NULL, ON DELETE CASCADE | Ait olduğu bülten |
+| `name` | VARCHAR(255) | NOT NULL | Bölüm adı (örn "Yıldız ve Rakipleri") |
+| `sort_order` | INTEGER | NOT NULL | Bölüm sırası (template içinde UNIQUE) |
+| `section_system_prompt` | TEXT | NOT NULL | Bölüm özet system prompt |
+| `section_user_prompt` | TEXT | NOT NULL | Bölüm özet user prompt |
+| `impact_prompt` | TEXT | NOT NULL | Yıldız Holding için etki prompt (bölüm çağrısı) |
+| `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Aktif/pasif |
+| `created_at` | TIMESTAMPTZ | NOT NULL | — |
+| `updated_at` | TIMESTAMPTZ | NOT NULL | — |
+
+> **Anlık etki prompt'u** (haber çekmecesindeki "Yıldız'ı nasıl etkiler?") bülten/bölüm dışında, tek **global** ayardır (`system_settings`: `newsletter_impact_system_prompt`, `newsletter_impact_user_prompt`).
 
 ### 2.9 ApiKey
 
@@ -374,7 +396,9 @@ erDiagram
     processed_items ||--o{ content_chunks : "parçalanır"
 
     digests ||--o{ digest_sections : "içerir"
-    digest_sections }o--o| prompt_templates : "kullanır"
+    newsletter_templates ||--o{ newsletter_sections : "içerir"
+    newsletter_templates ||--o{ digests : "üretir"
+    newsletter_sections }o--o| digest_sections : "üretir"
 
     api_keys ||--o{ api_usage_logs : "tüketir"
 
@@ -435,8 +459,10 @@ erDiagram
 
     digests {
         uuid id PK
-        enum digest_type
+        uuid newsletter_template_id FK
+        varchar newsletter_slug
         varchar title
+        text summary
         enum status
         date period_start
         date period_end
@@ -446,20 +472,32 @@ erDiagram
     digest_sections {
         uuid id PK
         uuid digest_id FK
+        uuid newsletter_section_id FK
         integer section_order
         text ai_summary
         text impact_note
         jsonb source_references
     }
 
-    prompt_templates {
+    newsletter_templates {
         uuid id PK
-        varchar name UK
-        enum digest_type
-        varchar section_key
-        text system_prompt
-        text user_prompt_template
-        integer version
+        varchar slug UK
+        varchar name
+        text description
+        integer date_range_days
+        text summary_system_prompt
+        text summary_user_prompt
+        integer min_content_score
+    }
+
+    newsletter_sections {
+        uuid id PK
+        uuid newsletter_template_id FK
+        varchar name
+        integer sort_order
+        text section_system_prompt
+        text section_user_prompt
+        text impact_prompt
     }
 
     api_keys {
@@ -584,24 +622,29 @@ erDiagram
 - Embedding boyutu kullanılan modele göre değişir (OpenAI text-embedding-3-small: 1536, Cohere embed-v3: 1024). pgvector VECTOR tipi kullanılır.
 - Embedding modeli admin panelinden (`system_settings` tablosu, key: `embedding_model`) değiştirilebilir. Model değişikliğinde tüm mevcut chunk embedding'leri yeniden hesaplanır (reindex job).
 
-### Digest
+### Digest (3-aşamalı üretim — Faz 6.5)
 
-- Digest üretimi EventBridge cron trigger ile başlar.
-- Üretim başladığında `status = generating`; tüm section'lar başarıyla oluştuğunda `status = ready`; herhangi bir hata durumunda `status = failed`.
-- Bir digest'in tüm DigestSection'ları aynı transaction'da oluşur. Kısmi digest yayınlanmaz.
-- Digest içeriği `digests` + `digest_sections` tablolarında structured JSON olarak saklanır. Frontend bu veriden render eder.
-- Ek olarak HTML snapshot S3'e arşiv amaçlı yazılır (`s3_archive_key`). Bu HTML serve edilmez; canlı içerik her zaman API üzerinden gelir.
-- Digest üretimi tamamlandığında (status = ready) tüm alıcılara "yeni rapor hazır" bildirimi gönderilir (e-posta + push).
+- Digest üretimi manuel tetikle (Faz 6.1 pipeline `digest_update`) veya cron ile başlar; bir `newsletter_templates` kaydı seçilir.
+- **Aşama 1 — Editör LLM (bülten başına 1):** `min_content_score` üstü + `date_range_days` aralığındaki haberler editöre verilir. Editör (Yıldız Holding CEO'su perspektifi) bültene-uygun haberleri seçer, bölümlere dağıtır, alakasızı eler ve haftalık **Bülten Özeti**'ni (`digests.summary`) üretir.
+- **Aşama 2 — Bölüm LLM (bölüm başına 1):** Editörün o bölüme atadığı haberlerden bölüm özeti (`ai_summary`) + Yıldız etki notu (`impact_note`) + `source_references` üretilir.
+- Üretim başladığında `status = generating`; tüm bölümler oluştuğunda `status = ready`; hata durumunda `status = failed`. Tüm DigestSection'lar aynı transaction'da; kısmi digest yayınlanmaz.
+- HTML snapshot S3'e arşiv amaçlı yazılır (`s3_archive_key`); canlı içerik API'den gelir.
+- Status = ready → "yeni rapor hazır" bildirimi (e-posta + push).
 
 ### DigestSection
 
-- Her section bir prompt template ile ilişkilendirilebilir. Template yoksa (NULL) section elle veya farklı bir pipeline ile üretilmiş demektir.
-- `source_references` JSONB dizisi şu yapıdadır: `[{"processed_item_id": "...", "url": "...", "title": "..."}]`.
+- Her section `newsletter_section_id` ile şablon bölümüne bağlanır (silinirse SET NULL; başlık/özet snapshot korunur).
+- `source_references` JSONB dizisi: `[{"processed_item_id": "...", "url": "...", "title": "..."}]` — viewer detayda çekmece haber kartları olarak render edilir.
 
-### PromptTemplate
+### NewsletterTemplate / NewsletterSection
 
-- Her düzenlemede `version` alanı otomatik artırılır. Önceki versiyon silinmez; ancak yalnızca en güncel versiyon aktif olarak kullanılır.
-- Prompt template'i production'a almak kullanıcı onayı gerektirir; agent otomatik yapamaz.
+- Admin tek ekrandan serbest bülten + sınırsız bölüm tanımlar. `slug` benzersiz; bölümler `sort_order` ile sıralanır.
+- Bülten/bölüm prompt'ları production'a almak kullanıcı onayı gerektirir; agent otomatik yapamaz.
+- Bülten silindiğinde bölümler CASCADE; geçmiş digest'ler `newsletter_slug` ile korunur.
+
+### Anlık Yıldız Etki Analizi
+
+- Viewer/admin, digest detayındaki haber çekmecesinde "Yıldız'ı nasıl etkiler?" butonuna basınca o tek haber (`processed_item`) **global** prompt ile LLM'e gider; sonuç anlık gösterilir, **kalıcılaştırılmaz**. Rate-limit uygulanır.
 
 ### ApiKey
 
@@ -760,7 +803,7 @@ flowchart LR
     CRON["EventBridge\nCron"] --> ENGINE["AI Engine\nDigest Generator"]
     ENGINE --> |"İlgili dönem verisini sorgula"| DB["PostgreSQL\n(processed_items)"]
     DB --> ENGINE
-    ENGINE --> |"Prompt template al"| PT["prompt_templates"]
+    ENGINE --> |"Bülten + bölüm prompt'larını al"| PT["newsletter_templates +\nnewsletter_sections"]
     PT --> ENGINE
     ENGINE --> |"LLM API çağrısı"| LLM["Groq / Gemini\n(round-robin)"]
     LLM --> ENGINE

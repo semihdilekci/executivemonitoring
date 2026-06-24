@@ -3,7 +3,9 @@
 import uuid
 
 from packages.shared.enums import (
+    ARTICLE_SCHEMA,
     PROCESSED_ITEM_SCHEMAS,
+    RESERVED_SCHEMAS,
     ApiProvider,
     RawItemStatus,
     SourceCategory,
@@ -53,6 +55,15 @@ def test_processed_item_models_cover_all_schemas() -> None:
         assert issubclass(model, ProcessedItem)
 
 
+def test_article_vs_reserved_schema_split() -> None:
+    # Faz 6.4 (ADR-0002): yalnızca `news` aktif haber schema'sı; geri kalanlar rezerve.
+    assert ARTICLE_SCHEMA == "news"
+    assert ARTICLE_SCHEMA not in RESERVED_SCHEMAS
+    assert set(RESERVED_SCHEMAS) == {"market", "geo", "transport", "fmcg"}
+    expected_order = (ARTICLE_SCHEMA, *RESERVED_SCHEMAS)
+    assert expected_order == PROCESSED_ITEM_SCHEMAS
+
+
 def test_source_model_columns() -> None:
     columns = {column.name for column in Source.__table__.columns}
     assert {
@@ -82,8 +93,13 @@ def test_content_chunk_embedding_dimension() -> None:
     assert embedding_column.type.dim == EMBEDDING_DIMENSION  # type: ignore[attr-defined]
 
 
-def test_content_chunk_no_processed_item_fk() -> None:
-    assert ContentChunk.__table__.foreign_keys == set()
+def test_content_chunk_fk_to_news_processed_items() -> None:
+    # Faz 6.4 İter 6: konsolidasyon sonrası native FK → news.processed_items(id).
+    fks = {fk.target_fullname for fk in ContentChunk.__table__.foreign_keys}
+    assert "news.processed_items.id" in fks
+    fk = next(iter(ContentChunk.__table__.foreign_keys))
+    assert fk.ondelete == "CASCADE"
+    assert fk.name == "fk_content_chunks_processed_item_id"
 
 
 def test_api_key_provider_enum() -> None:

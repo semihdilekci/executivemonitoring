@@ -25,6 +25,7 @@ def _create_payload(*, alias: str | None = None) -> dict[str, object]:
         "provider": "groq",
         "key_alias": alias or f"Groq Test {uuid.uuid4()}",
         "api_key": "gsk_test_secret_key_value_1234567890",
+        "model": "llama-3.3-70b-versatile",
         "priority_order": 1,
         "is_active": True,
     }
@@ -71,6 +72,7 @@ async def test_admin_api_key_crud_and_audit(
     key_id = created["id"]
     assert created["provider"] == "groq"
     assert created["key_alias"] == "Groq Primary CRUD"
+    assert created["model"] == "llama-3.3-70b-versatile"
     assert created["is_active"] is True
     assert "api_key" not in created
     assert "encrypted_key" not in created
@@ -173,6 +175,23 @@ async def test_create_api_key_invalid_body_returns_422(
             "priority_order": 1,
         },
     )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.asyncio
+async def test_create_api_key_rejects_model_provider_mismatch(
+    api_client: AsyncClient,
+    admin_test_user: AuthTestUser,
+) -> None:
+    """Sağlayıcıya ait olmayan model 422 döner (örn. groq + claude modeli)."""
+    token = await login_and_get_token(api_client, admin_test_user)
+    headers = auth_headers(token)
+
+    payload = _create_payload(alias="Mismatch")
+    payload["model"] = "claude-opus-4-8"
+
+    response = await api_client.post("/api/v1/api-keys", headers=headers, json=payload)
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 

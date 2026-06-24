@@ -19,13 +19,15 @@ export const CONTENT_CATEGORY_LABELS: Record<ContentCategory, string> = {
   regulatory: "Regülasyon",
 };
 
+/**
+ * MVP-0 haber konsolidasyonu sonrası (Faz 6.4) tüm içerik `news.processed_items`'da;
+ * `market`/`geo`/`transport`/`fmcg` rezerve ve boş. Filtre yalnızca Tümü / Haber sunar
+ * (`Docs/06` S-ADMIN-CONTENT-ARCHIVE). Rezerve değerler `SCHEMA_CATEGORY_LABELS` ve
+ * `SchemaCategory` union'ında API uyumu için korunur.
+ */
 export const SCHEMA_CATEGORY_FILTER_OPTIONS = [
-  { value: "", label: "Tüm şemalar" },
+  { value: "", label: "Tümü" },
   { value: "news", label: "Haber" },
-  { value: "market", label: "Piyasa" },
-  { value: "geo", label: "Jeopolitik" },
-  { value: "transport", label: "Lojistik" },
-  { value: "fmcg", label: "FMCG" },
 ] as const;
 
 export const CONTENT_CATEGORY_FILTER_OPTIONS = [

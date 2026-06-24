@@ -65,6 +65,7 @@ class ApiKeyService:
             provider=body.provider,
             key_alias=body.key_alias,
             encrypted_key=encrypted_key,
+            model=body.model,
             priority_order=body.priority_order,
             is_active=body.is_active,
         )
@@ -77,6 +78,7 @@ class ApiKeyService:
             payload={
                 "provider": api_key.provider.value,
                 "key_alias": api_key.key_alias,
+                "model": api_key.model,
                 "priority_order": api_key.priority_order,
                 "is_active": api_key.is_active,
             },

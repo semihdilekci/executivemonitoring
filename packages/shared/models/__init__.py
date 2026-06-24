@@ -15,6 +15,7 @@ from packages.shared.models.password_reset_token import PasswordResetToken
 from packages.shared.models.pipeline_run import PipelineRun
 from packages.shared.models.pipeline_run_step import PipelineRunStep
 from packages.shared.models.processed_item import (
+    ARTICLE_PROCESSED_ITEM_MODEL,
     PROCESSED_ITEM_MODELS,
     FmcgProcessedItem,
     GeoProcessedItem,
@@ -36,6 +37,7 @@ __all__ = [
     "Base",
     "ChatHistory",
     "ContentChunk",
+    "ARTICLE_PROCESSED_ITEM_MODEL",
     "CreatedAtMixin",
     "Digest",
     "DigestSection",

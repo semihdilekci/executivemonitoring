@@ -7,7 +7,8 @@ from datetime import date, datetime
 from typing import Literal
 
 from packages.shared.enums import ApiProvider
-from pydantic import BaseModel, ConfigDict, Field
+from packages.shared.llm_models import is_valid_model, models_for
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ApiKeyResponse(BaseModel):
@@ -18,6 +19,7 @@ class ApiKeyResponse(BaseModel):
     id: uuid.UUID
     provider: ApiProvider
     key_alias: str
+    model: str | None
     is_active: bool
     priority_order: int
     created_at: datetime
@@ -33,8 +35,17 @@ class CreateApiKeyRequest(BaseModel):
     provider: ApiProvider
     key_alias: str = Field(min_length=1, max_length=100)
     api_key: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=1, max_length=100)
     priority_order: int = Field(ge=1, le=1000)
     is_active: bool = True
+
+    @model_validator(mode="after")
+    def _validate_model_for_provider(self) -> CreateApiKeyRequest:
+        if not is_valid_model(self.provider, self.model):
+            allowed = ", ".join(models_for(self.provider))
+            msg = f"{self.provider.value} için geçersiz model. Geçerli: {allowed}"
+            raise ValueError(msg)
+        return self
 
 
 class PatchApiKeyStatusRequest(BaseModel):

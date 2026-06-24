@@ -70,9 +70,9 @@ Monorepo içinde backend ile ilgili üç ana dizin bulunur:
         auth.py                     → Login, token refresh, logout, password reset
         users.py                    → Kullanıcı CRUD (admin-only) + profil (viewer)
         sources.py                  → Kaynak yönetimi CRUD (admin-only)
-        prompt_templates.py         → Prompt şablon CRUD (admin-only)
+        newsletter_template.py      → Bülten şablonu CRUD (nested section, admin-only, Faz 6.5)
         api_keys.py                 → LLM API key CRUD + kullanım metrikleri (admin-only)
-        digests.py                  → Digest listeleme/detay + manuel tetikleme
+        digests.py                  → Digest listeleme/detay + manuel tetikleme + anlık etki (news-impact)
         pipeline.py                 → Pipeline run tetikleme/listeleme/detay/iptal (admin-only, Faz 6.1)
         chatbot.py                  → Soru gönderme + sohbet geçmişi
         notifications.py            → Bildirim alıcı yönetimi + FCM token kayıt
@@ -120,7 +120,9 @@ Monorepo içinde backend ile ilgili üç ana dizin bulunur:
     chunker.py                      → pgvector embedding chunk üretimi
 
 /services/ai-engine/                → AI işlemleri
-    digest_generator.py             → Bülten üretim orchestrator
+    digest_generator.py             → Bülten üretim orchestrator (editör → bölüm, Faz 6.5)
+    editor_selector.py              → Editör LLM: aday havuz + dağıtım + haftalık özet (Faz 6.5)
+    section_generator.py            → Bölüm LLM: özet + Yıldız etki (Faz 6.5)
     rag_pipeline.py                 → RAG sorgu → yanıt akışı
     chatbot_service.py              → Chatbot session yönetimi
     llm_client.py                   → Multi-provider LLM client (Groq, Gemini)
@@ -144,13 +146,12 @@ Monorepo içinde backend ile ilgili üç ana dizin bulunur:
         audit_log.py
         api_usage_log.py
         system_setting.py
-        prompt_template.py
+        newsletter_template.py      → NewsletterTemplate + NewsletterSection (Faz 6.5)
         notification.py
         content_chunk.py
     /enums/                         → Python enum tanımları
         user_role.py                → UserRole(admin, viewer)
         source_type.py              → SourceType(rss, email, api, gov, websocket)
-        digest_type.py              → DigestType(turkish_media, fmcg, strategy)
         article_status.py           → ArticleStatus(raw, processed, enriched, archived)
         event_type.py               → AuditEventType enum
     /utils/
@@ -775,15 +776,14 @@ def category_score(cat: str, matched: list[CategoryKeyword]) -> int:
 
 **Kaldırılan schema routing:** Eski `content_category` → `market`/`fmcg`/`geo` eşlemesi kaldırıldı. `market`, `fmcg`, `geo`, `transport` schema'ları MVP-0'da haber almaz — MVP-1+ yapılandırılmış veri için rezerve.
 
-**Digest sorgu filtresi** — bülten tipine göre `news.processed_items` üzerinde:
+**Digest aday havuzu (Faz 6.5)** — bülten-bazında kategori ön-filtresi **yok**. Editör LLM'e `news.processed_items` üzerinde tek filtre uygulanır:
 
-| `digest_type` | Filtre |
-| ------------- | ------ |
-| `turkish_media_weekly` | `source.category = turkish_media` |
-| `fmcg_weekly` | `content_category = fmcg` veya `source.category = fmcg` |
-| `strategy_weekly` | `topics` ∩ strategy/macro keyword seti |
+| Filtre | Kaynak |
+| ------ | ------ |
+| `relevance_score * 100 >= min_content_score` | `newsletter_templates.min_content_score` (0–100) |
+| `published_at` (yoksa `processed_at`) ∈ [period_start, period_end] | `date_range_days` veya generate isteğindeki period |
 
-`transport` schema'sı MVP-0'da kullanılmaz (AIS/OpenSky MVP-2).
+Sıralama `relevance_score DESC`. Bültene-ilgi, bölüm dağıtımı ve eleme **editör LLM kararıdır** (eski `DIGEST_TYPE_QUERY_CONFIG` kategori/topic eşlemesi kaldırıldı). `transport` schema'sı MVP-0'da kullanılmaz (AIS/OpenSky MVP-2).
 
 **Tag extraction:** Eşleşen keyword'ler `topics` JSONB dizisine eklenir (duplicate yok). `entities` MVP-0'da boş `[]` kalır.
 
@@ -917,21 +917,28 @@ Token tükenmesi (429) veya servis hatası (503) alındığında round-robin ile
 
 Her API çağrısının token kullanımı `api_usage_logs` tablosunda saklanır: provider, key ID, model, prompt/completion/total token sayıları, timestamp. Admin paneli bu veriden günlük/haftalık/aylık kullanım grafikleri üretir.
 
-### 9.2 Digest Generator
+### 9.2 Digest Generator — 3 Aşamalı Editör Pipeline (Faz 6.5)
 
-Bülten üretim akışı:
+Bir `newsletter_templates` kaydı seçilerek tetiklenir. Akış:
 
-1. **Makale seçimi:** `articles` tablosundan ilgili digest tipine göre (kategori + tarih aralığı + minimum skor) en yüksek skorlu makaleleri çek.
-2. **Prompt rendering:** `prompt_templates` tablosundan aktif şablonu al, Jinja2 ile makale verilerini render et.
-3. **LLM çağrısı:** Render edilmiş prompt'u `LLMClient.complete()` ile gönder.
-4. **Çıktı parse:** LLM yanıtını structured JSON'a parse et (bölümler, özet, etki notları, kaynak referansları).
-5. **Kayıt:** `digests` tablosuna structured JSON olarak yaz. Ek olarak HTML snapshot S3'e arşiv amaçlı yazılır.
-6. **Bildirim tetikleme:** `NotificationService.send_digest_ready()` çağır.
+**Aşama 0 — Aday havuz** (`editor_selector.py`): `news.processed_items` üzerinde `relevance_score*100 >= min_content_score` + tarih aralığı; `relevance_score DESC` sıralı `DigestArticle` listesi.
 
-Digest üretimi başarısız olursa (LLM hatası, parse hatası):
-- Hata `audit_logs`'a yazılır.
-- Admin'e mail bildirimi gönderilir.
-- Otomatik retry yapılmaz — admin müdahalesi beklenir (prompt sorunu olabilir).
+**Aşama 1 — Editör LLM (bülten başına 1):**
+1. `summary_system_prompt` + `summary_user_prompt` render edilir. Değişkenler: `{newsletter_name}`, `{newsletter_description}`, `{date_range}`, `{sections}` (bölüm adları), `{articles}` (aday havuz: id + başlık + kaynak + tarih + skor + içerik).
+2. `LLMClient.complete()` (editör = Yıldız Holding CEO'su perspektifi).
+3. Çıktı JSON parse: `{ "summary": "...", "assignments": [{"section": "<ad/index>", "article_ids": [...]}], "dropped": [...] }`. `summary` → `digests.summary`.
+
+**Aşama 2 — Bölüm LLM (bölüm başına 1)** (`section_generator.py`):
+1. Editörün o bölüme atadığı haberler alınır (atama boşsa bölüm üretilmez/boş geçilir).
+2. `section_system_prompt` + `section_user_prompt` + `impact_prompt` render edilir. Değişkenler: `{section_name}`, `{newsletter_name}`, `{date_range}`, `{articles}` (yalnızca atanan haberler).
+3. `LLMClient.complete()` → `{ai_summary, impact_note}`. `source_references` atanan haberlerden kurulur.
+4. `digest_sections` kaydı (`section_order` = `newsletter_sections.sort_order`, `newsletter_section_id` set).
+
+**Aşama 3 — Kayıt + bildirim:** `digests` (`summary`, `newsletter_template_id`, `newsletter_slug`, `total_sources_used`) + tüm `digest_sections` aynı transaction'da; status `ready`. HTML snapshot S3'e. `NotificationService.send_digest_ready()`.
+
+Hata (LLM/parse): `audit_logs`'a yazılır, admin'e mail, status `failed`, otomatik retry yok.
+
+> **Anlık Yıldız etki** (`POST /digests/news-impact`): tek `processed_item`, `system_settings` global prompt (`newsletter_impact_system_prompt` + `newsletter_impact_user_prompt`; değişkenler `{article_title}`, `{article_content}`, `{source}`) → `LLMClient.complete()` → düz metin. **Kalıcılaştırılmaz**; rate-limit 20/dk.
 
 ### 9.3 RAG Pipeline
 

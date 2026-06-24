@@ -86,6 +86,7 @@ export function ApiKeyCard({
       </div>
 
       <div className="flex flex-wrap gap-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+        {apiKey.model ? <span>Model: {apiKey.model}</span> : null}
         <span>Öncelik: {apiKey.priority_order}</span>
         <span>Eklendi: {formatNumericDate(apiKey.created_at)}</span>
       </div>

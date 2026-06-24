@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from packages.shared.enums import PROCESSED_ITEM_SCHEMAS
+from packages.shared.enums import ARTICLE_SCHEMA, PROCESSED_ITEM_SCHEMAS
 from packages.shared.models.base import Base, UUIDPrimaryKeyMixin
 
 
@@ -95,31 +95,34 @@ def _processed_item_table_args(schema: str) -> tuple[Any, ...]:
 
 
 class NewsProcessedItem(ProcessedItem):
-    """`news.processed_items` tablosu."""
+    """`news.processed_items` — Faz 6.4 (ADR-0002) sonrası tek **aktif** haber tablosu."""
 
     __table_args__ = _processed_item_table_args("news")
 
 
+# Rezerve schema tabloları: MVP-1+ yapılandırılmış veri için boş tutulur; processor
+# bunlara yazmaz (`Docs/02` §2). Migration sürekliliği için ORM eşlemesi korunur,
+# silinmez — yalnızca haber içeriği `news`'e konsolide edilmiştir.
 class MarketProcessedItem(ProcessedItem):
-    """`market.processed_items` tablosu."""
+    """`market.processed_items` tablosu (rezerve — boş)."""
 
     __table_args__ = _processed_item_table_args("market")
 
 
 class GeoProcessedItem(ProcessedItem):
-    """`geo.processed_items` tablosu."""
+    """`geo.processed_items` tablosu (rezerve — boş)."""
 
     __table_args__ = _processed_item_table_args("geo")
 
 
 class TransportProcessedItem(ProcessedItem):
-    """`transport.processed_items` tablosu."""
+    """`transport.processed_items` tablosu (rezerve — boş)."""
 
     __table_args__ = _processed_item_table_args("transport")
 
 
 class FmcgProcessedItem(ProcessedItem):
-    """`fmcg.processed_items` tablosu."""
+    """`fmcg.processed_items` tablosu (rezerve — boş)."""
 
     __table_args__ = _processed_item_table_args("fmcg")
 
@@ -131,5 +134,8 @@ PROCESSED_ITEM_MODELS: dict[str, type[ProcessedItem]] = {
     "transport": TransportProcessedItem,
     "fmcg": FmcgProcessedItem,
 }
+
+# Haber kayıtları için tek aktif model — repo/observer/seed bu sabiti kullanmalı.
+ARTICLE_PROCESSED_ITEM_MODEL: type[ProcessedItem] = PROCESSED_ITEM_MODELS[ARTICLE_SCHEMA]
 
 assert set(PROCESSED_ITEM_MODELS) == set(PROCESSED_ITEM_SCHEMAS)

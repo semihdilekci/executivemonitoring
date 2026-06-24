@@ -38,6 +38,7 @@ class ApiKeyRepository:
         provider: ApiProvider,
         key_alias: str,
         encrypted_key: str,
+        model: str,
         priority_order: int,
         is_active: bool = True,
     ) -> ApiKey:
@@ -45,6 +46,7 @@ class ApiKeyRepository:
             provider=provider,
             key_alias=key_alias,
             encrypted_key=encrypted_key,
+            model=model,
             priority_order=priority_order,
             is_active=is_active,
         )

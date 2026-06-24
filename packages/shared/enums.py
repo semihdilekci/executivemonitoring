@@ -75,6 +75,7 @@ class ApiProvider(StrEnum):
 
     GROQ = "groq"
     GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
 
 
 class LlmRequestType(StrEnum):
@@ -84,7 +85,15 @@ class LlmRequestType(StrEnum):
     CHATBOT = "chatbot"
 
 
-PROCESSED_ITEM_SCHEMAS: tuple[str, ...] = ("news", "market", "geo", "transport", "fmcg")
+# Faz 6.4 (ADR-0002): tüm haber içeriği yalnızca `news.processed_items`'a yazılır.
+# `market`/`geo`/`transport`/`fmcg` schema'ları MVP-1+ yapılandırılmış veri tipleri
+# için **rezerve** boş tablolardır — haber almazlar (`Docs/02` §2, §4.4).
+ARTICLE_SCHEMA: str = "news"
+RESERVED_SCHEMAS: tuple[str, ...] = ("market", "geo", "transport", "fmcg")
+
+# Fiziksel `processed_items` partition'larının tümü (aktif haber + rezerve). ORM tablo
+# eşlemesi ve migration kapsamı bu sırayı kullanır; sıralama geriye dönük korunur.
+PROCESSED_ITEM_SCHEMAS: tuple[str, ...] = (ARTICLE_SCHEMA, *RESERVED_SCHEMAS)
 
 
 class DigestType(StrEnum):

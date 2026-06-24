@@ -16,6 +16,7 @@ from services.ai_engine.exceptions import (
 )
 from services.ai_engine.llm_client import LLMClient
 from services.ai_engine.models import LLMResponse, TokenUsage
+from services.ai_engine.providers.anthropic_provider import AnthropicProvider
 from services.ai_engine.providers.base import LLMProvider
 from services.ai_engine.providers.gemini_provider import GeminiProvider
 from services.ai_engine.providers.groq_provider import GroqProvider
@@ -288,3 +289,59 @@ def test_groq_provider_rejects_empty_key() -> None:
 def test_gemini_provider_rejects_empty_key() -> None:
     with pytest.raises(ValueError, match="Gemini API key boş"):
         GeminiProvider(api_key="", key_id=uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_complete_success() -> None:
+    key_id = uuid.uuid4()
+    provider = AnthropicProvider(api_key="sk-ant-test-key", key_id=key_id)
+    response_body = httpx.Response(
+        200,
+        json={
+            "content": [{"type": "text", "text": "Claude yanıtı"}],
+            "usage": {"input_tokens": 4, "output_tokens": 6},
+            "model": "claude-opus-4-8",
+        },
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response_body,
+    ) as mock_post:
+        response = await provider.complete("merhaba", system_prompt="sistem")
+
+    assert response.text == "Claude yanıtı"
+    assert response.provider == ApiProvider.ANTHROPIC
+    assert response.api_key_id == key_id
+    assert response.usage.total_tokens == 10
+    mock_post.assert_awaited_once()
+    call_kwargs = mock_post.await_args.kwargs
+    assert call_kwargs["headers"]["x-api-key"] == "sk-ant-test-key"
+    assert call_kwargs["json"]["system"] == "sistem"
+    assert "sk-ant-test-key" not in str(response)
+
+
+@pytest.mark.asyncio
+async def test_anthropic_provider_maps_429_to_rate_limit() -> None:
+    provider = AnthropicProvider(api_key="sk-ant-test-key", key_id=uuid.uuid4())
+    response_body = httpx.Response(
+        429,
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"),
+    )
+
+    with (
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response_body,
+        ),
+        pytest.raises(RateLimitError),
+    ):
+        await provider.complete("merhaba")
+
+
+def test_anthropic_provider_rejects_empty_key() -> None:
+    with pytest.raises(ValueError, match="Anthropic API key boş"):
+        AnthropicProvider(api_key="", key_id=uuid.uuid4())

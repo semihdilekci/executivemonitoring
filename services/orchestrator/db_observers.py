@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from packages.shared.enums import RawItemStatus, SourceStatus, SourceType
 from packages.shared.models.pipeline_run import PipelineRun
-from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS
+from packages.shared.models.processed_item import ARTICLE_PROCESSED_ITEM_MODEL
 from packages.shared.models.raw_item import RawItem
 from packages.shared.models.source import Source
 from sqlalchemy import func, select
@@ -40,12 +40,12 @@ class DbRawItemCounter:
 
 
 class DbProcessedItemCounter:
-    """Bu run'da işlenen toplam `processed_items` sayısını 5 schema'da toplar.
+    """Bu run'da işlenen toplam `processed_items` sayısını `news` schema'sından okur.
 
-    `processed_items` schema-partition'lıdır (`news`/`market`/`geo`/`transport`/`fmcg` —
-    `Docs/02` §2); her tablo `processed_at >= run.started_at` penceresiyle sayılıp
-    toplanır. `ProcessStageExecutor` bu artışı SQS drain ile çapraz doğrular (`Docs/04`
-    §10.5). Yalnızca okuma; processor verisine yazmaz. Raw SQL yok.
+    Faz 6.4 (ADR-0002) sonrası tüm haber yalnızca `news.processed_items`'a yazılır;
+    rezerve schema'lar boştur, sayıma katılmazlar. `processed_at >= run.started_at`
+    penceresiyle sayılır. `ProcessStageExecutor` bu artışı SQS drain ile çapraz doğrular
+    (`Docs/04` §10.5). Yalnızca okuma; processor verisine yazmaz. Raw SQL yok.
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -54,16 +54,13 @@ class DbProcessedItemCounter:
     async def count_processed(self, run: PipelineRun) -> int:
         if run.started_at is None:
             return 0
-        total = 0
         async with self._session_factory() as db:
-            for model in PROCESSED_ITEM_MODELS.values():
-                result = await db.execute(
-                    select(func.count())
-                    .select_from(model)
-                    .where(model.processed_at >= run.started_at)
-                )
-                total += int(result.scalar_one())
-        return total
+            result = await db.execute(
+                select(func.count())
+                .select_from(ARTICLE_PROCESSED_ITEM_MODEL)
+                .where(ARTICLE_PROCESSED_ITEM_MODEL.processed_at >= run.started_at)
+            )
+            return int(result.scalar_one())
 
 
 class DbRawItemFailedCounter:

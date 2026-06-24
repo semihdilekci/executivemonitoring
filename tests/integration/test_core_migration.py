@@ -7,14 +7,13 @@ from collections.abc import Iterator
 import pytest
 from alembic import command
 from alembic.config import Config
-from packages.shared.env_loader import (
-    get_database_url,
-    load_dotenv_file,
-    safe_database_target,
-    try_resolve_sync_database_url,
-)
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
+
+from tests.integration.migration_db import (
+    make_alembic_config,
+    resolve_sync_test_database_url,
+)
 
 CORE_TABLES = {
     "users",
@@ -28,19 +27,7 @@ CORE_REVISION = "001_core_tables"
 
 @pytest.fixture(scope="session")
 def sync_database_url() -> str:
-    load_dotenv_file(override=False)
-    url = try_resolve_sync_database_url()
-    if url is None:
-        try:
-            raw = get_database_url(required=True)
-            target = safe_database_target(raw)
-        except RuntimeError as exc:
-            pytest.skip(str(exc))
-        pytest.skip(
-            f"DATABASE_URL ile PostgreSQL'e bağlanılamadı ({target}). "
-            "`.env` kimlik bilgilerini kontrol edin."
-        )
-    return url
+    return resolve_sync_test_database_url()
 
 
 @pytest.fixture
@@ -51,9 +38,7 @@ def db_engine(sync_database_url: str) -> Iterator[Engine]:
 
 
 def _alembic_config() -> Config:
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("script_location", "alembic")
-    return cfg
+    return make_alembic_config()
 
 
 def _reset_public_schema(engine: Engine) -> None:

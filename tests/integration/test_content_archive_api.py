@@ -1,7 +1,7 @@
 """İçerik Arşivi API integration testleri (Faz 6.2 — İterasyon 3).
 
-Admin-only liste + detay endpoint'leri; RBAC deny (viewer 403), cross-schema
-lookup, `404 PROCESSED_ITEM_NOT_FOUND`, zorunlu `schema_category` (422) doğrulanır.
+Admin-only liste + detay endpoint'leri; RBAC deny (viewer 403), `news` schema
+lookup, `404 PROCESSED_ITEM_NOT_FOUND`, varsayılan `schema_category=news` (Faz 6.4).
 Seed: 1 source → 1 raw_item → 1 news.processed_item + 2 content_chunk + 1 digest
 section reverse-reference.
 """
@@ -110,6 +110,9 @@ async def archive_seed(database_url: str) -> AsyncIterator[ArchiveSeed]:
                 content_category="macro",
             )
         )
+        # Cross-schema FK (public.content_chunks → news.processed_items) — parent
+        # önce flush edilmeli; UoW şema sınırı ötesinde sıra garanti etmez (Faz 6.4).
+        await session.flush()
         for idx in range(2):
             session.add(
                 ContentChunk(
@@ -273,18 +276,22 @@ async def test_detail_wrong_schema_returns_404(
 
 
 @pytest.mark.asyncio
-async def test_detail_missing_schema_category_returns_422(
+async def test_detail_defaults_to_news_schema(
     api_client: AsyncClient,
     admin_test_user: AuthTestUser,
     archive_seed: ArchiveSeed,
 ) -> None:
+    """schema_category verilmezse varsayılan `news` (Faz 6.4) — kayıt bulunur."""
     token = await login_and_get_token(api_client, admin_test_user)
     response = await api_client.get(
         f"/api/v1/admin/processed-items/{archive_seed.item_id}",
         headers=auth_headers(token),
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == str(archive_seed.item_id)
+    assert body["schema_category"] == "news"
 
 
 @pytest.mark.asyncio

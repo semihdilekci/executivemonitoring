@@ -279,6 +279,26 @@ async def test_generate_turkish_media_weekly_uses_media_query_config(
 
 
 @pytest.mark.asyncio
+async def test_generate_fmcg_weekly_queries_news_with_fmcg_filters(
+    llm_response_json: str,
+) -> None:
+    """Faz 6.4: fmcg_weekly artık `news` schema'sını fmcg filtreleriyle sorgular."""
+    digest, digest_repo, processed_repo = await _generate_for_digest_type(
+        digest_type=DigestType.FMCG_WEEKLY,
+        section_keys=["market_overview", "brand_moves"],
+        llm_response_json=llm_response_json,
+    )
+
+    expected = DIGEST_TYPE_QUERY_CONFIG["fmcg_weekly"]
+    assert processed_repo.last_config == expected
+    assert processed_repo.last_config is not None
+    assert processed_repo.last_config.schema == "news"
+    assert processed_repo.last_config.source_category == "fmcg"
+    assert processed_repo.last_config.content_category == "fmcg"
+    assert digest.status == DigestStatus.READY
+
+
+@pytest.mark.asyncio
 async def test_generate_strategy_weekly_uses_topic_keyword_config(
     llm_response_json: str,
 ) -> None:

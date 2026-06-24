@@ -71,7 +71,9 @@ async def get_processed_item(
     processed_item_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(require_admin)],
-    schema_category: Annotated[SchemaCategoryParam, Query()],
+    schema_category: Annotated[
+        SchemaCategoryParam, Query()
+    ] = SchemaCategoryParam.NEWS,
 ) -> ProcessedItemDetailResponse:
     return await content_archive_service.get_item_detail(
         db,

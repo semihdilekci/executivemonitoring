@@ -243,6 +243,23 @@ Fixture: migration öncesi çoklu schema seed → migration → assert tek schem
 
 ---
 
+### 3.10 Bülten İyileştirme Testleri (Faz 6.5)
+
+`tests/integration/test_newsletter_config_migration.py` + `test_newsletter_template_api.py` + `tests/unit/ai_engine/test_editor_selector.py` / `test_section_generator.py`:
+
+| Senaryo | Beklenen |
+|---------|----------|
+| Migration | `newsletter_templates`/`newsletter_sections` oluşur; 3 eski tip migrate; `prompt_templates` düşer; `digests.summary`/`newsletter_slug` kolonları var |
+| Editör aday havuz | Yalnızca `relevance_score*100 >= min_content_score` + tarih aralığı haberleri editöre gider |
+| Editör dağıtım/eleme | Mock LLM JSON → haberler doğru bölümlere; `dropped` bölümlere atanmaz; bozuk JSON fallback |
+| Bölüm üretimi | Atanan haberlerden `ai_summary` + `impact_note` + `source_references`; atama boşsa bölüm atlanır |
+| Newsletter CRUD | Admin create/update (sections replace)/delete 200; viewer 403; slug çakışma 409; min skor 0–100 dışı 422 |
+| Anlık etki | `POST /digests/news-impact` → 200 `{analysis}`; bilinmeyen `processed_item_id` 404; rate-limit 20/dk |
+
+Fixture: `fixtures/newsletter_templates.json` (3 production-grade bülten + bölümler) + `fixtures/llm/editor_response.json` (örnek editör JSON çıktısı).
+
+---
+
 ### 3.8 İçerik Arşivi API Testleri (Faz 6.2)
 
 `tests/integration/test_content_archive_api.py`:
@@ -378,14 +395,15 @@ async def test_rate_limiter_blocks_after_limit(fake_redis):
 |-------|--------|---------|
 | `fixtures/users.json` | 1 admin + 2 viewer test kullanıcısı | Dev seed + test |
 | `fixtures/sources.json` | 5 RSS + 2 email + 1 gov kaynak | Dev seed + test |
-| `fixtures/prompt_templates.json` | Her bülten tipi için 2-3 şablon | Dev seed + test |
+| `fixtures/newsletter_templates.json` | Production-grade serbest bülten + bölüm prompt'ları (Faz 6.5) | Dev seed + test |
 | `fixtures/system_settings.json` | Tüm varsayılan sistem ayarları | Dev seed + test |
 | `fixtures/raw_items.json` | 50 örnek ham veri | Dev seed |
 | `fixtures/processed_items.json` | 50 örnek işlenmiş veri (5 schema) | Dev seed |
 | `fixtures/rss/sample_feed.xml` | Geçerli RSS feed XML'i | Unit test |
 | `fixtures/rss/malformed_feed.xml` | Bozuk RSS XML'i | Unit test |
 | `fixtures/email/sample_newsletter.eml` | Örnek newsletter e-postası | Unit test |
-| `fixtures/llm/digest_response.json` | Örnek LLM digest çıktısı | Unit test |
+| `fixtures/llm/digest_response.json` | Örnek LLM bölüm çıktısı | Unit test |
+| `fixtures/llm/editor_response.json` | Örnek editör LLM dağıtım + özet JSON çıktısı (Faz 6.5) | Unit test |
 | `fixtures/llm/chatbot_response.json` | Örnek LLM chatbot çıktısı | Unit test |
 
 Production verisi dev ortamına taşınamaz. Fixture verisi gerçek URL'ler ve yapılandırmalar içerir ancak API key veya credential içermez.
@@ -636,8 +654,9 @@ Aşağıdaki senaryolar kesinlikle test edilmelidir. Bu liste yeni feature eklen
 | Viewer → `POST /users` | 403, FORBIDDEN | Integration |
 | Admin → `GET /audit-logs` | 200, loglar döner | Integration |
 | Viewer → `GET /audit-logs` | 403, FORBIDDEN | Integration |
-| Admin → `POST /digests/trigger` | 200, digest tetiklenir | Integration |
-| Viewer → `POST /digests/trigger` | 403, FORBIDDEN | Integration |
+| Admin → `POST /digests/generate` | 202, digest tetiklenir | Integration |
+| Viewer → `POST /digests/generate` | 403, FORBIDDEN | Integration |
+| Viewer → `POST /digests/news-impact` | 200, anlık analiz döner | Integration |
 | Token'sız istek → korumalı endpoint | 401, UNAUTHORIZED | Integration |
 
 ### 9.3 Collector Retry ve Backoff

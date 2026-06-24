@@ -157,7 +157,8 @@ async def test_ingest_mode_all_uses_default_category() -> None:
 
     assert result is not None
     assert result.extras["category"] == "fmcg"
-    assert result.extras["schema_category"] == "fmcg"
+    # Faz 6.4: content_category ne olursa olsun schema sabit "news"
+    assert result.extras["schema_category"] == "news"
     # all-mode: kazanan kategori (fmcg) keyword'ü eşleşmediği için scored boş
     assert result.extras["scored_keywords"] == []
 
@@ -199,16 +200,14 @@ async def test_topics_deduped_and_entities_empty() -> None:
     assert result.extras["entities"] == []
 
 
-def test_schema_routing_macro_to_news() -> None:
-    assert resolve_schema_category("macro") == "news"
-    assert resolve_schema_category("strategy") == "news"
-    assert resolve_schema_category("regulatory") == "news"
+@pytest.mark.parametrize(
+    "category",
+    ["macro", "strategy", "regulatory", "fmcg", "finance", "geopolitical", "transport", ""],
+)
+def test_schema_category_always_news(category: str) -> None:
+    """Faz 6.4 (ADR-0002): content_category ne olursa olsun haber schema'sı `news`.
 
-
-def test_schema_routing_geopolitical_to_geo() -> None:
-    assert resolve_schema_category("geopolitical") == "geo"
-
-
-def test_schema_routing_transport_falls_back_to_news() -> None:
-    """MVP-0'da transport schema routing kullanılmaz."""
-    assert resolve_schema_category("transport") == "news"
+    Eski kategori→schema routing (`finance→market`, `fmcg→fmcg`, `geopolitical→geo`)
+    kaldırıldı; rezerve schema'lar MVP-0'da haber almaz.
+    """
+    assert resolve_schema_category(category) == "news"

@@ -54,10 +54,17 @@ class ParsedDigestSection:
 
 @dataclass(frozen=True, slots=True)
 class DigestTypeQueryConfig:
-    """Digest tipine göre processed_items sorgu parametreleri."""
+    """Digest tipine göre processed_items sorgu parametreleri.
+
+    Faz 6.4 (ADR-0002): tüm bültenler artık `news.processed_items` üzerinden
+    sorgulanır; ayrım `source_category`/`content_category`/`topic_keywords`
+    filtreleriyle yapılır. `source_category` ve `content_category` birlikte
+    verilirse OR semantiğiyle uygulanır (`Docs/04` §8.4 digest filtre tablosu).
+    """
 
     schema: str
     source_category: str | None = None
+    content_category: str | None = None
     topic_keywords: tuple[str, ...] = ()
 
 
@@ -69,8 +76,12 @@ DIGEST_TYPE_QUERY_CONFIG: dict[str, DigestTypeQueryConfig] = {
     "turkish_media_weekly": DigestTypeQueryConfig(
         schema="news",
     ),
+    # Faz 6.4: FMCG haberleri artık ayrı `fmcg` schema'da değil `news`'te;
+    # `content_category = fmcg` VEYA `source.category = fmcg` ile süzülür.
     "fmcg_weekly": DigestTypeQueryConfig(
-        schema="fmcg",
+        schema="news",
+        source_category="fmcg",
+        content_category="fmcg",
     ),
     "strategy_weekly": DigestTypeQueryConfig(
         schema="news",

@@ -1,0 +1,501 @@
+---
+description: "[Faz 6.5] Bülten iyileştirme — serbest bülten konfig (2 seviye) + 3-aşamalı editör pipeline (editör dağıtım+özet → bölüm özet+Yıldız etki → anlık etki), tek-ekran şablon yönetimi, çekmece haber kartları — 7 iterasyon/chat (ADR+Docs → DB → editör LLM → bölüm+generator → API → FE şablon → FE detay). Mesajda \"Faz 6.5 — İterasyon M\" belirt."
+---
+
+# Faz 6.5: Bülten İyileştirme
+
+## Goal
+
+Düz `prompt_templates`'i **iki seviyeli serbest bülten konfigürasyon modeline** (`newsletter_templates` + `newsletter_sections`) taşımak; bülten üretimini **3 aşamalı LLM pipeline**'a dönüştürmek: (1) **Editör LLM** — `min_content_score` üstü haberleri okuyup bültene-uygun olanları seçer, bölümlere dağıtır, alakasızı eler ve haftalık **Bülten Özeti**'ni üretir; (2) **Bölüm LLM** — her bölüm için özet + Yıldız etki notu; (3) **Anlık etki** — haber çekmecesinde "Yıldız'ı nasıl etkiler?" runtime LLM çağrısı (tek global prompt). Admin tüm bülteni **tek ekrandan** yönetir. ADR: `Docs/adr/0003-newsletter-config-redesign.md`. Detay: `Docs/10` Faz 6.5.
+
+## Feature branch (zorunlu)
+
+Bu faz **kendi feature branch'inde**: `feature/f65-newsletter-improvement` (`48-git-phase-branch.mdc`). MVP-0'a ürün geliştirmesi; `main`'de faz kodu yok.
+
+**Stop (İterasyon 2, kod öncesi — İter 1 Docs tamamlandıysa):** [ ] `main` güncel; [ ] `feature/f65-newsletter-improvement` oluşturuldu; [ ] `git push -u origin HEAD`; [ ] Faz 6.4 migration'ları uygulanmış (`alembic current` = head, `news` konsolidasyonu dahil).
+
+## Bu fazın çalışma modeli
+
+- Tek sohbet fazı bitirmez. Her chat: `@63-phase-065-newsletter-improvement` + **「Faz 6.5 — İterasyon M」**.
+- Katman sırası: **ADR+Docs → DB → ai-engine (editör) → ai-engine (bölüm+generator) → API → FE şablon → FE detay** — karıştırma.
+- Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil. Plan moduna geçme — iterasyon blueprint yeterli.
+- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Gate/enrich/score **algoritması değişmez** (Faz 6.3); yalnızca digest üretim katmanı ve konfig modeli değişir.
+
+## Required Context
+
+- ADR-0003 — iki seviyeli serbest model + 3-aşamalı pipeline + global anlık-prompt kararı
+- `digests`/`digest_sections` çıktı modeli korunur; `digest_type` enum → `newsletter_slug`/`newsletter_template_id` (`Docs/02` §4.6–4.7)
+- Editör aday havuzu = `news.processed_items`, `relevance_score*100 >= min_content_score`, tarih aralığı (`Docs/04` §8.4)
+- Mevcut digest üretim kodu: `services/ai_engine/digest_generator.py`, `digest_models.py`, `processed_item_repository.py`, `prompt_renderer.py`, `llm_client.py`
+- Mevcut FE: `apps/web/components/digest/*`, `app/(dashboard)/admin/prompt-templates/page.tsx`, `components/admin/prompt-editor.tsx`
+- Mockup: `Docs/YGIP_screen_reference_mockup.html` (S-DIGEST-DETAIL çekmece + "Yıldız'ı nasıl etkiler?")
+
+## Done Definition
+
+- [ ] `newsletter_templates` + `newsletter_sections` tabloları + `digests.summary`/`newsletter_slug`/`newsletter_template_id` + `digest_sections.newsletter_section_id` migration uygulanmış; `prompt_templates` migrate→drop; 3 eski tip seed'lenmiş
+- [ ] `DigestType` enum kaldırıldı; kod serbest `slug` kullanır
+- [ ] Editör LLM aday havuzu filtreliyor, haberleri bölümlere dağıtıyor, alakasızı eliyor, haftalık özet üretiyor
+- [ ] Her bölüm LLM çağrısı `ai_summary` + `impact_note` + `source_references` üretiyor
+- [ ] `POST /api/v1/newsletter-templates` CRUD (nested section) admin-only + audit; `POST /api/v1/digests/news-impact` authenticated + rate-limit
+- [ ] Admin tek ekrandan serbest bülten + sınırsız bölüm tanımlıyor
+- [ ] Digest detay: haftalık özet + bölüm çekmece kartları (kaynağa git + "Yıldız'ı nasıl etkiler?") render ediyor
+- [ ] `pytest tests/` + `ruff` + `mypy` + `npm run build` yeşil; ADR-0003 + `Docs/` ile kod uyumlu
+
+## Explicit Don'ts
+
+- Cron/bildirim zamanlaması revizyonu (mevcut manuel trigger / Faz 6.1 `digest_update` kalır)
+- Gate/enrich/score rating algoritmasını değiştirme (Faz 6.3 kapsamı)
+- Yeni schema veya haber depolama değişikliği (Faz 6.4 kapsamı)
+- Bülten/bölüm başına ayrı anlık-etki prompt'u (tek global karar — ADR-0003)
+- Anlık etki sonucunu DB'ye kalıcılaştırma (anlık/runtime)
+- Mobil (Faz 7); prompt "Test Et" / versiyon geçmişi (eski S-ADMIN-PROMPT-EDIT özellikleri — kapsam dışı)
+- Production migration onaysız çalıştırma
+
+---
+
+### İterasyon 1 — ADR + Docs Semantik Güncellemesi (6.5.1)
+
+**Hedef:** ADR-0003 kabul; `Docs/01/02/03/04/05/06/07/08/10` + `mimari-kararlar` + `CLAUDE.md` serbest bülten + 3-aşamalı pipeline ile güncel; kod değişikliği yok.
+
+**Teslim çıktısı:**
+- `Docs/adr/0003-newsletter-config-redesign.md`
+- `Docs/mimari-kararlar.md` — [AP-007]/[AI-001] + versiyon 0.4
+- Numaralı Docs güncellemeleri (entity/tablo/endpoint/ekran/pipeline/journey) + `CLAUDE.md` faz tablosu
+
+**Önkoşullar:**
+- [ ] Faz 6.5 taslağı onaylanmış
+- [ ] (Önerilir) Faz 6.4 Docs güncel
+
+**Docs okuma sırası:**
+1. `Docs/adr/0003-newsletter-config-redesign.md` — karar özeti
+2. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.1 — kapsam
+3. `Docs/02_DATABASE_SCHEMA.md` §3, §4.6–4.8 — yeni model semantiği
+4. `Docs/04_BACKEND_SPEC.md` §9.2 — 3-aşamalı pipeline
+5. `45-write-adr.mdc` — ADR formatı (referans)
+
+**Uygulama planı:**
+1. ADR-0003 oluştur — bağlam, karar, reddedilen alternatifler (`Docs/adr/0003-*`)
+2. `mimari-kararlar.md` — [AP-007]/[AI-001] + versiyon geçmişi 0.4
+3. Numaralı Docs dosyalarını docs-map minimum set ile güncelle (01/02/03/04/05/06/07/08/10)
+4. `CLAUDE.md` faz tablosuna 6.5 satırı ekle
+5. Bu `.mdc` dosyasını oluştur
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `Docs/adr/0003-newsletter-config-redesign.md`, `.cursor/rules/63-phase-065-newsletter-improvement.mdc` |
+| Güncelle | `Docs/01`–`08`, `10`, `mimari-kararlar.md`, `CLAUDE.md` |
+| Dokunma | `apps/`, `services/`, `packages/`, `alembic/` (İter 2+) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| 2 seviyeli serbest model | ADR-0003 | Spec-only bu iterasyonda |
+| 3-aşamalı pipeline | `Docs/04` §9.2 | Docs metni güncellendi |
+| `digest_type` enum kaldırma | `Docs/02` §3 | slug semantiği |
+
+**Kalite kapıları:**
+- [ ] Docs tutarlılığı: enum/route/`S-*`/terminoloji çapraz kontrol (`/newsletter-templates`, `news-impact`, S-ADMIN-NEWSLETTERS)
+- [ ] `Docs/10` §6.5.1–6.5.7 ↔ bu `.mdc` iterasyon sayısı uyumlu
+
+**Bu iterasyonda yok:**
+- Migration, model, ai-engine, API, FE
+
+**Risk / dikkat:**
+- İter 1 tamamlandıysa doğrudan İter 2'ye geç — dosyaları tekrar yazma
+
+**Stop:**
+- [ ] ADR-0003 + `Docs/10` Faz 6.5 mevcut
+- [ ] PR/onay → İterasyon 2
+
+---
+
+### İterasyon 2 — DB: Newsletter Config Model + Migration + Seed (6.5.2)
+
+**Hedef:** `newsletter_templates` + `newsletter_sections` oluşur; `digests` (`summary`, `newsletter_template_id`, `newsletter_slug`) + `digest_sections` (`newsletter_section_id`) alter; `DigestType` enum kaldırılır; `prompt_templates` migrate→drop; global anlık-prompt `system_settings`; 3 eski tip seed; migration + model + unit/integration test yeşil.
+
+**Teslim çıktısı:**
+- `packages/shared/models/newsletter_template.py` — `NewsletterTemplate`, `NewsletterSection` + ilişki
+- `packages/shared/models/digest.py`, `digest_section.py` — kolon değişiklikleri; `packages/shared/enums.py` — `DigestType` kaldırma
+- `alembic/versions/013_newsletter_config.py` — `down_revision` mevcut head
+- `fixtures/newsletter_templates.json` — 3 production-grade bülten + bölümler + global anlık-prompt; `scripts/seed.py` yükleme
+- `tests/integration/test_newsletter_config_migration.py`, `tests/unit/test_data_models.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 1 Stop
+- [ ] Feature branch Stop tamam
+- [ ] `alembic current` = head (Faz 6.4 dahil)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.2 — kapsam
+2. `Docs/02_DATABASE_SCHEMA.md` §3, §4.6–4.8 — tablolar, enum, FK, CHECK
+3. `Docs/01_DOMAIN_MODEL.md` §2.6–2.10 — entity alanları
+4. `Docs/adr/0003-newsletter-config-redesign.md` — migrate→drop + denormalize slug
+5. `Docs/08_TESTING_STRATEGY.md` §3.10 — migration + seed test senaryoları
+
+**Uygulama planı:**
+1. `newsletter_template.py` — `NewsletterTemplate` (slug unique, min_content_score CHECK 0–100) + `NewsletterSection` (CASCADE, `uq_newsletter_sections_order`); `packages/shared/models/__init__.py` export
+2. `digest.py` — `digest_type` (enum) kaldır → `newsletter_template_id` (FK SET NULL) + `newsletter_slug` (str) + `summary` (TEXT); `digest_section.py` — `prompt_template_id` → `newsletter_section_id`
+3. `enums.py` — `DigestType` sınıfını kaldır; kullanan importları temizle (model/seed)
+4. `013_newsletter_config.py` — `create_table` ×2; `digests`/`digest_sections` alter; `prompt_templates` satırlarını `newsletter_*`'a taşı (INSERT … SELECT) → tabloyu drop; `system_settings` insert (`newsletter_impact_system_prompt`, `newsletter_impact_user_prompt`); `digest_type_enum` drop
+5. `fixtures/newsletter_templates.json` + `scripts/seed.py` — idempotent yükleme (slug upsert)
+6. `test_newsletter_config_migration.py` — upgrade sonrası tablolar+kolonlar; `prompt_templates` yok; seed bütünlük; `test_data_models.py` güncelle
+7. `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`; `pytest tests/unit/test_data_models.py tests/integration/test_newsletter_config_migration.py -v`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `packages/shared/models/newsletter_template.py`, `alembic/versions/013_newsletter_config.py`, `fixtures/newsletter_templates.json`, `tests/integration/test_newsletter_config_migration.py` |
+| Güncelle | `packages/shared/models/digest.py`, `digest_section.py`, `__init__.py`, `packages/shared/enums.py`, `scripts/seed.py`, `tests/unit/test_data_models.py` |
+| Dokunma | ai-engine (İter 3–4), API (İter 5), FE (İter 6–7) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| 2 tablo + FK/CHECK | `Docs/02` §4.8 | slug unique, score CHECK, sort_order unique |
+| digests slug + summary | `Docs/02` §4.6 | enum→FK+denorm; summary TEXT |
+| prompt_templates emekli | ADR-0003 | INSERT…SELECT → drop |
+| global anlık-prompt | `Docs/02` §4.8 notu | 2 system_settings key |
+
+**Kalite kapıları:**
+- [ ] Migration round-trip yeşil (veya belgelenmiş kısıt)
+- [ ] Integration migration test PG ile yeşil
+- [ ] Seed idempotent (tekrar çalıştırılabilir)
+- [ ] `ruff` + `mypy packages` yeşil
+
+**Bu iterasyonda yok:**
+- ai-engine üretim akışı (İter 3–4); API (İter 5)
+
+**Risk / dikkat:**
+- `DigestType` enum'a bağlı tüm importlar (digest_generator, digest_models, fixtures) — İter 3–4'te düzelir; bu iterasyonda model/seed dışı kod kırılabilir, İter 3 öncesi tam suite beklenmez
+- `digest_sections.prompt_template_id` → `newsletter_section_id` rename: mevcut FK constraint drop/add
+- Production migration **kullanıcı onayı** (`01` yasak listesi)
+
+**Stop:**
+- [ ] `alembic upgrade head`
+- [ ] `pytest tests/integration/test_newsletter_config_migration.py tests/unit/test_data_models.py -v`
+- [ ] `ruff check packages && mypy packages`
+- [ ] PR/onay → İterasyon 3
+
+---
+
+### İterasyon 3 — AI Engine: Editör LLM (Dağıtım + Bülten Özeti) (6.5.3)
+
+**Hedef:** Editör LLM aşaması çalışır — aday havuz (`relevance_score*100 >= min_content_score`, tarih aralığı) seçilir, summary prompt render edilip LLM çağrılır, çıktı `{summary, assignments, dropped}` parse edilir; unit testler yeşil.
+
+**Teslim çıktısı:**
+- `services/ai_engine/editor_selector.py` — aday havuz + editör prompt render + LLM + JSON parse
+- `services/ai_engine/digest_models.py` — `EditorResult`, `SectionAssignment` dataclass; `DIGEST_TYPE_QUERY_CONFIG`/`SECTION_ORDER` kaldırma
+- `tests/unit/ai_engine/test_editor_selector.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 2 Stop (`012` uygulanmış, modeller hazır)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.3 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §9.2 (Aşama 0–1) + §8.4 aday havuz filtresi
+3. `Docs/03_API_CONTRACTS.md` §5 — editör prompt değişkenleri (`{newsletter_name}`, `{sections}`, `{articles}` …)
+4. `services/ai_engine/processed_item_repository.py`, `prompt_renderer.py`, `llm_client.py` (mevcut)
+5. `Docs/08_TESTING_STRATEGY.md` §3.10 — editör test senaryoları
+
+**Uygulama planı:**
+1. `digest_models.py` — `EditorResult(summary, assignments, dropped)`, `SectionAssignment(section, article_ids)`; eski query/order config sil
+2. `editor_selector.py` `select_candidates(newsletter, period)` — `processed_item_repository` ile `relevance_score >= min_content_score/100` + tarih aralığı; `relevance_score DESC`
+3. `editor_selector.py` `run_editor(newsletter, articles)` — `summary_system_prompt`/`summary_user_prompt` render (`prompt_renderer`), `LLMClient.complete()` (operation_type=digest_generation), `parse_editor_response()` JSON parse + fallback (bozuk JSON → tüm haberler ilk bölüme, boş özet uyarısı)
+4. Section eşleme: editör `section` alanı bölüm adı veya index → `newsletter_sections` ile eşleştir; eşleşmeyen atama `dropped`
+5. `test_editor_selector.py` — aday filtre (skor altı eler), dağıtım parse, `dropped` bölüme atanmaz, bozuk JSON fallback, tarih aralığı sınırı
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/ai_engine/editor_selector.py`, `tests/unit/ai_engine/test_editor_selector.py` |
+| Güncelle | `services/ai_engine/digest_models.py`, `fixtures/llm/editor_response.json` (yoksa oluştur) |
+| Dokunma | `digest_generator.py`/`section_generator.py` (İter 4), API (İter 5) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Aday havuz filtresi | `Docs/04` §8.4 | `score*100 >= min_content_score` |
+| Editör prompt değişkenleri | `Docs/03` §5 | render context tam |
+| JSON dağıtım çıktısı | `Docs/04` §9.2 | `{summary, assignments, dropped}` |
+| Bozuk JSON | `Docs/08` §3.10 | fallback deterministik |
+
+**Kalite kapıları:**
+- [ ] Pozitif: filtre + dağıtım + özet parse
+- [ ] Deny: bozuk JSON fallback; skor altı haber elenir
+- [ ] `pytest tests/unit/ai_engine/test_editor_selector.py -v`
+- [ ] AI engine ≥%70 coverage (`04-quality-gates`); `ruff` + `mypy services/ai_engine`
+
+**Bu iterasyonda yok:**
+- Bölüm üretimi + generator orchestrate (İter 4); persist
+
+**Risk / dikkat:**
+- Editör context token limiti — aday havuz büyükse `min_content_score`/limit ile kıs; havuz boşsa erken dönüş (boş digest senaryosu İter 4'te)
+- LLM `article_ids` halüsinasyonu — yalnızca verilen aday id'lerle eşleştir, bilinmeyeni at
+
+**Stop:**
+- [ ] `pytest tests/unit/ai_engine/test_editor_selector.py -v`
+- [ ] `ruff check services/ai_engine && mypy services/ai_engine`
+- [ ] PR/onay → İterasyon 4
+
+---
+
+### İterasyon 4 — AI Engine: Bölüm Üretimi + Generator Wire (6.5.4)
+
+**Hedef:** Editör → bölüm pipeline çalışır; her bölüm LLM çağrısı `ai_summary` + `impact_note` + `source_references` üretir; `digests.summary` + bölümler persist edilir; eski tek-çağrı akışı kaldırılır; unit + e2e yeşil.
+
+**Teslim çıktısı:**
+- `services/ai_engine/section_generator.py` — bölüm başına LLM çağrısı (section + impact prompt → `{ai_summary, impact_note}`)
+- `services/ai_engine/digest_generator.py` — editör → bölüm orchestrate; `summary`/`newsletter_slug`/`newsletter_template_id`/`total_sources_used` persist
+- `tests/unit/ai_engine/test_section_generator.py`, `test_digest_generator.py`, `tests/integration/test_pipeline_e2e.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 3 Stop (editör çalışır)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.4 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §9.2 (Aşama 2–3) — bölüm çağrısı + persist
+3. `Docs/03_API_CONTRACTS.md` §7 — digest detay yanıtı (`summary`, `sections[]` alanları)
+4. `services/ai_engine/digest_generator.py`, `digest_repository.py`, `digest_parser.py` (mevcut)
+5. `Docs/08_TESTING_STRATEGY.md` §3.10 — bölüm + e2e senaryoları
+
+**Uygulama planı:**
+1. `section_generator.py` `generate_section(newsletter_section, articles, ctx)` — `section_system_prompt` + `section_user_prompt` + `impact_prompt` render; `LLMClient.complete()`; çıktı `{ai_summary, impact_note}` parse (`digest_parser` uyarla); `source_references` atanan haberlerden (`processed_item_id` + url + title)
+2. `digest_generator.py` `generate()` — `editor_selector.select_candidates` → `run_editor` → `digests.summary` set; her `newsletter_section` için atanan haberlerle `generate_section`; atama boşsa bölüm atla
+3. Persist — `digest_repository` ile `digests` (summary, newsletter_slug, newsletter_template_id, total_sources_used) + `digest_sections` (section_order = sort_order, newsletter_section_id) tek transaction; status `generating→ready/failed`
+4. Eski tek-çağrı/`SECTION_ORDER`/`DIGEST_TYPE_QUERY_CONFIG` kalıntılarını kaldır
+5. `test_section_generator.py` (atanan haberlerden özet+etki; boş atama atlanır), `test_digest_generator.py` (editör+bölüm mock → summary+sections persist), `test_pipeline_e2e.py` güncelle
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/ai_engine/section_generator.py`, `tests/unit/ai_engine/test_section_generator.py` |
+| Güncelle | `services/ai_engine/digest_generator.py`, `digest_models.py` (gerekirse), `tests/unit/ai_engine/test_digest_generator.py`, `tests/integration/test_pipeline_e2e.py` |
+| Dokunma | API router/service (İter 5), FE (İter 6–7) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Bölüm çağrısı özet+etki | `Docs/04` §9.2 | `{ai_summary, impact_note}` |
+| source_references | `Docs/01` §2.7 | atanan haberlerden |
+| summary persist | `Docs/02` §4.6 | `digests.summary` |
+| Boş atama | `Docs/04` §9.2 | bölüm atlanır |
+
+**Kalite kapıları:**
+- [ ] Pozitif: editör+bölüm → summary + sections persist
+- [ ] Deny: bölüm parse hatası → digest `failed`; boş atama bölümü atlanır
+- [ ] `pytest tests/unit/ai_engine/ tests/integration/test_pipeline_e2e.py -v`
+- [ ] AI engine ≥%70 coverage; `ruff` + `mypy services/ai_engine`
+
+**Bu iterasyonda yok:**
+- API endpoint değişikliği (İter 5); anlık etki endpoint (İter 5)
+
+**Risk / dikkat:**
+- `digest_parser` JSON şeması bölüm çıktısına uyarlanmalı (eski çoklu-section parse'ı tekil bölüme indir)
+- Transaction bütünlüğü — herhangi bölüm fail → tüm digest `failed`, kısmi yayın yok (`Docs/01` Digest lifecycle)
+
+**Stop:**
+- [ ] `pytest tests/unit/ai_engine/ tests/integration/test_pipeline_e2e.py -v`
+- [ ] `ruff check services/ai_engine && mypy services/ai_engine`
+- [ ] PR/onay → İterasyon 5
+
+---
+
+### İterasyon 5 — API: Newsletter CRUD + Digest Gen + Anlık Etki (6.5.5)
+
+**Hedef:** `/api/v1/newsletter-templates` nested-section CRUD (admin-only, audit) çalışır; digest generate `newsletter_template_id` ile tetiklenir, detay `summary` döner; `POST /api/v1/digests/news-impact` (authenticated, rate-limit) anlık analiz döner; integration testler yeşil.
+
+**Teslim çıktısı:**
+- `apps/api/repositories/newsletter_template_repository.py`, `apps/api/services/newsletter_template_service.py`, `apps/api/routers/newsletter_template.py`, `apps/api/schemas/newsletter_template.py`
+- `apps/api/services/digest_service.py`, `routers/digests.py`, `schemas/digest.py` — generate + news-impact + summary
+- Eski `prompt_templates` router/service/schema kaldır; `apps/api/main.py` include güncel
+- `tests/integration/test_newsletter_template_api.py`, `test_digest_endpoints.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 4 Stop (generator çalışır)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.5 — kapsam
+2. `Docs/03_API_CONTRACTS.md` §5 (newsletter CRUD), §7 (generate + news-impact), §12 (yetki matrisi)
+3. `Docs/07_SECURITY_IMPLEMENTATION.md` §6.3 (RBAC) + §6.4 (anlık etki rate-limit 20/dk) + §9 (audit)
+4. `apps/api/routers/prompt_templates.py`, `apps/api/services/prompt_template_resolver.py` (mevcut — kaldırılacak), `apps/api/routers/content_archive.py` (admin router kalıbı)
+5. `Docs/08_TESTING_STRATEGY.md` §3.10 — CRUD + anlık etki test senaryoları
+
+**Uygulama planı:**
+1. `schemas/newsletter_template.py` — `NewsletterSection*`, `NewsletterTemplate*` (create/update/response, nested); `min_content_score` 0–100 validation
+2. `newsletter_template_repository.py` — list/get(+sections)/create/update(sections replace)/delete
+3. `newsletter_template_service.py` — CRUD + duplicate slug 409 + audit (`newsletter_template.created/updated/deleted`); `routers/newsletter_template.py` `require_admin`
+4. `digest_service.py`/`routers/digests.py`/`schemas/digest.py` — generate `newsletter_template_id` (+period opsiyonel, yoksa `date_range_days`); detay/list response `summary`/`newsletter_slug`; `POST /digests/news-impact` (processed_item lookup → global `system_settings` prompt render → `LLMClient.complete()` → `{analysis}`; 404/503; rate-limit 20/dk)
+5. Eski `prompt_templates` router/service/resolver/schema kaldır; `main.py` include güncelle; `digest_service` template resolver → `newsletter_template_repository`
+6. `test_newsletter_template_api.py` (admin CRUD, viewer 403, slug 409, score 422), `test_digest_endpoints.py` (generate 202, news-impact 200/404, viewer news-impact 200)
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/api/repositories/newsletter_template_repository.py`, `services/newsletter_template_service.py`, `routers/newsletter_template.py`, `schemas/newsletter_template.py`, `tests/integration/test_newsletter_template_api.py` |
+| Güncelle | `apps/api/services/digest_service.py`, `routers/digests.py`, `schemas/digest.py`, `main.py`, `tests/integration/test_digest_endpoints.py` |
+| Sil | `apps/api/routers/prompt_templates.py`, `services/prompt_service.py`, `prompt_template_resolver.py`, `schemas/prompt_template.py` (varsa) |
+| Dokunma | FE (İter 6–7) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| `POST/PUT/DELETE /newsletter-templates` admin | `Docs/03` §5, `Docs/07` §6.3 | `require_admin` + audit |
+| slug çakışma 409 / score 422 | `Docs/03` §5 | service validation |
+| `POST /digests/news-impact` auth + 20/dk | `Docs/03` §7, `Docs/07` §6.4 | rate-limit; viewer erişebilir |
+| digest detay summary | `Docs/03` §7 | response alanı |
+
+**Kalite kapıları:**
+- [ ] Admin CRUD + viewer 403; slug 409; score 422
+- [ ] news-impact 200 + bilinmeyen id 404 + rate-limit
+- [ ] `pytest tests/integration/test_newsletter_template_api.py tests/integration/test_digest_endpoints.py -v`
+- [ ] API router ≥%60 coverage; `ruff` + `mypy apps`
+
+**Bu iterasyonda yok:**
+- FE ekranları (İter 6–7)
+
+**Risk / dikkat:**
+- `prompt_templates` kaldırılınca digest_service/orchestrator referansları kırılabilir — `db_observers.py` / pipeline `digest_update` yolu kontrol et
+- news-impact LLM hata yutması — tüm provider fail → 503 (kullanıcıya açık mesaj)
+
+**Stop:**
+- [ ] `pytest tests/integration/test_newsletter_template_api.py tests/integration/test_digest_endpoints.py -v`
+- [ ] `ruff check apps && mypy apps`
+- [ ] PR/onay → İterasyon 6
+
+---
+
+### İterasyon 6 — FE: Bülten Şablonları Tek-Ekran (6.5.6)
+
+**Hedef:** `S-ADMIN-NEWSLETTERS` — bülten listesi + bülten başına tek-ekran editör (bülten alanları + dinamik bölüm editörü ekle/sil/sırala) çalışır; `npm run build` yeşil.
+
+**Teslim çıktısı:**
+- `app/(dashboard)/admin/prompt-templates/page.tsx` (route korunur) — newsletter listesi + editör
+- `components/admin/newsletter-editor.tsx`, `newsletter-section-editor.tsx`
+- `hooks/use-newsletter-templates.ts`, `lib/newsletter-labels.ts`, `types/api.ts` newsletter tipleri, `lib/constants.ts` sidebar etiketi
+
+**Önkoşullar:**
+- [ ] İterasyon 5 Stop (newsletter API hazır)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.6 — kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-NEWSLETTERS (alanlar, dinamik bölüm, değişken yardımı)
+3. `Docs/03_API_CONTRACTS.md` §5 — request/response şekli (nested sections)
+4. `apps/web/components/admin/prompt-editor.tsx`, `app/(dashboard)/admin/prompt-templates/page.tsx` (mevcut — yeniden tasarlanacak)
+5. `.cursor/rules/22-forms.mdc`, `24-components.mdc` — form + admin tablo kalıbı
+
+**Uygulama planı:**
+1. `types/api.ts` — `NewsletterTemplate`, `NewsletterSection`, request/response tipleri (`any` yok)
+2. `hooks/use-newsletter-templates.ts` — list/create/update/delete (React Query; mutation sonrası invalidate)
+3. `newsletter-section-editor.tsx` — dinamik bölüm kartı (ad + section system/user + impact prompt; ekle/sil/sırala)
+4. `newsletter-editor.tsx` — bülten alanları (ad, slug, açıklama, date_range_days, min_content_score, summary system/user prompt, model) + bölüm listesi; kaydet ConfirmDialog
+5. `page.tsx` — newsletter listesi + "Yeni Bülten" + editör aç; `lib/newsletter-labels.ts` TR label; `lib/constants.ts` sidebar "Bülten Şablonları"
+6. `cd apps/web && npm run build`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/web/components/admin/newsletter-editor.tsx`, `newsletter-section-editor.tsx`, `apps/web/hooks/use-newsletter-templates.ts`, `apps/web/lib/newsletter-labels.ts` |
+| Güncelle | `apps/web/app/(dashboard)/admin/prompt-templates/page.tsx`, `apps/web/types/api.ts`, `apps/web/lib/constants.ts` |
+| Sil | `apps/web/components/admin/prompt-editor.tsx` (eski) |
+| Dokunma | Digest detay (İter 7) |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Tek-ekran bülten + bölüm | `Docs/06` S-ADMIN-NEWSLETTERS | bülten alanları + dinamik bölümler |
+| min skor 0–100 | `Docs/06` / `Docs/03` §5 | input validation |
+| nested CRUD | `Docs/03` §5 | sections replace |
+| sidebar etiketi | `Docs/06` §navigasyon | "Bülten Şablonları" |
+
+**Kalite kapıları:**
+- [ ] `npm run build` apps/web yeşil
+- [ ] TypeScript strict — `any` yok
+- [ ] Bölüm ekle/sil/sırala + kaydet akışı çalışır
+
+**Bu iterasyonda yok:**
+- Digest detay çekmece/anlık etki (İter 7); mobil
+- Anlık-etki prompt'u bu ekranda değil (global system setting)
+
+**Risk / dikkat:**
+- slug düzenlemede salt-okunur (benzersizlik); yeni bültende serbest
+- bölüm `sort_order` çakışması — UI sıralamayı normalize etsin
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] PR/onay → İterasyon 7
+
+---
+
+### İterasyon 7 — FE: Digest Detay Özet + Çekmece + Anlık Etki (6.5.7)
+
+**Hedef:** Digest detayında haftalık **Bülten Özeti** bloğu + bölüm **çekmece** haber kartları (kaynağa git + "Yıldız'ı nasıl etkiler?") + anlık etki hook (`POST /digests/news-impact`) çalışır; `npm run build` yeşil. Faz 6.5 Done.
+
+**Teslim çıktısı:**
+- `app/(dashboard)/digests/[id]/page.tsx`, `components/digest/digest-summary.tsx`, `digest-section.tsx` (güncel)
+- `components/digest/news-drawer-card.tsx` — accordion haber kartı + "Kaynağa git" + "★ Yıldız'ı nasıl etkiler?" + inline analiz
+- `hooks/use-news-impact.ts`, `types/api.ts` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 6 Stop (FE şablon ekranı hazır); İter 5 news-impact endpoint
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.7 — kapsam
+2. `Docs/06_SCREEN_CATALOG.md` — S-DIGEST-DETAIL (özet kutusu, çekmece, "Yıldız'ı nasıl etkiler?", state'ler)
+3. `Docs/YGIP_screen_reference_mockup.html` — çekmece + `showYildizAnalysis` davranışı (referans tasarım)
+4. `Docs/03_API_CONTRACTS.md` §7 — digest detay `summary`/`sections`, `news-impact` request/response
+5. `apps/web/components/digest/source-reference-list.tsx`, `digest-section.tsx` (mevcut accordion)
+
+**Uygulama planı:**
+1. `types/api.ts` — digest detay `summary`; `NewsImpactRequest/Response`
+2. `use-news-impact.ts` — `POST /digests/news-impact` mutation; `processed_item_id` key cache; loading/error state
+3. `digest-summary.tsx` — haftalık özet bloğu (ÖZET label, altın border; `digests.summary`)
+4. `news-drawer-card.tsx` — accordion (başlık/kaynak/tarih → body: tam metin + "Kaynağa git ↗" + "★ Yıldız'ı nasıl etkiler?" buton + typing → analiz; toggle cache)
+5. `digest-section.tsx` — bölüm özeti + impact_box (`impact_note`) + `news-drawer-card` listesi (`source_references`); `page.tsx` özet bloğunu en üste yerleştir
+6. `cd apps/web && npm run build`; Faz 6.5 Done Definition + roadmap işareti
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `apps/web/components/digest/digest-summary.tsx`, `news-drawer-card.tsx`, `apps/web/hooks/use-news-impact.ts` |
+| Güncelle | `apps/web/app/(dashboard)/digests/[id]/page.tsx`, `components/digest/digest-section.tsx`, `apps/web/types/api.ts` |
+| Dokunma | Admin şablon ekranı (İter 6 tamam); mobil |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Haftalık özet bloğu | `Docs/06` S-DIGEST-DETAIL | `digests.summary` |
+| Çekmece haber kartı | `Docs/06` / mockup | accordion + kaynağa git |
+| "Yıldız'ı nasıl etkiler?" | `Docs/03` §7 | `news-impact`; toggle cache |
+| impact_box | `Docs/06` | `section.impact_note` null ise gizli |
+
+**Kalite kapıları:**
+- [ ] `npm run build` apps/web yeşil; TypeScript strict
+- [ ] Özet + çekmece + anlık etki (loading/typing/error) state'leri çalışır
+- [ ] Anlık etki ikinci tıkta tekrar LLM çağırmaz (cache)
+
+**Bu iterasyonda yok:**
+- Mobil (Faz 7); yeni endpoint
+
+**Risk / dikkat:**
+- Rate-limit 429 → kullanıcıya "Lütfen biraz bekleyin" (`Docs/06` state)
+- `source_references.url` null → "Kaynağa git" gizle (mockup davranışı)
+
+**Stop:**
+- [ ] `cd apps/web && npm run build`
+- [ ] Faz 6.5 Done Definition tamam; roadmap işareti
+- [ ] PR/onay → Faz 7 veya kullanıcı yönlendirmesi

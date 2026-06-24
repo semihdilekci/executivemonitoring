@@ -62,8 +62,17 @@ class ProcessedItemRepository:
             .limit(limit)
         )
 
+        # Faz 6.4: kaynak ve içerik kategorisi filtreleri OR semantiğiyle uygulanır
+        # (örn. fmcg_weekly: source.category=fmcg VEYA content_category=fmcg).
+        category_predicates = []
         if config.source_category is not None:
-            query = query.where(Source.category == SourceCategory(config.source_category))
+            category_predicates.append(
+                Source.category == SourceCategory(config.source_category)
+            )
+        if config.content_category is not None:
+            category_predicates.append(model.content_category == config.content_category)
+        if category_predicates:
+            query = query.where(or_(*category_predicates))
 
         result = await db.execute(query)
         rows = result.all()

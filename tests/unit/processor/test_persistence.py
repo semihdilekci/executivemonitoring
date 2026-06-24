@@ -108,6 +108,34 @@ async def test_persist_pipeline_output_happy_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_persist_pipeline_output_ignores_legacy_schema_category() -> None:
+    """Faz 6.4: extras'ta eski `market`/`fmcg` schema_category gelse bile `news`'e yazılır."""
+    raw_item_id = uuid.uuid4()
+    item = _sample_input()
+    output = _output_with_chunks(item)
+    output.extras["schema_category"] = "market"  # legacy routing artığı
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=_mock_scalar_result(None))
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+
+    embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
+    result = await persist_pipeline_output(
+        session,  # type: ignore[arg-type]
+        embedding,
+        raw_item_id=raw_item_id,
+        output=output,
+    )
+
+    assert result is not None
+    assert result.schema_category == "news"
+    added = session.add.call_args.args[0]
+    assert isinstance(added, NewsProcessedItem)
+    assert added.schema_category == "news"
+
+
+@pytest.mark.asyncio
 async def test_persist_pipeline_output_sets_content_category() -> None:
     raw_item_id = uuid.uuid4()
     item = _sample_input()

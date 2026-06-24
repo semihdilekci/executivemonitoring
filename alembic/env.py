@@ -23,7 +23,15 @@ target_metadata = Base.metadata
 
 
 def _sync_database_url() -> str:
-    """asyncpg URL'ini Alembic için psycopg2 sync URL'ine çevirir."""
+    """asyncpg URL'ini Alembic için psycopg2 sync URL'ine çevirir.
+
+    Çağıran Config'te `test_database_url` main-option olarak açık bir URL
+    verdiyse (integration migration testleri ygip_test'i hedeflemek için
+    kullanır) o öncelenir; aksi halde `DATABASE_URL` çözülür.
+    """
+    override = config.get_main_option("test_database_url")
+    if override:
+        return async_to_sync_database_url(override)
     load_dotenv_file(override=False)
     url = get_database_url(required=True)
     return async_to_sync_database_url(url)

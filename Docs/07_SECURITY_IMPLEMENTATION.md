@@ -316,15 +316,18 @@ JWT claim'deki rol runtime'da yeterliliği sağlar. Ek cache mekanizması veya D
 | | `POST /sources` | ✅ | ❌ |
 | | `PUT /sources/{id}` | ✅ | ❌ |
 | | `DELETE /sources/{id}` | ✅ | ❌ |
-| **Prompt** | `GET /prompt-templates` | ✅ | ❌ |
-| | `PUT /prompt-templates/{id}` | ✅ | ❌ |
+| **Bülten Şablonu** | `GET /newsletter-templates` | ✅ | ❌ |
+| | `POST /newsletter-templates` | ✅ | ❌ |
+| | `PUT /newsletter-templates/{id}` | ✅ | ❌ |
+| | `DELETE /newsletter-templates/{id}` | ✅ | ❌ |
 | **API Key** | `GET /api-keys` | ✅ | ❌ |
 | | `POST /api-keys` | ✅ | ❌ |
 | | `DELETE /api-keys/{id}` | ✅ | ❌ |
 | | `GET /api-keys/usage` | ✅ | ❌ |
 | **Digest** | `GET /digests` | ✅ | ✅ |
 | | `GET /digests/{id}` | ✅ | ✅ |
-| | `POST /digests/trigger` | ✅ | ❌ |
+| | `POST /digests/generate` | ✅ | ❌ |
+| | `POST /digests/news-impact` | ✅ | ✅ |
 | **Chatbot** | `POST /chatbot/ask` | ✅ | ✅ |
 | | `GET /chatbot/history` | ✅ | ❌ |
 | | `GET /chatbot/history/me` | ✅ | ✅ |
@@ -382,6 +385,7 @@ Redis sliding window counter ile uygulanır. Her istek IP adresi veya User ID ba
 |--------------------|-------|---------|---------|
 | Auth (`/api/v1/auth/*`) | 10 req/dk | IP adresi | Brute force koruması |
 | Chatbot (`/api/v1/chatbot/ask`) | 20 req/dk | User ID | LLM API maliyeti koruması |
+| Anlık etki (`/api/v1/digests/news-impact`) | 20 req/dk | User ID | Runtime LLM maliyeti koruması (Faz 6.5) |
 | Genel (diğer tüm) | 100 req/dk | User ID | Genel koruma |
 | Sağlık (`/health`, `/ready`) | Limitsiz | — | Monitoring erişimi |
 

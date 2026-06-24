@@ -8,13 +8,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from packages.shared.models.content_chunk import ContentChunk
-from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS, ProcessedItem
+from packages.shared.models.processed_item import (
+    PROCESSED_ITEM_MODELS,
+    NewsProcessedItem,
+    ProcessedItem,
+)
 from packages.shared.models.raw_item import RawItem
 from packages.shared.utils.hashing import storage_content_hash
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.processor.embedding_service import EmbeddingService, chunks_from_extras
+from services.processor.keyword_pool import ARTICLE_SCHEMA
 from services.processor.models import ProcessorInput, ProcessorOutput
 
 logger = logging.getLogger("ygip.processor.persistence")
@@ -70,13 +75,6 @@ async def find_processed_item_for_raw_item(
     return None
 
 
-def _resolve_schema_category(output: ProcessorOutput) -> str:
-    schema_raw = output.extras.get("schema_category", "news")
-    if isinstance(schema_raw, str) and schema_raw in PROCESSED_ITEM_MODELS:
-        return schema_raw
-    return "news"
-
-
 async def persist_pipeline_output(
     session: AsyncSession,
     embedding_service: EmbeddingService,
@@ -84,9 +82,13 @@ async def persist_pipeline_output(
     raw_item_id: uuid.UUID,
     output: ProcessorOutput,
 ) -> PersistResult | None:
-    """processed_items + content_chunks tek transaction'da yazar; duplicate → None."""
-    schema_category = _resolve_schema_category(output)
-    model_cls = PROCESSED_ITEM_MODELS[schema_category]
+    """processed_items + content_chunks tek transaction'da yazar; duplicate → None.
+
+    Faz 6.4 (ADR-0002): tüm haber içeriği `news.processed_items`'a yazılır;
+    `schema_category` her zaman `"news"` (eski kategori→schema routing kaldırıldı).
+    """
+    schema_category = ARTICLE_SCHEMA
+    model_cls = NewsProcessedItem
 
     existing = await session.execute(
         select(model_cls.id).where(model_cls.raw_item_id == raw_item_id)

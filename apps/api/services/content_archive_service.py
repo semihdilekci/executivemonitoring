@@ -1,6 +1,6 @@
 """İçerik Arşivi iş mantığı (Faz 6.2) — `Docs/04` §8.8.
 
-Router'ı ince tutar: repository birleşik listesini bülten kullanım batch lookup'ı
+Router'ı ince tutar: repository `news` listesini bülten kullanım batch lookup'ı
 ile birleştirir, `clean_content` içermeyen liste yanıtı üretir.
 """
 
@@ -79,7 +79,7 @@ def _to_details(rows: list[DigestUsageRow]) -> list[DigestUsageDetail]:
 
 
 class ContentArchiveService:
-    """Cross-schema arşiv listeleme servisi."""
+    """Haber arşivi (`news.processed_items`) listeleme servisi (Faz 6.4)."""
 
     def __init__(
         self,

@@ -129,6 +129,9 @@ async def _seed_rag_fixture(
             ),
         ]
     )
+    # Cross-schema FK (public.content_chunks → news.processed_items) — parent processed
+    # item'lar önce flush edilmeli; UoW şema sınırı ötesinde sıra garanti etmez (Faz 6.4).
+    await session.flush()
     session.add_all(
         [
             ContentChunk(

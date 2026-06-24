@@ -1,8 +1,11 @@
-"""İçerik Arşivi cross-schema veri erişimi (Faz 6.2) — `Docs/04` §8.8.
+"""İçerik Arşivi veri erişimi (Faz 6.2; Faz 6.4 konsolidasyon) — `Docs/04` §8.8.
 
-5 domain schema (`news`/`market`/`geo`/`transport`/`fmcg`) `processed_items`
-tablolarını `UNION ALL` ile birleştirir; cursor pagination `{schema}:{uuid}`.
-Liste yanıtında `clean_content` yer almaz (performans + detay endpoint ayrımı).
+Faz 6.4 (ADR-0002): tüm haber içeriği `news.processed_items`'da. Liste varsayılanı
+yalnızca `news` sorgular — eski cross-schema `UNION ALL` kaldırıldı. `schema_category`
+filtresi verilirse yalnızca o schema sorgulanır; rezerve schema'lar
+(`market`/`geo`/`transport`/`fmcg`) MVP-0'da boş olduğundan sonuç boş döner.
+Cursor pagination `{schema}:{uuid}`. Liste yanıtında `clean_content` yer almaz
+(performans + detay endpoint ayrımı).
 """
 
 from __future__ import annotations
@@ -17,8 +20,11 @@ from packages.shared.models.digest_section import DigestSection
 from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS, ProcessedItem
 from packages.shared.models.raw_item import RawItem
 from packages.shared.models.source import Source
-from sqlalchemy import Select, String, and_, cast, func, literal, or_, select, union_all
+from sqlalchemy import Select, String, and_, cast, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Faz 6.4 (ADR-0002): haber depolama tek schema. Liste varsayılanı bu schema'dır.
+ARTICLE_SCHEMA = "news"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,12 +77,18 @@ def _sort_expression(model: type[ProcessedItem], sort_by: str) -> Any:
 
 
 class ProcessedItemRepository:
-    """5 schema processed_items birleşik sorgu + cursor pagination."""
+    """`news.processed_items` tekil sorgu + cursor pagination (Faz 6.4)."""
 
     def _target_schemas(self, schema_category: str | None) -> list[str]:
-        if schema_category is not None:
-            return [schema_category] if schema_category in PROCESSED_ITEM_MODELS else []
-        return list(PROCESSED_ITEM_MODELS)
+        """Sorgulanacak schema — Faz 6.4 sonrası varsayılan tek `news`.
+
+        Filtre verilmezse yalnızca `news` (haber arşivi). Verilirse o schema
+        sorgulanır; rezerve schema'lar boş tablo → boş sonuç. Bilinmeyen değer →
+        boş liste (router enum doğrulaması zaten 422 üretir).
+        """
+        if schema_category is None:
+            return [ARTICLE_SCHEMA]
+        return [schema_category] if schema_category in PROCESSED_ITEM_MODELS else []
 
     def _build_schema_select(
         self,
@@ -196,6 +208,9 @@ class ProcessedItemRepository:
         if not schemas:
             return [], None, False
 
+        # Faz 6.4: tek schema sorgulanır (varsayılan `news`); UNION yok.
+        target_schema = schemas[0]
+
         cursor_sort_value: Any = None
         cursor_id: uuid.UUID | None = None
         if cursor is not None:
@@ -206,23 +221,15 @@ class ProcessedItemRepository:
             if cursor_sort_value is None:
                 cursor_id = None  # cursor satırı yok → filtre uygulanmaz
 
-        subqueries = [
-            self._build_schema_select(
-                schema,
-                PROCESSED_ITEM_MODELS[schema],
-                filters,
-                sort_by=resolved_sort,
-                sort_dir=resolved_dir,
-                cursor_sort_value=cursor_sort_value,
-                cursor_id=cursor_id,
-            )
-            for schema in schemas
-        ]
-
-        if len(subqueries) == 1:
-            combined = subqueries[0].subquery()
-        else:
-            combined = union_all(*subqueries).subquery()
+        combined = self._build_schema_select(
+            target_schema,
+            PROCESSED_ITEM_MODELS[target_schema],
+            filters,
+            sort_by=resolved_sort,
+            sort_dir=resolved_dir,
+            cursor_sort_value=cursor_sort_value,
+            cursor_id=cursor_id,
+        ).subquery()
 
         order_cols = (
             (combined.c.sort_key.asc(), combined.c.id.asc())

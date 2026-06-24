@@ -34,6 +34,8 @@ class ApiKey(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     provider: Mapped[ApiProvider] = mapped_column(api_provider_enum, nullable=False)
     key_alias: Mapped[str] = mapped_column(String(100), nullable=False)
     encrypted_key: Mapped[str] = mapped_column(Text, nullable=False)
+    # Bu anahtarla kullanılacak LLM modeli; eski kayıtlarda NULL (factory fallback).
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     priority_order: Mapped[int] = mapped_column(Integer, nullable=False)
 

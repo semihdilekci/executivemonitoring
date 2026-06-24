@@ -999,5 +999,50 @@
     "status": "active",
     "category": "strategy",
     "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000064-0000-4000-8000-000000000064",
+    "name": "Supply Chain Dive",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.supplychaindive.com/feeds/news/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000065-0000-4000-8000-000000000065",
+    "name": "C-Store Dive",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.cstoredive.com/feeds/news/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000066-0000-4000-8000-000000000066",
+    "name": "Manufacturing Dive",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.manufacturingdive.com/feeds/news/",
+      "language": "en",
+      "ingest_mode": "all",
+      "default_category": "fmcg"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "fmcg",
+    "target_phase": "mvp-0"
   }
 ]

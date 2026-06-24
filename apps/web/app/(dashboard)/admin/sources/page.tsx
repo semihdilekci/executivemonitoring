@@ -163,6 +163,23 @@ export default function AdminSourcesPage() {
     statusFilter === "all" &&
     debouncedSearch === "";
 
+  const sourceCountLabel = useMemo(() => {
+    const count = filteredSources.length;
+    if (count === 0) return null;
+    if (sourcesQuery.hasNextPage) {
+      return `${count} kaynak gösteriliyor`;
+    }
+    if (debouncedSearch && count !== allSources.length) {
+      return `${count} / ${allSources.length} kaynak`;
+    }
+    return `Toplam ${count} kaynak`;
+  }, [
+    allSources.length,
+    debouncedSearch,
+    filteredSources.length,
+    sourcesQuery.hasNextPage,
+  ]);
+
   return (
     <RoleGate>
       <div className="space-y-6">
@@ -230,6 +247,12 @@ export default function AdminSourcesPage() {
             </select>
           </div>
         </div>
+
+        {!sourcesQuery.isLoading && !sourcesQuery.isError && sourceCountLabel ? (
+          <p className="text-sm text-gray-600" aria-live="polite">
+            {sourceCountLabel}
+          </p>
+        ) : null}
 
         {sourcesQuery.isLoading ? <SourceTableSkeleton /> : null}
 

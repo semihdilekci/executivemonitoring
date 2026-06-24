@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from packages.shared.models.content_chunk import ContentChunk
-from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS, ProcessedItem
+from packages.shared.models.processed_item import NewsProcessedItem, ProcessedItem
 from packages.shared.models.raw_item import RawItem
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,16 +49,15 @@ class ContentChunkRepository:
         processed_by_id = await _load_processed_items(db, item_ids)
         urls_by_raw_id = await _load_raw_item_urls(
             db,
-            {item.raw_item_id for item, _schema in processed_by_id.values()},
+            {item.raw_item_id for item in processed_by_id.values()},
         )
 
         ranked: list[ChunkSearchResult] = []
         for chunk in candidates:
-            resolved = processed_by_id.get(chunk.processed_item_id)
-            if resolved is None:
+            item = processed_by_id.get(chunk.processed_item_id)
+            if item is None:
                 continue
 
-            item, _schema = resolved
             similarity = cosine_similarity(query_embedding, chunk.embedding)
             if similarity < threshold:
                 continue
@@ -83,21 +82,19 @@ class ContentChunkRepository:
 async def _load_processed_items(
     db: AsyncSession,
     item_ids: set[uuid.UUID],
-) -> dict[uuid.UUID, tuple[ProcessedItem, str]]:
-    """Tüm schema'larda processed_item arar."""
+) -> dict[uuid.UUID, ProcessedItem]:
+    """`news.processed_items`'da processed_item arar (Faz 6.4: tek schema).
+
+    Konsolidasyon sonrası tüm haber içeriği `news`'te; eski cross-schema tarama
+    kaldırıldı.
+    """
     if not item_ids:
         return {}
 
-    found: dict[uuid.UUID, tuple[ProcessedItem, str]] = {}
-    remaining = set(item_ids)
-    for schema, model_cls in PROCESSED_ITEM_MODELS.items():
-        if not remaining:
-            break
-        result = await db.execute(select(model_cls).where(model_cls.id.in_(remaining)))
-        for row in result.scalars():
-            found[row.id] = (row, schema)
-        remaining -= found.keys()
-    return found
+    result = await db.execute(
+        select(NewsProcessedItem).where(NewsProcessedItem.id.in_(item_ids))
+    )
+    return {row.id: row for row in result.scalars()}
 
 
 async def _load_raw_item_urls(

@@ -90,6 +90,7 @@ Mesajda **「Faz N — İterasyon M」** belirt. Kod öncesi `48-git-phase-branc
 | 6.2 | İçerik Arşivi (admin) | `@60-phase-062-content-archive` |
 | 6.3 | Keyword Takibi & rating-tabanlı skorlama | `@61-phase-063-keyword-tracking` |
 | 6.4 | Haber schema konsolidasyonu | `@62-phase-064-news-schema-consolidation` |
+| 6.5 | Bülten iyileştirme (editör pipeline + serbest bülten) | `@63-phase-065-newsletter-improvement` |
 | 7 | Mobil | `@57-phase-07-mobile` |
 | 8 | Pipeline runtime (Lambda deploy) | `@58-phase-08-pipeline-runtime` |
 

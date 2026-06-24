@@ -376,18 +376,15 @@ Kaynak durumunu değiştirir (active/inactive). Error state'ten çıkmak için d
 
 ---
 
-## 5. Prompt Template Endpoint'leri
+## 5. Bülten Şablonu (Newsletter Template) Endpoint'leri
 
-### GET /api/v1/prompt-templates _(Admin only)_
+> **Faz 6.5:** Eski `/prompt-templates` endpoint'leri kaldırıldı. İki seviyeli serbest model (`newsletter_templates` + nested `newsletter_sections`). Tümü **Admin only**; state değişiminde audit (`newsletter_template.created/updated/deleted`). Şablon production'a almak kullanıcı onayı gerektirir.
 
-Tüm prompt şablonlarını listeler.
+### GET /api/v1/newsletter-templates _(Admin only)_
 
-**Query parametreleri:**
+Tüm bültenleri listeler (bölümler dahil). Sayı sınırlı → pagination yok.
 
-| Parametre | Tip | Zorunlu | Açıklama |
-|-----------|-----|---------|----------|
-| `digest_type` | string | Hayır | Bülten tipi filtresi |
-| `is_active` | boolean | Hayır | Aktiflik filtresi |
+**Query:** `is_active` (boolean, opsiyonel).
 
 **Response (200):**
 ```json
@@ -395,14 +392,26 @@ Tüm prompt şablonlarını listeler.
   "data": [
     {
       "id": "aa0e8400-...",
-      "name": "FMCG Haftalık — Global Trendler",
-      "digest_type": "fmcg_weekly",
-      "section_key": "global_trends",
-      "system_prompt": "Sen bir FMCG analisti...",
-      "user_prompt_template": "Aşağıdaki haberleri analiz et:\n{context}\n\nTürkçe özet yaz.",
+      "slug": "fmcg_weekly",
+      "name": "FMCG Haftalık",
+      "description": "Yıldız Holding ve FMCG sektörüyle ilgili haftalık bülten.",
+      "date_range_days": 7,
+      "summary_system_prompt": "Sen Yıldız Holding CEO'su gibi düşünen bir editörsün...",
+      "summary_user_prompt": "Bülten: {newsletter_name}\nAçıklama: {newsletter_description}\nBölümler: {sections}\nHaberler:\n{articles}\n\nUygun haberleri bölümlere dağıt, alakasızı ele, haftalık özet yaz.",
+      "min_content_score": 50,
       "model_preference": null,
       "is_active": true,
-      "version": 3,
+      "sections": [
+        {
+          "id": "bb1f9500-...",
+          "name": "Yıldız ve Rakipleri",
+          "sort_order": 1,
+          "section_system_prompt": "Sen bir FMCG analistisin...",
+          "section_user_prompt": "Bölüm: {section_name}\nHaberler:\n{articles}\n\nÖzet yaz.",
+          "impact_prompt": "Bu haberlerin Yıldız Holding ve firmaları için etkisini analiz et.",
+          "is_active": true
+        }
+      ],
       "created_at": "2026-06-01T10:00:00Z",
       "updated_at": "2026-06-10T14:30:00Z"
     }
@@ -410,35 +419,42 @@ Tüm prompt şablonlarını listeler.
 }
 ```
 
-Prompt template sayısı sınırlı olduğundan pagination uygulanmaz; tümü döner.
+**Prompt değişkenleri:** Editör (summary) prompt'u → `{newsletter_name}`, `{newsletter_description}`, `{date_range}`, `{sections}`, `{articles}`. Bölüm prompt'u → `{section_name}`, `{newsletter_name}`, `{date_range}`, `{articles}`.
 
-### POST /api/v1/prompt-templates _(Admin only)_
+### POST /api/v1/newsletter-templates _(Admin only)_
 
-Yeni prompt şablonu oluşturur.
+Yeni bülten oluşturur (bölümler nested). **Response (201):** oluşturulan obje.
 
-**Request:**
+**Request (özet):**
 ```json
 {
-  "name": "Strateji Haftalık — Teknoloji Trendleri",
-  "digest_type": "strategy_weekly",
-  "section_key": "tech_trends",
-  "system_prompt": "Sen bir strateji danışmanısın...",
-  "user_prompt_template": "Aşağıdaki kaynakları değerlendir:\n{context}",
-  "model_preference": "gemini"
+  "slug": "tech_weekly",
+  "name": "Teknoloji Haftalık",
+  "description": "...",
+  "date_range_days": 7,
+  "summary_system_prompt": "...",
+  "summary_user_prompt": "...",
+  "min_content_score": 50,
+  "model_preference": "gemini",
+  "sections": [
+    { "name": "Yapay Zekâ", "sort_order": 1, "section_system_prompt": "...", "section_user_prompt": "...", "impact_prompt": "..." }
+  ]
 }
 ```
 
-**Response (201):** Oluşturulan template objesi (`version: 1`).
+**Hata kodları:** `slug` çakışması → 409 `NEWSLETTER_SLUG_EXISTS`; `min_content_score` 0–100 dışı veya boş bölüm listesi → 422.
 
-### PUT /api/v1/prompt-templates/{template_id} _(Admin only)_
+### GET /api/v1/newsletter-templates/{id} _(Admin only)_
 
-Şablon güncelleme. `version` alanı otomatik artırılır. Önceki versiyon korunmaz — güncel versiyonun üzerine yazılır.
+Tek bülten detayı (bölümler dahil).
 
-Audit log'a `prompt_template.updated` yazılır.
+### PUT /api/v1/newsletter-templates/{id} _(Admin only)_
 
-### GET /api/v1/prompt-templates/{template_id} _(Admin only)_
+Bülten + bölümleri günceller. Bölümler **replace** semantiği ile gönderilir (mevcut bölümler `id` ile eşleşir; eksikler silinir/deaktive, yeniler eklenir). Audit `newsletter_template.updated`.
 
-Tek şablon detayı.
+### DELETE /api/v1/newsletter-templates/{id} _(Admin only)_
+
+Bülteni siler. Bölümler CASCADE; geçmiş digest'ler `newsletter_slug` ile korunur (`newsletter_template_id` SET NULL). Audit `newsletter_template.deleted`.
 
 ---
 
@@ -550,7 +566,7 @@ Bülten listesi. Kronolojik sıralama (en yeni önce).
 |-----------|-----|---------|----------|
 | `cursor` | string | Hayır | Pagination cursor |
 | `limit` | integer | Hayır | Sayfa boyutu (varsayılan: 10, max: 50) |
-| `digest_type` | string | Hayır | Bülten tipi filtresi |
+| `newsletter_slug` | string | Hayır | Bülten tipi (slug) filtresi |
 | `status` | string | Hayır | Durum filtresi (varsayılan: `ready` — viewer yalnızca `ready` bültenleri görür) |
 
 Viewer rolü yalnızca `status = ready` bültenleri görebilir. Admin tüm durumları görebilir.
@@ -561,7 +577,7 @@ Viewer rolü yalnızca `status = ready` bültenleri görebilir. Admin tüm durum
   "data": [
     {
       "id": "cc0e8400-...",
-      "digest_type": "fmcg_weekly",
+      "newsletter_slug": "fmcg_weekly",
       "title": "FMCG Haftalık Bülten — 9-15 Haziran 2026",
       "status": "ready",
       "period_start": "2026-06-09",
@@ -580,14 +596,15 @@ Viewer rolü yalnızca `status = ready` bültenleri görebilir. Admin tüm durum
 
 ### GET /api/v1/digests/{digest_id} _(Admin + Viewer)_
 
-Bülten detayı. Section'ları dahil eder.
+Bülten detayı. Haftalık `summary` + section'ları dahil eder.
 
 **Response (200):**
 ```json
 {
   "id": "cc0e8400-...",
-  "digest_type": "fmcg_weekly",
+  "newsletter_slug": "fmcg_weekly",
   "title": "FMCG Haftalık Bülten — 9-15 Haziran 2026",
+  "summary": "Bu hafta kakao fiyatlarındaki düşüş, AB ambalaj direktifi ve Mondelez yeniden yapılanması öne çıktı...",
   "status": "ready",
   "period_start": "2026-06-09",
   "period_end": "2026-06-15",
@@ -598,7 +615,7 @@ Bülten detayı. Section'ları dahil eder.
     {
       "id": "ee0e8400-...",
       "section_order": 1,
-      "section_title": "Global FMCG Trendleri",
+      "section_title": "Yıldız ve Rakipleri",
       "ai_summary": "Bu hafta global gıda sektöründe...",
       "impact_note": "Yıldız Holding'in bisküvi kategorisinde...",
       "source_references": [
@@ -613,16 +630,16 @@ Bülten detayı. Section'ları dahil eder.
 }
 ```
 
-Viewer `status != ready` olan bültene erişmeye çalışırsa 404 döner (bülten "yok" gibi davranılır, 403 dönmez).
+`summary` = haftalık **Bülten Özeti** (editör LLM); en tepede gösterilir. Viewer `status != ready` bültene erişirse 404 döner (403 değil).
 
 ### POST /api/v1/digests/generate _(Admin only)_
 
-Manuel bülten üretimi tetikler. Cron dışında ad-hoc üretim için kullanılır.
+Manuel bülten üretimi tetikler (3-aşamalı editör pipeline). `period_*` verilmezse `newsletter_templates.date_range_days`'ten hesaplanır.
 
 **Request:**
 ```json
 {
-  "digest_type": "fmcg_weekly",
+  "newsletter_template_id": "aa0e8400-...",
   "period_start": "2026-06-09",
   "period_end": "2026-06-15"
 }
@@ -638,6 +655,22 @@ Manuel bülten üretimi tetikler. Cron dışında ad-hoc üretim için kullanıl
 ```
 
 İşlem asenkron çalışır; sonuç `GET /api/v1/digests/{id}` ile sorgulanır.
+
+### POST /api/v1/digests/news-impact _(Admin + Viewer)_
+
+Haber çekmecesindeki "Yıldız'ı nasıl etkiler?" butonunun anlık analizi. Tek haber **global** prompt ile LLM'e gönderilir; sonuç **kalıcılaştırılmaz**. Rate-limit: 20 req/dk (kullanıcı bazlı, `Docs/07` §9).
+
+**Request:**
+```json
+{ "processed_item_id": "ff0e8400-..." }
+```
+
+**Response (200):**
+```json
+{ "analysis": "Mondelez'in yeniden yapılanması Yıldız için fırsat: Türkiye tesisinin düşük maliyeti..." }
+```
+
+**Hata:** `processed_item` bulunamazsa 404; tüm LLM provider'lar başarısızsa 503 `AI_PROVIDERS_UNAVAILABLE`.
 
 ### GET /api/v1/briefs/today _(Admin + Viewer)_
 
@@ -1333,10 +1366,11 @@ Tüm endpoint'lerin rol bazlı erişim tablosu. ✅ = erişim var, ❌ = erişim
 | `/sources/{id}` | PUT | ✅ | ❌ | Evet |
 | `/sources/{id}` | DELETE | ✅ | ❌ | Evet |
 | `/sources/{id}/status` | PATCH | ✅ | ❌ | Evet |
-| `/prompt-templates` | GET | ✅ | ❌ | Evet |
-| `/prompt-templates` | POST | ✅ | ❌ | Evet |
-| `/prompt-templates/{id}` | GET | ✅ | ❌ | Evet |
-| `/prompt-templates/{id}` | PUT | ✅ | ❌ | Evet |
+| `/newsletter-templates` | GET | ✅ | ❌ | Evet |
+| `/newsletter-templates` | POST | ✅ | ❌ | Evet |
+| `/newsletter-templates/{id}` | GET | ✅ | ❌ | Evet |
+| `/newsletter-templates/{id}` | PUT | ✅ | ❌ | Evet |
+| `/newsletter-templates/{id}` | DELETE | ✅ | ❌ | Evet |
 | `/api-keys` | GET | ✅ | ❌ | Evet |
 | `/api-keys` | POST | ✅ | ❌ | Evet |
 | `/api-keys/{id}` | DELETE | ✅ | ❌ | Evet |
@@ -1345,6 +1379,7 @@ Tüm endpoint'lerin rol bazlı erişim tablosu. ✅ = erişim var, ❌ = erişim
 | `/digests` | GET | ✅ | ✅ | Evet |
 | `/digests/{id}` | GET | ✅ | ✅ | Evet |
 | `/digests/generate` | POST | ✅ | ❌ | Evet |
+| `/digests/news-impact` | POST | ✅ | ✅ | Evet |
 | `/chat` | POST | ✅ | ✅ | Evet |
 | `/chat/history` | GET | ✅ | ❌ | Evet |
 | `/notifications/preferences` | GET | ✅ | ❌ | Evet |
@@ -1596,6 +1631,7 @@ Redis sliding window counter ile uygulanır. Limit aşıldığında 429 döner.
 | Auth (login) | 10 req/dk | Per IP | Brute-force koruması |
 | Auth (refresh) | 20 req/dk | Per IP | Token refresh flood koruması |
 | Chatbot | 20 req/dk | Per user | LLM API maliyetini kontrol altında tutma |
+| Anlık Yıldız etki | 20 req/dk | Per user | `POST /digests/news-impact` — runtime LLM maliyetini sınırlama |
 | Password reset | 3 req/saat | Per IP | Reset link flood koruması |
 | Pipeline trigger | 5 req/dk | Per user | `POST /pipeline/runs` — maliyetli orkestrasyonu sınırlama (eşzamanlılık guard'a ek) |
 

@@ -1,6 +1,6 @@
 # YıldızHolding Global Intelligence Platform — Mimari Kararlar Dokümanı
 
-> **Versiyon:** 0.2
+> **Versiyon:** 0.4
 > **Son güncelleme:** 2026-06-17
 > **Durum:** İlk taslak — tüm MVP-0 kararları kapandı, 8 açık karar §18'de bekliyor.
 > **Amaç:** Bu doküman `.md` ve `.mdc` dosyalarının tamamının referans alacağı tek doğruluk kaynağıdır. Tüm mimari ve iş kuralı kararları buraya işlenir.
@@ -135,7 +135,7 @@
 **Karar [AP-001]:** Admin paneli aşağıdaki sayfaları içerir; tüm sayfalar yalnızca `admin` rolüne görünür:
 1. **Kullanıcı Yönetimi** — kullanıcı oluştur/düzenle/pasif yap, rol ata.
 2. **Kaynak Yönetimi** — RSS URL'leri, API endpoint'leri, e-posta newsletter göndericileri ekle/çıkart/aktif-pasif yap.
-3. **Prompt Şablon Yönetimi** — her bülten bölümü için AI prompt şablonlarını düzenle.
+3. **Bülten Şablonu Yönetimi** — serbest bülten + sınırsız bölüm + tüm prompt'lar tek ekrandan ([AP-007]).
 4. **API Yönetimi** — LLM API key'leri (Gemini, Groq) ekle/çıkart; token bazlı kullanım grafiği (günlük/haftalık/aylık, key bazında kırılım). [X-TS-005]
 5. **Bildirim Yönetimi** — mail alıcı listesi, bildirim zamanlaması, JWT parametre ayarları. [X-SEC-002]
 6. **Sohbet Geçmişi** — kullanıcı bazlı chatbot soru/yanıt kayıtları; kim, ne zaman, ne sordu, ne yanıt aldı. [X-AP-005]
@@ -154,6 +154,8 @@
 **Karar [AP-004]:** API Yönetimi sayfasında LLM API key'leri yönetilir. Token tükenmesi veya kota hatası durumunda sistem sıradaki aktif key'e geçer (round-robin fallback). Kullanım metrikleri `api_usage_logs` tablosunda saklanır; grafikler bu tablodan üretilir. [X-TS-005]
 
 **Karar [AP-005]:** Chatbot sohbet geçmişi `chat_history` tablosunda saklanır: `id`, `user_id`, `question`, `answer`, `sources` (JSON — RAG kaynak referansları), `token_used`, `created_at`. Admin panelinde filtrelenebilir liste olarak görüntülenir. [X-AUD-001]
+
+**Karar [AP-007] (Faz 6.5):** Bülten konfigürasyonu **iki seviyeli serbest modele** taşınır (`newsletter_templates` + `newsletter_sections`); düz `prompt_templates` emekliye ayrılır. Bülten tipi serbest `slug` (enum kaldırılır). Üretim **3 aşamalı**: editör LLM (min skor üstü haberleri bölümlere dağıtır, eler, haftalık özet üretir) → bölüm LLM (özet + Yıldız etki) → anlık etki ("Yıldız'ı nasıl etkiler?" runtime, tek global prompt). Detay: ADR-0003. [AI-001]
 
 ---
 
@@ -373,6 +375,7 @@ Detay: `Docs/04_BACKEND_SPEC.md` §8.3–8.4; `Docs/10_IMPLEMENTATION_ROADMAP.md
 | 0.1 | 2026-06-11 | İlk taslak. P-001..007, S-001..006, A-001..003, AUTH-001..003, R-001..002, AP-001..005, SEC-001..007, AUD-001..003, I-001..005, N-001..006, TS-001..013, INF-001..007, TEST-001..003, CODE-001..005 kararları alındı. §6, §7, §8 kapsam dışı bırakıldı. 8 açık karar §18'de bekliyor. |
 | 0.2 | 2026-06-17 | AP-002 güncellendi; AP-006 eklendi — rol bazlı navigasyon (viewer: PillNav, admin: sidebar). `/digests` bülten listesi route'u. |
 | 0.3 | 2026-06-22 | [DB-001] haber schema konsolidasyonu; [TS-002] güncellendi. ADR-0002. Faz 6.4. |
+| 0.4 | 2026-06-24 | [AP-007] / [AI-001] serbest bülten konfigürasyonu + 3-aşamalı editör pipeline; AP-001 #3 güncellendi. ADR-0003. Faz 6.5. |
 
 ---
 

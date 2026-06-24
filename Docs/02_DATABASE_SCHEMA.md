@@ -43,7 +43,7 @@ PostgreSQL schema'ları **veri tipine** göre ayrılır (haber makalesi vs. yap�
 
 **Faz 6.4 kararı (ADR-0002):** MVP-0'da processor **yalnızca** `news.processed_items`'a yazar. `content_category` (6 keyword kategorisi) depolama ayrımı değildir — filtreleme ve bülten seçimi için kullanılır. Eski `market`/`fmcg`/`geo` schema'larındaki haber satırları migration ile `news`'e taşınır.
 
-**Yeni veri tipi kuralı:** Yeni entity shape → yeni schema + yeni tablo(lar). Yeni bülten → `digest_type` + sorgu filtresi; haber için ayrı schema açılmaz.
+**Yeni veri tipi kuralı:** Yeni entity shape → yeni schema + yeni tablo(lar). Yeni bülten → admin panelinden `newsletter_templates` kaydı (serbest `slug` + bölümler, Faz 6.5); haber için ayrı schema açılmaz, kod değişmez.
 
 Schema oluşturma migration'ın ilk adımıdır (rezerve schema'lar boş kalabilir):
 
@@ -67,7 +67,6 @@ CREATE TYPE source_type_enum AS ENUM ('rss', 'email', 'rest_api', 'websocket', '
 CREATE TYPE source_status_enum AS ENUM ('active', 'inactive', 'error');
 CREATE TYPE source_category_enum AS ENUM ('turkish_media', 'fmcg', 'strategy', 'official', 'market', 'geo', 'transport');
 CREATE TYPE raw_item_status_enum AS ENUM ('pending', 'processing', 'processed', 'failed');
-CREATE TYPE digest_type_enum AS ENUM ('turkish_media_weekly', 'fmcg_weekly', 'strategy_weekly');
 CREATE TYPE digest_status_enum AS ENUM ('generating', 'ready', 'failed');
 CREATE TYPE api_provider_enum AS ENUM ('groq', 'gemini');
 CREATE TYPE pipeline_run_type_enum AS ENUM ('collect_pipeline', 'digest_update');
@@ -78,6 +77,8 @@ CREATE TYPE keyword_category_enum AS ENUM ('macro', 'finance', 'fmcg', 'strategy
 ```
 
 > `keyword_category_enum` değerleri `processed_items.content_category` ile **birebir aynıdır** (enricher kategori anahtarları, `Docs/04` §8.4). Source-seviyesi `source_category_enum`'dan farklıdır; ikisi karıştırılmaz.
+
+> **`digest_type_enum` kaldırıldı (Faz 6.5):** Bülten tipi artık serbest `slug` (string). Bülten kimliği `newsletter_templates.slug` ile taşınır; `digests` tablosu `newsletter_template_id` (FK) + denormalize `newsletter_slug` kolonu kullanır. ADR-0003.
 
 ---
 
@@ -226,7 +227,7 @@ CREATE INDEX idx_{schema}_processed_items_content_category ON {schema}.processed
 ```sql
 CREATE TABLE content_chunks (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    processed_item_id   UUID NOT NULL,
+    processed_item_id   UUID NOT NULL REFERENCES news.processed_items(id) ON DELETE CASCADE,
     chunk_index         INTEGER NOT NULL,
     chunk_text          TEXT NOT NULL,
     token_count         INTEGER NOT NULL,
@@ -239,7 +240,7 @@ CREATE TABLE content_chunks (
 CREATE INDEX idx_content_chunks_processed_item_id ON content_chunks (processed_item_id);
 ```
 
-**FK notu (Faz 6.4 sonrası):** `processed_item_id` → `news.processed_items(id)` native FK eklenebilir (Faz 6.4 İter 6). Migration öncesi çoklu schema nedeniyle FK yoktu; Faz 6.4 haber konsolidasyonu bunu kapatır.
+**FK notu (Faz 6.4 İter 6):** `processed_item_id` → `news.processed_items(id)` native FK (`fk_content_chunks_processed_item_id`, `ON DELETE CASCADE`) `010_content_chunks_fk` migration ile **eklendi**. Migration öncesi çoklu schema partition nedeniyle FK yoktu; haber konsolidasyonu (`009`) tüm chunk'ları `news`'e bağladığından bütünlük kapısı kapatıldı.
 
 **pgvector index:** Aşağıda §10'da detaylandırılmıştır.
 
@@ -250,8 +251,10 @@ CREATE INDEX idx_content_chunks_processed_item_id ON content_chunks (processed_i
 ```sql
 CREATE TABLE digests (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    digest_type           digest_type_enum NOT NULL,
+    newsletter_template_id UUID REFERENCES newsletter_templates(id) ON DELETE SET NULL,
+    newsletter_slug       VARCHAR(100) NOT NULL,
     title                 VARCHAR(500) NOT NULL,
+    summary               TEXT,
     status                digest_status_enum NOT NULL DEFAULT 'generating',
     period_start          DATE NOT NULL,
     period_end            DATE NOT NULL,
@@ -263,53 +266,77 @@ CREATE TABLE digests (
     completed_at          TIMESTAMPTZ
 );
 
-CREATE INDEX idx_digests_digest_type ON digests (digest_type);
+CREATE INDEX idx_digests_newsletter_slug ON digests (newsletter_slug);
 CREATE INDEX idx_digests_status ON digests (status);
 CREATE INDEX idx_digests_created_at ON digests (created_at DESC);
 CREATE INDEX idx_digests_period ON digests (period_start, period_end);
 ```
 
+> **Faz 6.5:** `digest_type` (enum) → `newsletter_template_id` (FK, SET NULL ile geçmiş korunur) + denormalize `newsletter_slug` (template silinse de filtre/gruplama çalışır). `summary` = editör LLM'in ürettiği **haftalık Bülten Özeti** (en tepede gösterilir).
+
 ### 4.7 digest_sections
 
 ```sql
 CREATE TABLE digest_sections (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    digest_id           UUID NOT NULL REFERENCES digests(id) ON DELETE CASCADE,
-    section_order       INTEGER NOT NULL,
-    section_title       VARCHAR(500) NOT NULL,
-    ai_summary          TEXT NOT NULL,
-    impact_note         TEXT,
-    source_references   JSONB NOT NULL DEFAULT '[]'::jsonb,
-    prompt_template_id  UUID REFERENCES prompt_templates(id) ON DELETE SET NULL
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    digest_id             UUID NOT NULL REFERENCES digests(id) ON DELETE CASCADE,
+    section_order         INTEGER NOT NULL,
+    section_title         VARCHAR(500) NOT NULL,
+    ai_summary            TEXT NOT NULL,
+    impact_note           TEXT,
+    source_references     JSONB NOT NULL DEFAULT '[]'::jsonb,
+    newsletter_section_id UUID REFERENCES newsletter_sections(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_digest_sections_digest_id ON digest_sections (digest_id);
 ```
 
-**ON DELETE davranışı:** Digest silindiğinde section'lar CASCADE ile silinir. Prompt template silindiğinde referans SET NULL olur (geçmiş section'lar korunur).
+**ON DELETE davranışı:** Digest silindiğinde section'lar CASCADE ile silinir. Newsletter section/template silindiğinde referans SET NULL olur (geçmiş section'lar korunur). `section_title`/`ai_summary`/`impact_note` snapshot tutulur. `source_references` JSONB: `[{"processed_item_id": "...", "url": "...", "title": "..."}]`.
 
-### 4.8 prompt_templates
+### 4.8 newsletter_templates + newsletter_sections
+
+> **Faz 6.5:** Düz `prompt_templates` tablosu emekliye ayrıldı (migrate→drop, ADR-0003). Yerine iki seviyeli serbest model gelir.
 
 ```sql
-CREATE TABLE prompt_templates (
+CREATE TABLE newsletter_templates (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name                  VARCHAR(255) NOT NULL,
-    digest_type           digest_type_enum NOT NULL,
-    section_key           VARCHAR(100) NOT NULL,
-    system_prompt         TEXT NOT NULL,
-    user_prompt_template  TEXT NOT NULL,
+    slug                  VARCHAR(100) NOT NULL,            -- serbest bülten tanımlayıcı
+    name                  VARCHAR(255) NOT NULL,            -- TR UI bülten adı
+    description           TEXT NOT NULL DEFAULT '',         -- editör LLM çağrısına gider
+    date_range_days       INTEGER NOT NULL DEFAULT 7,       -- içerik tarih aralığı (gün)
+    summary_system_prompt TEXT NOT NULL,                    -- editör (özet) system prompt
+    summary_user_prompt   TEXT NOT NULL,                    -- editör (özet) user prompt
+    min_content_score     INTEGER NOT NULL DEFAULT 50,      -- 0–100; LLM'e giden min skor
     model_preference      VARCHAR(50),
     is_active             BOOLEAN NOT NULL DEFAULT true,
-    version               INTEGER NOT NULL DEFAULT 1,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    CONSTRAINT uq_prompt_templates_name UNIQUE (name)
+    CONSTRAINT uq_newsletter_templates_slug UNIQUE (slug),
+    CONSTRAINT ck_newsletter_min_score CHECK (min_content_score BETWEEN 0 AND 100)
 );
 
-CREATE INDEX idx_prompt_templates_digest_type ON prompt_templates (digest_type);
-CREATE INDEX idx_prompt_templates_is_active ON prompt_templates (is_active);
+CREATE INDEX idx_newsletter_templates_is_active ON newsletter_templates (is_active);
+
+CREATE TABLE newsletter_sections (
+    id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    newsletter_template_id UUID NOT NULL REFERENCES newsletter_templates(id) ON DELETE CASCADE,
+    name                   VARCHAR(255) NOT NULL,           -- bölüm adı (örn "Yıldız ve Rakipleri")
+    sort_order             INTEGER NOT NULL,
+    section_system_prompt  TEXT NOT NULL,                   -- bölüm özet system prompt
+    section_user_prompt    TEXT NOT NULL,                   -- bölüm özet user prompt
+    impact_prompt          TEXT NOT NULL,                   -- Yıldız etki prompt (bölüm çağrısı)
+    is_active              BOOLEAN NOT NULL DEFAULT true,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_newsletter_sections_order UNIQUE (newsletter_template_id, sort_order)
+);
+
+CREATE INDEX idx_newsletter_sections_template_id ON newsletter_sections (newsletter_template_id);
 ```
+
+> **Anlık etki prompt'u (global):** "Yıldız'ı nasıl etkiler?" butonu `system_settings` key'lerini kullanır: `newsletter_impact_system_prompt`, `newsletter_impact_user_prompt`. Bülten/bölüm başına değil — tüm bültenlerde tek prompt.
 
 ### 4.9 api_keys
 
@@ -678,14 +705,12 @@ erDiagram
     raw_items ||--o| transport_processed_items : "raw_item_id"
     raw_items ||--o| fmcg_processed_items : "raw_item_id"
 
-    news_processed_items ||--o{ content_chunks : "processed_item_id"
-    market_processed_items ||--o{ content_chunks : "processed_item_id"
-    geo_processed_items ||--o{ content_chunks : "processed_item_id"
-    transport_processed_items ||--o{ content_chunks : "processed_item_id"
-    fmcg_processed_items ||--o{ content_chunks : "processed_item_id"
+    news_processed_items ||--o{ content_chunks : "processed_item_id (FK)"
 
     digests ||--o{ digest_sections : "digest_id"
-    digest_sections }o--o| prompt_templates : "prompt_template_id"
+    newsletter_templates ||--o{ newsletter_sections : "newsletter_template_id"
+    newsletter_templates ||--o{ digests : "newsletter_template_id"
+    newsletter_sections }o--o| digest_sections : "newsletter_section_id"
 
     api_keys ||--o{ api_usage_logs : "api_key_id"
 
@@ -737,7 +762,9 @@ erDiagram
 
     digests {
         uuid id PK
-        digest_type_enum digest_type
+        uuid newsletter_template_id FK
+        varchar newsletter_slug
+        text summary
         digest_status_enum status
         date period_start
         date period_end
@@ -749,15 +776,23 @@ erDiagram
         integer section_order
         text ai_summary
         text impact_note
-        uuid prompt_template_id FK
+        uuid newsletter_section_id FK
     }
 
-    prompt_templates {
+    newsletter_templates {
         uuid id PK
-        varchar name UK
-        digest_type_enum digest_type
-        varchar section_key
-        integer version
+        varchar slug UK
+        varchar name
+        integer date_range_days
+        integer min_content_score
+    }
+
+    newsletter_sections {
+        uuid id PK
+        uuid newsletter_template_id FK
+        varchar name
+        integer sort_order
+        text impact_prompt
     }
 
     api_keys {
@@ -882,7 +917,7 @@ Migration dosyaları `NNN_kısa_açıklama.py` formatında adlandırılır. Sır
 7. `content_chunks`
 8. `digests`
 9. `digest_sections`
-10. `prompt_templates`
+10. `newsletter_templates` + `newsletter_sections` (Faz 6.5; MVP-0 çekirdekte `prompt_templates` idi → `013_newsletter_config.py` ile migrate→drop)
 11. `api_keys`
 12. `api_usage_logs`
 13. `chat_history`
@@ -908,7 +943,7 @@ Seed dosyaları:
 |-------|--------|
 | `fixtures/users.json` | 1 admin + 2 viewer test kullanıcısı |
 | `fixtures/sources.json` | 5 RSS + 2 email + 1 gov kaynak (gerçek URL'ler, test amaçlı) |
-| `fixtures/prompt_templates.json` | Her bülten tipi için 2-3 örnek template |
+| `fixtures/newsletter_templates.json` | Production-grade serbest bülten + bölüm prompt'ları (Faz 6.5) |
 | `fixtures/system_settings.json` | Tüm varsayılan sistem ayarları |
 | `fixtures/raw_items.json` | 50 örnek ham veri (RSS çıktısı simülasyonu) |
 | `fixtures/processed_items.json` | 50 örnek işlenmiş veri (5 schema'ya dağıtılmış) |

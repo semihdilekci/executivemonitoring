@@ -200,7 +200,7 @@ const VIEWER_NAV_ITEMS = [
 | `/chatbot` | AI Chatbot | Authenticated | Auth guard |
 | `/admin/users` | Kullanıcı yönetimi | Admin | Auth + Role guard |
 | `/admin/sources` | Kaynak yönetimi | Admin | Auth + Role guard |
-| `/admin/prompt-templates` | Prompt şablon yönetimi | Admin | Auth + Role guard |
+| `/admin/prompt-templates` | Bülten şablonu yönetimi (tek-ekran, Faz 6.5) | Admin | Auth + Role guard |
 | `/admin/api-keys` | API key yönetimi | Admin | Auth + Role guard |
 | `/admin/notifications` | Bildirim yönetimi + JWT ayarları | Admin | Auth + Role guard |
 | `/admin/pipeline` | Pipeline izleme (kokpit) — Faz 6.1 | Admin | Auth + Role guard |

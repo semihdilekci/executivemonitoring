@@ -254,7 +254,7 @@ export interface DeleteSourceResponse {
   deleted_raw_items_count: number;
 }
 
-export type ApiProvider = "groq" | "gemini";
+export type ApiProvider = "groq" | "gemini" | "anthropic";
 
 export interface PromptTemplateItem {
   id: string;
@@ -298,6 +298,7 @@ export interface ApiKeyItem {
   id: string;
   provider: ApiProvider;
   key_alias: string;
+  model: string | null;
   is_active: boolean;
   priority_order: number;
   created_at: string;
@@ -313,6 +314,7 @@ export interface CreateApiKeyRequest {
   provider: ApiProvider;
   key_alias: string;
   api_key: string;
+  model: string;
   priority_order: number;
   is_active?: boolean;
 }

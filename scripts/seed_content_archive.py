@@ -1,8 +1,9 @@
 """İçerik Arşivi (Faz 6.2) demo seed — idempotent.
 
-Processor çıktısını taklit eden gerçekçi `raw_items` + cross-schema
-`processed_items` + `digests`/`digest_sections` (bülten kullanımı) +
-`content_chunks` (RAG parça sayısı) kayıtları üretir. Yalnızca dev/test.
+Processor çıktısını taklit eden gerçekçi `raw_items` + `news.processed_items` +
+`digests`/`digest_sections` (bülten kullanımı) + `content_chunks` (RAG parça sayısı)
+kayıtları üretir. Faz 6.4 (ADR-0002) sonrası tüm haber yalnızca `news` schema'sındadır;
+`content_category` (6 değer) ince sınıflandırmayı korur. Yalnızca dev/test.
 
 Çalıştırma:
     .venv/bin/python scripts/seed_content_archive.py
@@ -177,7 +178,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 6,
-        "schema": "market",
+        "schema": "news",
         "source_id": SRC_BLOOMBERG,
         "content_category": "finance",
         "title": "Kakao vadeli işlemleri yeni zirve gördü",
@@ -195,7 +196,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 7,
-        "schema": "market",
+        "schema": "news",
         "source_id": SRC_BLOOMBERG,
         "content_category": "finance",
         "title": "Dolar/TL haftayı yatay seyirle tamamladı",
@@ -213,7 +214,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 8,
-        "schema": "fmcg",
+        "schema": "news",
         "source_id": SRC_PERAKENDE,
         "content_category": "fmcg",
         "title": "Ülker yeni üretim hattı yatırımını duyurdu",
@@ -231,7 +232,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 9,
-        "schema": "fmcg",
+        "schema": "news",
         "source_id": SRC_NIELSEN,
         "content_category": "fmcg",
         "title": "NielsenIQ: FMCG fiyat artışları yavaşlıyor",
@@ -249,7 +250,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 10,
-        "schema": "fmcg",
+        "schema": "news",
         "source_id": SRC_FOODNAV,
         "content_category": "fmcg",
         "lang": "en",
@@ -268,7 +269,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 11,
-        "schema": "geo",
+        "schema": "news",
         "source_id": SRC_ECONOMIST,
         "content_category": "geopolitical",
         "title": "Kızıldeniz'de lojistik gerilim ticaret rotalarını etkiliyor",
@@ -286,7 +287,7 @@ ITEMS: list[dict[str, Any]] = [
     },
     {
         "idx": 12,
-        "schema": "transport",
+        "schema": "news",
         "source_id": SRC_ECONOMIST,
         "content_category": "geopolitical",
         "title": "Süveyş Kanalı trafiği kademeli olarak normale dönüyor",

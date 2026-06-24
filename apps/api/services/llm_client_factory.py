@@ -7,34 +7,63 @@ import os
 from packages.shared.enums import ApiProvider, LlmRequestType
 from services.ai_engine.llm_client import LLMClient, UsageLogHook
 from services.ai_engine.models import LLMResponse
+from services.ai_engine.providers.anthropic_provider import (
+    DEFAULT_ANTHROPIC_MODEL,
+    AnthropicProvider,
+)
 from services.ai_engine.providers.base import LLMProvider
 from services.ai_engine.providers.gemini_provider import DEFAULT_GEMINI_MODEL, GeminiProvider
-from services.ai_engine.providers.groq_provider import GroqProvider
+from services.ai_engine.providers.groq_provider import DEFAULT_GROQ_MODEL, GroqProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.services.api_key_service import ApiKeyService
 from apps.api.services.api_usage_service import ApiUsageService
 
 
-def _gemini_model() -> str:
-    """Aktif Gemini modeli — `GEMINI_MODEL` env override'ı, yoksa güncel GA varsayılan."""
+# Anahtarda model seçili değilse (eski kayıt) sağlayıcı bazında fallback; env override
+# yalnızca model seçimi olmayan kayıtlar için geriye uyumluluk sağlar.
+def _gemini_fallback_model() -> str:
     return os.environ.get("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODEL
+
+
+def _anthropic_fallback_model() -> str:
+    return os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_ANTHROPIC_MODEL
+
+
+def _groq_fallback_model() -> str:
+    return os.environ.get("GROQ_MODEL", "").strip() or DEFAULT_GROQ_MODEL
 
 
 async def list_llm_providers(
     db: AsyncSession,
     api_key_service: ApiKeyService,
 ) -> list[LLMProvider]:
-    """Aktif API key'lerden provider listesi oluşturur."""
+    """Aktif API key'lerden provider listesi oluşturur — anahtarın seçili modeliyle."""
     decrypted = await api_key_service.list_active_decrypted(db)
     providers: list[LLMProvider] = []
     for api_key, plaintext in decrypted:
         if api_key.provider == ApiProvider.GROQ:
-            providers.append(GroqProvider(api_key=plaintext, key_id=api_key.id))
+            providers.append(
+                GroqProvider(
+                    api_key=plaintext,
+                    key_id=api_key.id,
+                    model=api_key.model or _groq_fallback_model(),
+                )
+            )
         elif api_key.provider == ApiProvider.GEMINI:
             providers.append(
                 GeminiProvider(
-                    api_key=plaintext, key_id=api_key.id, model=_gemini_model()
+                    api_key=plaintext,
+                    key_id=api_key.id,
+                    model=api_key.model or _gemini_fallback_model(),
+                )
+            )
+        elif api_key.provider == ApiProvider.ANTHROPIC:
+            providers.append(
+                AnthropicProvider(
+                    api_key=plaintext,
+                    key_id=api_key.id,
+                    model=api_key.model or _anthropic_fallback_model(),
                 )
             )
     return providers

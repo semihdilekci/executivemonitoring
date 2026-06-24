@@ -6,6 +6,7 @@ import { Modal } from "@/components/common/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { API_PROVIDER_LABELS } from "@/lib/api-labels";
+import { PROVIDER_MODELS, defaultModelFor } from "@/lib/llm-models";
 import type { ApiProvider, ApiKeyItem, CreateApiKeyRequest } from "@/types/api";
 import { isApiError } from "@/types/api";
 
@@ -17,7 +18,7 @@ interface ApiKeyFormModalProps {
   onCreate: (values: CreateApiKeyRequest) => Promise<void>;
 }
 
-const PROVIDERS: ApiProvider[] = ["groq", "gemini"];
+const PROVIDERS: ApiProvider[] = ["groq", "gemini", "anthropic"];
 
 function getFormErrorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
@@ -32,6 +33,7 @@ export function ApiKeyFormModal({
   onCreate,
 }: ApiKeyFormModalProps) {
   const [provider, setProvider] = useState<ApiProvider>("groq");
+  const [model, setModel] = useState<string>(defaultModelFor("groq"));
   const [keyAlias, setKeyAlias] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [priorityOrder, setPriorityOrder] = useState(1);
@@ -46,11 +48,18 @@ export function ApiKeyFormModal({
         : 1;
 
     setProvider("groq");
+    setModel(defaultModelFor("groq"));
     setKeyAlias("");
     setApiKey("");
     setPriorityOrder(nextPriority);
     setFormError(null);
   }, [isOpen, existingKeys]);
+
+  // Sağlayıcı değişince model listesi değişir; o sağlayıcının varsayılanına dön.
+  const handleProviderChange = (next: ApiProvider) => {
+    setProvider(next);
+    setModel(defaultModelFor(next));
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -74,6 +83,7 @@ export function ApiKeyFormModal({
         provider,
         key_alias: trimmedAlias,
         api_key: trimmedKey,
+        model,
         priority_order: priorityOrder,
         is_active: true,
       });
@@ -100,12 +110,30 @@ export function ApiKeyFormModal({
           <select
             id="provider"
             value={provider}
-            onChange={(event) => setProvider(event.target.value as ApiProvider)}
+            onChange={(event) => handleProviderChange(event.target.value as ApiProvider)}
             className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-600"
           >
             {PROVIDERS.map((item) => (
               <option key={item} value={item}>
                 {API_PROVIDER_LABELS[item]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="model" className="block text-sm font-medium text-gray-700">
+            Model
+          </label>
+          <select
+            id="model"
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            className="flex h-10 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-600"
+          >
+            {PROVIDER_MODELS[provider].map((item) => (
+              <option key={item} value={item}>
+                {item}
               </option>
             ))}
           </select>

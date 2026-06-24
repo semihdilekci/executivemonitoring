@@ -244,23 +244,21 @@ def static_keyword_pool_provider(records: Iterable[KeywordRecord]) -> KeywordPoo
     return KeywordPoolProvider(_loader)
 
 
-# İçerik kategorisi (`KeywordCategory` / `content_category`) -> PostgreSQL schema.
-# Faz 6.3+ ile kaynak ve içerik kategorileri 6 değere hizalandığından eski
-# SourceCategory alias'ları (turkish_media/official/market/geo) kaldırıldı;
-# bilinmeyen değerler `resolve_schema_category` içinde "news"e düşer.
-CATEGORY_TO_SCHEMA: dict[str, str] = {
-    "macro": "news",
-    "strategy": "news",
-    "regulatory": "news",
-    "fmcg": "fmcg",
-    "finance": "market",
-    "geopolitical": "geo",
-}
+# Faz 6.4 (ADR-0002): tüm haber içeriği `news.processed_items`'a yazılır.
+# `content_category` (6 değer) ince sınıflandırmadır; PostgreSQL schema seçimini
+# **belirlemez**. `market`/`fmcg`/`geo`/`transport` schema'ları MVP-1+ yapılandırılmış
+# veri için rezerve — haber almazlar. Eski `content_category → schema` haritası
+# (`CATEGORY_TO_SCHEMA`) bu fazda kaldırıldı.
+ARTICLE_SCHEMA = "news"
 
 
 def resolve_schema_category(category: str) -> str:
-    """İçerik kategorisini PostgreSQL schema adına map eder."""
-    return CATEGORY_TO_SCHEMA.get(category, "news")
+    """Haber depolama schema'sı — her zaman `news` (`Docs/04` §8.4, ADR-0002).
+
+    `content_category`'den bağımsızdır. İmza geriye dönük uyum için korunur;
+    argüman yok sayılır (eski kategori→schema routing kaldırıldı).
+    """
+    return ARTICLE_SCHEMA
 
 
 def category_score(matched: list[CategoryKeyword]) -> int:
