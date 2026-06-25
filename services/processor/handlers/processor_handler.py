@@ -12,7 +12,10 @@ from services.processor.models import (
     ProcessedResult,
     ProcessorInput,
 )
-from services.processor.pipeline_orchestrator import PipelineOrchestrator
+from services.processor.pipeline_orchestrator import (
+    PipelineOrchestrator,
+    build_translation_dependencies,
+)
 
 logger = logging.getLogger("ygip.processor.handler")
 
@@ -158,7 +161,15 @@ async def handle_sqs_event(
                 async with processor_db_session() as session:
                     redis = await create_processor_redis()
                     try:
-                        orch = PipelineOrchestrator(session=session, redis=redis)
+                        translation_client, translation_min_score = (
+                            await build_translation_dependencies(session)
+                        )
+                        orch = PipelineOrchestrator(
+                            session=session,
+                            redis=redis,
+                            translation_llm_client=translation_client,
+                            translation_min_score=translation_min_score,
+                        )
                         result = await process_sqs_record(record, orchestrator=orch)
                     finally:
                         await redis.aclose()

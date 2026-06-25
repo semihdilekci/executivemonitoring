@@ -1,22 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorView } from "@/components/common/error-view";
 import { DigestCard } from "@/components/digest/digest-card";
 import { DigestListSkeleton } from "@/components/digest/digest-list-skeleton";
 import { Button } from "@/components/ui/button";
-import { DIGEST_TYPE_FILTERS } from "@/lib/digest-labels";
+import { getNewsletterBadgeMeta } from "@/lib/digest-labels";
 import { cn } from "@/lib/utils";
 import { useDigestsWithRead } from "@/hooks/use-digests";
-import type { DigestType } from "@/types/api";
+
+interface NewsletterFilterOption {
+  value: string;
+  label: string;
+}
 
 export default function DigestsPage() {
-  const [digestTypeFilter, setDigestTypeFilter] = useState<
-    DigestType | "all"
-  >("all");
+  const [newsletterFilter, setNewsletterFilter] = useState<string>("all");
+  const [knownSlugs, setKnownSlugs] = useState<string[]>([]);
 
   const {
+    digests,
     unread,
     read,
     unreadCount,
@@ -28,9 +32,33 @@ export default function DigestsPage() {
     hasNextPage,
     isFetchingNextPage,
   } = useDigestsWithRead({
-    digestType: digestTypeFilter === "all" ? undefined : digestTypeFilter,
+    newsletterSlug: newsletterFilter === "all" ? undefined : newsletterFilter,
     limit: 20,
   });
+
+  // Görülen bülten slug'larını biriktir; bir filtre seçilince diğer
+  // seçenekler kaybolmasın (serbest slug — sabit liste yok).
+  useEffect(() => {
+    if (digests.length === 0) return;
+    setKnownSlugs((prev) => {
+      const next = new Set(prev);
+      for (const digest of digests) {
+        next.add(digest.newsletter_slug);
+      }
+      return next.size === prev.length ? prev : Array.from(next);
+    });
+  }, [digests]);
+
+  const filters = useMemo<NewsletterFilterOption[]>(
+    () => [
+      { value: "all", label: "Tümü" },
+      ...knownSlugs.map((slug) => ({
+        value: slug,
+        label: getNewsletterBadgeMeta(slug).label,
+      })),
+    ],
+    [knownSlugs],
+  );
 
   if (isLoading) {
     return (
@@ -62,8 +90,9 @@ export default function DigestsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        digestTypeFilter={digestTypeFilter}
-        onFilterChange={setDigestTypeFilter}
+        filters={filters}
+        activeFilter={newsletterFilter}
+        onFilterChange={setNewsletterFilter}
       />
 
       {!hasAnyDigest ? (
@@ -140,11 +169,13 @@ export default function DigestsPage() {
 }
 
 function PageHeader({
-  digestTypeFilter = "all",
+  filters = [],
+  activeFilter = "all",
   onFilterChange,
 }: {
-  digestTypeFilter?: DigestType | "all";
-  onFilterChange?: (value: DigestType | "all") => void;
+  filters?: NewsletterFilterOption[];
+  activeFilter?: string;
+  onFilterChange?: (value: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -155,14 +186,14 @@ function PageHeader({
         </p>
       </div>
 
-      {onFilterChange ? (
+      {onFilterChange && filters.length > 1 ? (
         <div
           className="flex flex-wrap gap-2"
           role="group"
-          aria-label="Bülten tipi filtresi"
+          aria-label="Bülten filtresi"
         >
-          {DIGEST_TYPE_FILTERS.map((filter) => {
-            const isActive = digestTypeFilter === filter.value;
+          {filters.map((filter) => {
+            const isActive = activeFilter === filter.value;
             return (
               <button
                 key={filter.value}

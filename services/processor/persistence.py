@@ -13,6 +13,7 @@ from packages.shared.models.processed_item import (
     NewsProcessedItem,
     ProcessedItem,
 )
+from packages.shared.models.processed_item_translation import ProcessedItemTranslation
 from packages.shared.models.raw_item import RawItem
 from packages.shared.utils.hashing import storage_content_hash
 from sqlalchemy import func, select
@@ -136,6 +137,8 @@ async def persist_pipeline_output(
     session.add(processed_item)
     await session.flush()
 
+    _persist_original_translation(session, processed_item.id, output.extras)
+
     chunks = chunks_from_extras(output.extras.get("chunks"))
     if not chunks:
         msg = "Pipeline başarılı ancak chunk üretilmedi"
@@ -160,6 +163,40 @@ async def persist_pipeline_output(
         processed_item_id=processed_item.id,
         schema_category=schema_category,
         chunk_count=len(chunk_rows),
+    )
+
+
+def _persist_original_translation(
+    session: AsyncSession,
+    processed_item_id: uuid.UUID,
+    extras: dict[str, Any],
+) -> None:
+    """`TranslationProcessor` çeviri yaptıysa orijinal EN satırını ekler (`Docs/02` §4.4b).
+
+    `extras["original_translation"]` yalnızca EN→TR çeviri başarılıysa set edilir
+    (`Docs/04` §8.45). Aynı transaction'da `is_original=true` satırı yazılır; çeviri
+    yoksa no-op.
+    """
+    original = extras.get("original_translation")
+    if not isinstance(original, dict):
+        return
+
+    language = original.get("language")
+    title = original.get("title")
+    content = original.get("content")
+    if not isinstance(language, str) or not language:
+        return
+    if not isinstance(title, str) or not isinstance(content, str):
+        return
+
+    session.add(
+        ProcessedItemTranslation(
+            processed_item_id=processed_item_id,
+            language=language[:5],
+            title=title,
+            content=content,
+            is_original=True,
+        )
     )
 
 

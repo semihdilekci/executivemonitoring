@@ -1,4 +1,4 @@
-import { SourceReferenceList } from "@/components/digest/source-reference-list";
+import { NewsDrawerCard } from "@/components/digest/news-drawer-card";
 import { getSectionAnchorId } from "@/lib/digest-detail-utils";
 import type { DigestSection } from "@/types/api";
 
@@ -38,8 +38,17 @@ export function DigestSectionCard({ section }: DigestSectionCardProps) {
       ) : null}
 
       {section.source_references.length > 0 ? (
-        <div className="mt-5">
-          <SourceReferenceList references={section.source_references} />
+        <div className="mt-5 space-y-2">
+          <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">
+            Kaynak haberler
+          </h4>
+          {section.source_references.map((reference, index) => (
+            <NewsDrawerCard
+              key={reference.processed_item_id}
+              reference={reference}
+              defaultExpanded={index === 0}
+            />
+          ))}
         </div>
       ) : null}
     </article>

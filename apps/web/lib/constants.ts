@@ -28,7 +28,7 @@ export const ADMIN_NAV_ITEMS: readonly NavItem[] = [
   { label: "Pipeline İzleme", href: "/admin/pipeline" },
   { label: "İçerik Arşivi", href: "/admin/content-archive" },
   { label: "Keyword Takibi", href: "/admin/keywords" },
-  { label: "Prompt Şablonları", href: "/admin/prompt-templates" },
+  { label: "Bülten Şablonları", href: "/admin/prompt-templates" },
   { label: "API Anahtarları", href: "/admin/api-keys" },
   { label: "Bildirimler", href: "/admin/notifications" },
   { label: "Sohbet Geçmişi", href: "/admin/chat-history" },
@@ -43,12 +43,17 @@ export const queryKeys = {
     all: ["digests"] as const,
     list: (params?: {
       cursor?: string;
-      digestType?: string;
+      newsletterSlug?: string;
       limit?: number;
       isRead?: boolean;
     }) => ["digests", "list", params ?? {}] as const,
     detail: (id: string) => ["digests", "detail", id] as const,
     readState: (userId: string) => ["digests", "read-state", userId] as const,
+  },
+  newsImpact: {
+    all: ["news-impact"] as const,
+    detail: (processedItemId: string) =>
+      ["news-impact", processedItemId] as const,
   },
   users: {
     all: ["users"] as const,
@@ -97,11 +102,11 @@ export const queryKeys = {
     preferences: ["notifications", "preferences"] as const,
     recipients: ["notifications", "recipients"] as const,
   },
-  promptTemplates: {
-    all: ["prompt-templates"] as const,
-    list: (filters?: { digest_type?: string; is_active?: boolean }) =>
-      ["prompt-templates", "list", filters ?? {}] as const,
-    detail: (id: string) => ["prompt-templates", "detail", id] as const,
+  newsletterTemplates: {
+    all: ["newsletter-templates"] as const,
+    list: (filters?: { is_active?: boolean }) =>
+      ["newsletter-templates", "list", filters ?? {}] as const,
+    detail: (id: string) => ["newsletter-templates", "detail", id] as const,
   },
   apiKeys: {
     all: ["api-keys"] as const,

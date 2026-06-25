@@ -28,6 +28,8 @@ Tam metin: `.cursor/rules/0*.mdc`, `04-quality-gates.mdc`.
 - **[03] Güvenlik** — JWT, RBAC, audit transaction, raw SQL yasak, secret commit yasak.
 - **[04] Kalite** — pytest coverage eşikleri, ruff+mypy CI (`Docs/09` §5), auth/RBAC ≥%90.
 
+> **⛔ Dev DB koruması (her testte):** Hiçbir test geliştirme veritabanını (`ygip_dev` / `DATABASE_URL`) drop/truncate/downgrade/`DROP SCHEMA` etmez. Yıkıcı DB işlemleri **yalnızca** adında `test` geçen izole DB'de (`ygip_test`/`TEST_DATABASE_URL`) çalışır; URL `tests/integration/migration_db.py` (`resolve_*_test_database_url` + `guard_destructive`) üzerinden çözülür. Detay: `35-testing-pytest.mdc` → "Dev DB koruması".
+
 ---
 
 ## Glob Yönlendirme

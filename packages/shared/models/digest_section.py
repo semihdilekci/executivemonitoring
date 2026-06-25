@@ -13,7 +13,7 @@ from packages.shared.models.base import Base, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from packages.shared.models.digest import Digest
-    from packages.shared.models.prompt_template import PromptTemplate
+    from packages.shared.models.newsletter_template import NewsletterSection
 
 
 class DigestSection(Base, UUIDPrimaryKeyMixin):
@@ -36,14 +36,15 @@ class DigestSection(Base, UUIDPrimaryKeyMixin):
         nullable=False,
         server_default="[]",
     )
-    prompt_template_id: Mapped[uuid.UUID | None] = mapped_column(
+    # Faz 6.5 (ADR-0003): `prompt_template_id` → `newsletter_section_id` (provenance, SET NULL).
+    newsletter_section_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("prompt_templates.id", ondelete="SET NULL"),
+        ForeignKey("newsletter_sections.id", ondelete="SET NULL"),
         nullable=True,
     )
 
     digest: Mapped[Digest] = relationship("Digest", back_populates="sections")
-    prompt_template: Mapped[PromptTemplate | None] = relationship(
-        "PromptTemplate",
+    newsletter_section: Mapped[NewsletterSection | None] = relationship(
+        "NewsletterSection",
         back_populates="digest_sections",
     )

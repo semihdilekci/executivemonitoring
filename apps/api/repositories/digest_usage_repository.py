@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from packages.shared.enums import DigestType
 from packages.shared.models.digest import Digest
 from packages.shared.models.digest_section import DigestSection
 from sqlalchemy import or_, select
@@ -23,7 +22,7 @@ class DigestUsageRow:
     """Tek bir bülten kullanımı — liste özeti + detay (`section_title`) için ortak."""
 
     digest_id: uuid.UUID
-    digest_type: DigestType
+    newsletter_slug: str
     digest_title: str
     period_start: date
     period_end: date
@@ -80,7 +79,7 @@ class DigestUsageRepository:
                 continue
             row = DigestUsageRow(
                 digest_id=digest.id,
-                digest_type=digest.digest_type,
+                newsletter_slug=digest.newsletter_slug,
                 digest_title=digest.title,
                 period_start=digest.period_start,
                 period_end=digest.period_end,

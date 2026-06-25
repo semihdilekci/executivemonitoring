@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -18,10 +18,13 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.shared.enums import ARTICLE_SCHEMA, PROCESSED_ITEM_SCHEMAS
 from packages.shared.models.base import Base, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from packages.shared.models.processed_item_translation import ProcessedItemTranslation
 
 
 class ProcessedItem(Base, UUIDPrimaryKeyMixin):
@@ -98,6 +101,13 @@ class NewsProcessedItem(ProcessedItem):
     """`news.processed_items` — Faz 6.4 (ADR-0002) sonrası tek **aktif** haber tablosu."""
 
     __table_args__ = _processed_item_table_args("news")
+
+    # Faz 6.5: çok-dilli içerik varyantları (orijinal EN vb., `Docs/02` §4.4b).
+    translations: Mapped[list[ProcessedItemTranslation]] = relationship(
+        "ProcessedItemTranslation",
+        back_populates="processed_item",
+        cascade="all, delete-orphan",
+    )
 
 
 # Rezerve schema tabloları: MVP-1+ yapılandırılmış veri için boş tutulur; processor

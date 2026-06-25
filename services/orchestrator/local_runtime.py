@@ -31,7 +31,10 @@ from services.collectors.sqs_publisher import SQSPublisher
 from services.orchestrator.aws_clients import InvokeResult, QueueDepth
 from services.processor.db_session import create_processor_redis
 from services.processor.models import ProcessorInput
-from services.processor.pipeline_orchestrator import PipelineOrchestrator
+from services.processor.pipeline_orchestrator import (
+    PipelineOrchestrator,
+    build_translation_dependencies,
+)
 
 logger = logging.getLogger("ygip.orchestrator.local")
 
@@ -141,7 +144,18 @@ class LocalCollectorInvoker:
             for body in bodies:
                 item = ProcessorInput.from_sqs_body(body)
                 async with self._session_factory() as session:
-                    orchestrator = PipelineOrchestrator(session=session, redis=redis)
+                    # İngilizce haber çevirisi için operasyon-scoped LLM client + eşik
+                    # (Lambda `handle_sqs_event` ile aynı bağlama; `Docs/04` §8.45/§9.1).
+                    # Aktif `article_translation` anahtarı yoksa client None → no-op.
+                    translation_client, translation_min_score = (
+                        await build_translation_dependencies(session)
+                    )
+                    orchestrator = PipelineOrchestrator(
+                        session=session,
+                        redis=redis,
+                        translation_llm_client=translation_client,
+                        translation_min_score=translation_min_score,
+                    )
                     try:
                         result = await orchestrator.process(item, sqs_body=body)
                         await session.commit()

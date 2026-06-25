@@ -149,6 +149,29 @@ async def enforce_chat_rate_limit(
     return user
 
 
+async def enforce_news_impact_rate_limit(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Anlık etki endpoint per-user rate limit — `Docs/07` §6.4 (20 req/dk).
+
+    Viewer dahil tüm authenticated kullanıcılar erişebilir; runtime LLM maliyeti
+    kullanıcı bazında sınırlanır.
+    """
+    settings: Settings = getattr(request.app.state, "settings", None) or get_settings()
+    request.state.user_id = str(user.id)
+    key = build_rate_limit_key("news-impact", request)
+    backend = _resolve_rate_limiter_backend(request)
+    exceeded, retry_after = await backend.increment_and_check(
+        key,
+        settings.RATE_LIMIT_NEWS_IMPACT,
+        WINDOW_SECONDS,
+    )
+    if exceeded:
+        raise RateLimitException(retry_after_seconds=retry_after)
+    return user
+
+
 async def enforce_pipeline_rate_limit(
     request: Request,
     user: Annotated[User, Depends(require_admin)],

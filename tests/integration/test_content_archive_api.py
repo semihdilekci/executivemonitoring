@@ -17,7 +17,6 @@ import pytest
 from httpx import AsyncClient
 from packages.shared.enums import (
     DigestStatus,
-    DigestType,
     RawItemStatus,
     SourceCategory,
     SourceStatus,
@@ -126,7 +125,7 @@ async def archive_seed(database_url: str) -> AsyncIterator[ArchiveSeed]:
         session.add(
             Digest(
                 id=digest_id,
-                digest_type=DigestType.STRATEGY_WEEKLY,
+                newsletter_slug="strategy_weekly",
                 title="Strateji Haftalık — 9–15 Haziran 2026",
                 status=DigestStatus.READY,
                 period_start=date(2026, 6, 9),

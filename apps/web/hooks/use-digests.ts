@@ -29,7 +29,7 @@ async function fetchDigestPage(
       params: {
         cursor: params.cursor,
         limit: params.limit,
-        digest_type: params.digest_type,
+        newsletter_slug: params.newsletter_slug,
         status: params.status ?? "ready",
         ...(params.is_read !== undefined && { is_read: params.is_read }),
       },
@@ -39,7 +39,7 @@ async function fetchDigestPage(
 }
 
 export function useDigests(options?: {
-  digestType?: DigestListParams["digest_type"];
+  newsletterSlug?: DigestListParams["newsletter_slug"];
   limit?: number;
   isRead?: boolean;
 }) {
@@ -47,7 +47,7 @@ export function useDigests(options?: {
 
   return useInfiniteQuery({
     queryKey: queryKeys.digests.list({
-      digestType: options?.digestType,
+      newsletterSlug: options?.newsletterSlug,
       limit,
       isRead: options?.isRead,
     }),
@@ -55,7 +55,7 @@ export function useDigests(options?: {
       fetchDigestPage({
         cursor: pageParam,
         limit,
-        digest_type: options?.digestType,
+        newsletter_slug: options?.newsletterSlug,
         status: "ready",
         is_read: options?.isRead,
       }),
@@ -89,7 +89,7 @@ export function flattenDigestPages(
 }
 
 export function useDigestsWithRead(options?: {
-  digestType?: DigestListParams["digest_type"];
+  newsletterSlug?: DigestListParams["newsletter_slug"];
   limit?: number;
 }) {
   const query = useDigests(options);

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ApiKeyCard } from "@/components/admin/api-key-card";
 import { ApiKeyFormModal } from "@/components/admin/api-key-form-modal";
+import { TranslationSettingsForm } from "@/components/admin/translation-settings-form";
 import { UsageChart } from "@/components/admin/usage-chart";
 import { RoleGate } from "@/components/auth/role-gate";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
@@ -17,9 +18,10 @@ import {
   useCreateApiKey,
   useDeleteApiKey,
   usePatchApiKeyStatus,
+  useUpdateApiKey,
 } from "@/hooks/use-api-keys";
 import { API_PROVIDER_LABELS } from "@/lib/api-labels";
-import type { ApiKeyItem, ApiProvider } from "@/types/api";
+import type { ApiKeyItem, ApiProvider, LlmRequestType } from "@/types/api";
 import { isApiError } from "@/types/api";
 
 type RangeOption = "7" | "30" | "90";
@@ -46,6 +48,7 @@ export default function AdminApiKeysPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApiKeyItem | null>(null);
   const [togglingKeyId, setTogglingKeyId] = useState<string | null>(null);
+  const [updatingScopeKeyId, setUpdatingScopeKeyId] = useState<string | null>(null);
   const [range, setRange] = useState<RangeOption>("30");
   const [providerFilter, setProviderFilter] = useState<ApiProvider | "all">("all");
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -53,6 +56,7 @@ export default function AdminApiKeysPage() {
   const apiKeysQuery = useApiKeys();
   const createApiKey = useCreateApiKey();
   const patchApiKeyStatus = usePatchApiKeyStatus();
+  const updateApiKey = useUpdateApiKey();
   const deleteApiKey = useDeleteApiKey();
 
   const dateRange = useMemo(() => getDateRange(Number.parseInt(range, 10)), [range]);
@@ -107,6 +111,22 @@ export default function AdminApiKeysPage() {
       showToast(message, "error");
     } finally {
       setTogglingKeyId(null);
+    }
+  };
+
+  const handleUpdateScope = async (keyId: string, scope: LlmRequestType[]) => {
+    setUpdatingScopeKeyId(keyId);
+    try {
+      await updateApiKey.mutateAsync({ keyId, body: { request_type_scope: scope } });
+      showToast("Operasyon kapsamı güncellendi.");
+    } catch (error) {
+      const message = isApiError(error)
+        ? error.message
+        : "Kapsam güncellenirken bir hata oluştu.";
+      showToast(message, "error");
+      throw error;
+    } finally {
+      setUpdatingScopeKeyId(null);
     }
   };
 
@@ -189,7 +209,9 @@ export default function AdminApiKeysPage() {
                 key={apiKey.id}
                 apiKey={apiKey}
                 isToggling={togglingKeyId === apiKey.id}
+                isUpdatingScope={updatingScopeKeyId === apiKey.id}
                 onToggleStatus={(item) => void handleToggleStatus(item)}
+                onUpdateScope={handleUpdateScope}
                 onDelete={setDeleteTarget}
               />
             ))}
@@ -240,6 +262,7 @@ export default function AdminApiKeysPage() {
                   <option value="all">Tümü</option>
                   <option value="groq">Groq</option>
                   <option value="gemini">Gemini</option>
+                  <option value="anthropic">Claude</option>
                 </select>
               </div>
             </div>
@@ -251,6 +274,8 @@ export default function AdminApiKeysPage() {
             <UsageChart data={usageQuery.data} isLoading={usageQuery.isLoading} />
           )}
         </section>
+
+        <TranslationSettingsForm />
       </div>
 
       <ApiKeyFormModal

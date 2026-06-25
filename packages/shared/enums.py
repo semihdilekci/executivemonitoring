@@ -83,6 +83,8 @@ class LlmRequestType(StrEnum):
 
     DIGEST_GENERATION = "digest_generation"
     CHATBOT = "chatbot"
+    # Faz 6.5: ingest-time EN→TR haber çevirisi (`TranslationProcessor`, `Docs/04` §8.45).
+    ARTICLE_TRANSLATION = "article_translation"
 
 
 # Faz 6.4 (ADR-0002): tüm haber içeriği yalnızca `news.processed_items`'a yazılır.
@@ -94,14 +96,6 @@ RESERVED_SCHEMAS: tuple[str, ...] = ("market", "geo", "transport", "fmcg")
 # Fiziksel `processed_items` partition'larının tümü (aktif haber + rezerve). ORM tablo
 # eşlemesi ve migration kapsamı bu sırayı kullanır; sıralama geriye dönük korunur.
 PROCESSED_ITEM_SCHEMAS: tuple[str, ...] = (ARTICLE_SCHEMA, *RESERVED_SCHEMAS)
-
-
-class DigestType(StrEnum):
-    """Bülten tipi (`digest_type_enum`)."""
-
-    TURKISH_MEDIA_WEEKLY = "turkish_media_weekly"
-    FMCG_WEEKLY = "fmcg_weekly"
-    STRATEGY_WEEKLY = "strategy_weekly"
 
 
 class DigestStatus(StrEnum):

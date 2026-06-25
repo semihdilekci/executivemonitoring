@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Enum, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.shared.enums import ApiProvider
@@ -38,6 +39,13 @@ class ApiKey(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     priority_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Faz 6.5: anahtarın kullanılacağı LLM operasyonları (`LlmRequestType` değerleri);
+    # boş dizi `[]` = tüm operasyonlar (geriye uyumlu). Kapsam filtresi `Docs/04` §9.1.
+    request_type_scope: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default="[]",
+    )
 
     usage_logs: Mapped[list[ApiUsageLog]] = relationship(
         "ApiUsageLog",

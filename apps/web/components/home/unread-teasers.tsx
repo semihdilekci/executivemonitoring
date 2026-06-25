@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorView } from "@/components/common/error-view";
-import { DigestTypeBadge } from "@/components/digest/digest-type-badge";
+import { NewsletterBadge } from "@/components/digest/newsletter-badge";
 import { TeaserSkeleton } from "@/components/digest/digest-list-skeleton";
 import { useUnreadDigestTeasers } from "@/hooks/use-digests";
 
@@ -58,7 +58,7 @@ export function UnreadTeasers() {
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy-800">
                 {digest.title}
               </span>
-              <DigestTypeBadge digestType={digest.digest_type} />
+              <NewsletterBadge newsletterSlug={digest.newsletter_slug} />
             </Link>
           </li>
         ))}

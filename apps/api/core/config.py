@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_PASSWORD_RESET: int = 3
     RATE_LIMIT_CHATBOT: int = 20
     RATE_LIMIT_PIPELINE: int = 5
+    # Anlık "Yıldız'ı nasıl etkiler?" runtime LLM çağrısı (Faz 6.5 — Docs/07 §6.4).
+    RATE_LIMIT_NEWS_IMPACT: int = 20
 
     PASSWORD_RESET_BASE_URL: str = "http://localhost:3000/reset-password"
 

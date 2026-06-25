@@ -6,11 +6,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from packages.shared.enums import DigestStatus, DigestType
+from packages.shared.enums import DigestStatus
 from packages.shared.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.api.core.deps import (
+    enforce_news_impact_rate_limit,
     get_api_key_service,
     get_api_usage_service,
     get_current_user,
@@ -22,6 +23,8 @@ from apps.api.schemas.digest import (
     DigestListResponse,
     GenerateDigestRequest,
     GenerateDigestResponse,
+    NewsImpactRequest,
+    NewsImpactResponse,
 )
 from apps.api.services.api_key_service import ApiKeyService
 from apps.api.services.api_usage_service import ApiUsageService
@@ -41,7 +44,7 @@ async def list_digests(
     user: Annotated[User, Depends(get_current_user)],
     cursor: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
-    digest_type: Annotated[DigestType | None, Query()] = None,
+    newsletter_slug: Annotated[str | None, Query()] = None,
     status: Annotated[DigestStatus | None, Query()] = None,
 ) -> DigestListResponse:
     return await digest_service.list_digests(
@@ -49,18 +52,9 @@ async def list_digests(
         user=user,
         cursor=cursor,
         limit=limit,
-        digest_type=digest_type,
+        newsletter_slug=newsletter_slug,
         status=status,
     )
-
-
-@router.get("/{digest_id}", response_model=DigestDetailResponse)
-async def get_digest(
-    digest_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_user)],
-) -> DigestDetailResponse:
-    return await digest_service.get_digest(db, user=user, digest_id=digest_id)
 
 
 @router.post(
@@ -84,3 +78,28 @@ async def generate_digest(
         api_key_service=api_key_service,
         api_usage_service=api_usage_service,
     )
+
+
+@router.post("/news-impact", response_model=NewsImpactResponse)
+async def news_impact(
+    body: NewsImpactRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(enforce_news_impact_rate_limit)],
+    api_key_service: Annotated[ApiKeyService, Depends(get_api_key_service)],
+    api_usage_service: Annotated[ApiUsageService, Depends(get_api_usage_service)],
+) -> NewsImpactResponse:
+    return await digest_service.news_impact(
+        db,
+        processed_item_id=body.processed_item_id,
+        api_key_service=api_key_service,
+        api_usage_service=api_usage_service,
+    )
+
+
+@router.get("/{digest_id}", response_model=DigestDetailResponse)
+async def get_digest(
+    digest_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> DigestDetailResponse:
+    return await digest_service.get_digest(db, user=user, digest_id=digest_id)

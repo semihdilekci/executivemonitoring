@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from packages.shared.enums import (
     DigestStatus,
-    DigestType,
     PipelineStage,
     PipelineStepStatus,
 )
@@ -463,9 +462,13 @@ class ProcessStageExecutor:
 
 @dataclass(slots=True)
 class DigestRequest:
-    """`run.params`'tan türeyen digest üretim isteği (`Docs/03` §7)."""
+    """`run.params`'tan türeyen digest üretim isteği (`Docs/03` §7).
 
-    digest_type: DigestType
+    Faz 6.5 (ADR-0003): `digest_type` enum yerine serbest bülten
+    (`newsletter_template_id`); runner bülteni id ile yükleyip üretir.
+    """
+
+    newsletter_template_id: uuid.UUID
     period_start: date
     period_end: date
     send_notification: bool
@@ -512,13 +515,13 @@ class DigestStageExecutor:
     @staticmethod
     def _parse_request(run: PipelineRun) -> DigestRequest:
         params = run.params or {}
-        digest_type = DigestType(params["digest_type"])
+        newsletter_template_id = uuid.UUID(str(params["newsletter_template_id"]))
         period_start = date.fromisoformat(str(params["period_start"]))
         period_end = date.fromisoformat(str(params["period_end"]))
         if period_end < period_start:
             raise ValueError("period_end, period_start tarihinden önce olamaz")
         return DigestRequest(
-            digest_type=digest_type,
+            newsletter_template_id=newsletter_template_id,
             period_start=period_start,
             period_end=period_end,
             send_notification=bool(params.get("send_notification", False)),
@@ -539,7 +542,7 @@ class DigestStageExecutor:
         digest_id = str(result.digest_id) if result.digest_id is not None else None
         detail: dict[str, Any] = {
             "digest_id": digest_id,
-            "digest_type": request.digest_type.value,
+            "newsletter_template_id": str(request.newsletter_template_id),
             "period_start": request.period_start.isoformat(),
             "period_end": request.period_end.isoformat(),
             "section_count": result.section_count,

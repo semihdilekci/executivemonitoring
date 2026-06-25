@@ -4623,5 +4623,2299 @@
         "rating": 4
       }
     ]
+  },
+  {
+    "term_tr": "pladis",
+    "term_en": "pladis",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Ülker",
+    "term_en": "Ülker",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Godiva",
+    "term_en": "Godiva",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "McVitie's",
+    "term_en": "McVitie's",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "DeMet's",
+    "term_en": "DeMet's",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Besler",
+    "term_en": "Besler",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Aytaç",
+    "term_en": "Aytaç",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Kerevitaş",
+    "term_en": "Kerevitaş",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Biskot",
+    "term_en": "Biskot",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Taygeta",
+    "term_en": "Taygeta",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Polinas",
+    "term_en": "Polinas",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Azmüsebat",
+    "term_en": "Azmüsebat",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "İstegelsin",
+    "term_en": "İstegelsin",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "G2M",
+    "term_en": "G2M",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Yıldız Holding",
+    "term_en": "Yıldız Holding",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Bizim Toptan",
+    "term_en": "Bizim Toptan",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Şok Marketler",
+    "term_en": "Şok Marketler",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Seç Marketleri",
+    "term_en": "Seç Marketleri",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Önem Gıda",
+    "term_en": "Önem Gıda",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Doğa Çay",
+    "term_en": "Doğa Çay",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Oba Çay",
+    "term_en": "Oba Çay",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Adapazarı Şeker",
+    "term_en": "Adapazarı Şeker",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "United Biscuits",
+    "term_en": "United Biscuits",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Makina Takım",
+    "term_en": "Makina Takım",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Gözde Girişim",
+    "term_en": "Gözde Girişim",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Penta Teknoloji",
+    "term_en": "Penta Teknoloji",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Yıldız Gayrimenkul",
+    "term_en": "Yıldız Gayrimenkul",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "BİM",
+    "term_en": "BİM",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "A101",
+    "term_en": "A101",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Migros",
+    "term_en": "Migros",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "CarrefourSA",
+    "term_en": "CarrefourSA",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Altunbilekler",
+    "term_en": "Altunbilekler",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Nev Gross",
+    "term_en": "Nev Gross",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Cep Gross",
+    "term_en": "Cep Gross",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Rize Gross",
+    "term_en": "Rize Gross",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Gimsa Gross",
+    "term_en": "Gimsa Gross",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Anfa Gross",
+    "term_en": "Anfa Gross",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Eti",
+    "term_en": "Eti",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Nestlé",
+    "term_en": "Nestlé",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Mondelez",
+    "term_en": "Mondelez",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Oreo",
+    "term_en": "Oreo",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Milka",
+    "term_en": "Milka",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Ferrero",
+    "term_en": "Ferrero",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Lindt",
+    "term_en": "Lindt",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Hershey",
+    "term_en": "Hershey",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Kanky",
+    "term_en": "Kanky",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Albeni",
+    "term_en": "Albeni",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Alpella",
+    "term_en": "Alpella",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Altınbaşak",
+    "term_en": "Altınbaşak",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Biskrem",
+    "term_en": "Biskrem",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Caramio",
+    "term_en": "Caramio",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Çizi",
+    "term_en": "Çizi",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Çokokrem",
+    "term_en": "Çokokrem",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Çokomel",
+    "term_en": "Çokomel",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Çokonat",
+    "term_en": "Çokonat",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Dankek",
+    "term_en": "Dankek",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Dido",
+    "term_en": "Dido",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Halley",
+    "term_en": "Halley",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Hanımeller",
+    "term_en": "Hanımeller",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Kekstra",
+    "term_en": "Kekstra",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Kremini",
+    "term_en": "Kremini",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Krispi",
+    "term_en": "Krispi",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Rondo",
+    "term_en": "Rondo",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Rozi",
+    "term_en": "Rozi",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "SuperFresh",
+    "term_en": "SuperFresh",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Teremyağ",
+    "term_en": "Teremyağ",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Jacob's",
+    "term_en": "Jacob's",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Carr's",
+    "term_en": "Carr's",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Flipz",
+    "term_en": "Flipz",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Verkade",
+    "term_en": "Verkade",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Haansbro",
+    "term_en": "Haansbro",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Cafe Crown",
+    "term_en": "Cafe Crown",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Coco Pops",
+    "term_en": "Coco Pops",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
+  },
+  {
+    "term_tr": "Bizim Yağ",
+    "term_en": "Bizim Yağ",
+    "is_active": true,
+    "categories": [
+      {
+        "category": "macro",
+        "rating": 7
+      },
+      {
+        "category": "finance",
+        "rating": 7
+      },
+      {
+        "category": "fmcg",
+        "rating": 7
+      },
+      {
+        "category": "strategy",
+        "rating": 7
+      },
+      {
+        "category": "geopolitical",
+        "rating": 7
+      },
+      {
+        "category": "regulatory",
+        "rating": 7
+      }
+    ]
   }
 ]

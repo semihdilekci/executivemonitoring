@@ -22,7 +22,7 @@ class DigestArchiveService:
         sections: list[DigestSection],
     ) -> str:
         archive_key = (
-            f"{digest.digest_type.value}/"
+            f"{digest.newsletter_slug}/"
             f"{digest.period_start.year}/"
             f"{digest.period_start.month:02d}/"
             f"{digest.id}.html"

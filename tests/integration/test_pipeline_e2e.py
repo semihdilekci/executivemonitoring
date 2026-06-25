@@ -12,6 +12,7 @@ from fakeredis.aioredis import FakeRedis
 from packages.shared.enums import RawItemStatus, SourceCategory, SourceStatus, SourceType
 from packages.shared.models.content_chunk import ContentChunk
 from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS
+from packages.shared.models.processed_item_translation import ProcessedItemTranslation
 from packages.shared.models.raw_item import RawItem
 from packages.shared.models.source import Source
 from packages.shared.utils.hashing import sqs_content_hash
@@ -32,6 +33,42 @@ _PIPELINE_CONTENT = (
     "Piyasa analistleri enflasyon ve büyüme beklentilerini değerlendiriyor. "
     "Merkez bankası kararı küresel yatırımcıların dikkatini çekti."
 )
+
+_ENGLISH_CONTENT = (
+    "The central bank raised the benchmark interest rate this week as inflation "
+    "concerns intensified across global markets. Analysts said monetary policy "
+    "decisions and the exchange rate outlook would shape investor sentiment in the "
+    "coming quarter, with gross domestic product growth and the current account "
+    "deficit remaining in focus for international investors and financial markets."
+)
+
+_TRANSLATED_JSON = (
+    '{"title": "Merkez Bankası Faizi Artırdı", '
+    '"content": "Merkez bankası bu hafta gösterge faiz oranını artırdı; enflasyon '
+    'endişeleri küresel piyasalarda yoğunlaştı."}'
+)
+
+
+class _FakeTranslationResponse:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+class _FakeTranslationClient:
+    """E2E için sahte çeviri LLM client'ı — sabit TR JSON döner."""
+
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        max_tokens: int = 4096,
+        operation_type: object = None,
+    ) -> _FakeTranslationResponse:
+        return _FakeTranslationResponse(self._text)
 
 
 @pytest.fixture
@@ -104,6 +141,24 @@ def _build_processor_input(source: Source, *, content_suffix: str = "") -> Proce
     )
 
 
+def _build_english_processor_input(source: Source) -> ProcessorInput:
+    content_hash = sqs_content_hash(_ENGLISH_CONTENT)
+    collected_at = datetime.now(UTC)
+    url = "https://example.com/article/pipeline-e2e-en"
+    return ProcessorInput(
+        source_id=source.id,
+        source_type=source.source_type.value,
+        title="Central bank raises interest rate",
+        content=_ENGLISH_CONTENT,
+        content_hash=content_hash,
+        published_at=collected_at,
+        raw_metadata={"url": url},
+        url=url,
+        external_id=url,
+        collected_at=collected_at,
+    )
+
+
 def _sqs_body(item: ProcessorInput) -> str:
     return json.dumps(
         {
@@ -163,6 +218,64 @@ async def test_pipeline_e2e_writes_processed_item_and_chunks(
 
         chunk_count = await count_content_chunks(session, processed.id)
         assert chunk_count >= 1
+
+    await redis.aclose()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_e2e_translates_english_article(
+    database_url: str,
+    pipeline_source: Source,
+) -> None:
+    """EN haber → TranslationProcessor → canonical TR + orijinal EN satırı (`Docs/04` §8.45)."""
+    item = _build_english_processor_input(pipeline_source)
+    engine = create_async_engine(database_url)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    redis = FakeRedis()
+    embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
+
+    async with session_factory() as session:
+        orchestrator = PipelineOrchestrator(
+            session=session,
+            redis=redis,
+            embedding_service=embedding,
+            translation_llm_client=_FakeTranslationClient(_TRANSLATED_JSON),
+            translation_min_score=0,
+        )
+        result = await orchestrator.process(item, sqs_body=_sqs_body(item))
+        assert result.status == "success"
+        await session.commit()
+
+    async with session_factory() as session:
+        raw_item_id = await resolve_raw_item_id(session, item)
+        assert raw_item_id is not None
+        found = await find_processed_item_for_raw_item(session, raw_item_id)
+        assert found is not None
+        _, processed = found
+        # Canonical içerik Türkçe çevrilmiş hale gelir.
+        assert processed.language == "tr"
+        assert processed.title == "Merkez Bankası Faizi Artırdı"
+        assert "Merkez bankası bu hafta" in processed.clean_content
+
+        # Orijinal İngilizce başlık+metin sidecar satırına yazılır.
+        translations = (
+            (
+                await session.execute(
+                    select(ProcessedItemTranslation).where(
+                        ProcessedItemTranslation.processed_item_id == processed.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(translations) == 1
+        original = translations[0]
+        assert original.language == "en"
+        assert original.is_original is True
+        assert original.title == "Central bank raises interest rate"
+        assert "central bank" in original.content.lower()
 
     await redis.aclose()
     await engine.dispose()

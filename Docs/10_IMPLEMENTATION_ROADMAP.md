@@ -1328,6 +1328,7 @@ Oluşturulacaklar:
 - Editör aday havuzu: `news.processed_items`, `relevance_score*100 >= min_content_score`, `date_range_days` aralığı; bülten-bazında ön kategori filtresi **yok** (editör karar verir).
 - Anlık etki prompt'u **tek global** (`system_settings`); rate-limit + authenticated (viewer dahil).
 - Çıktı modeli (`digest_sections`) korunur; FE render mantığı yeniden kullanılır. Cron/bildirim zamanlama bu fazda **değişmez** (manuel trigger).
+- **İçerik dili (6.5.8–6.5.10):** Bültendeki tüm haberlerin Türkçe olması için İngilizce haberler **ingest sırasında** (processor zincirinde, Scorer sonrası/Chunker öncesi) `TranslationProcessor` ile Türkçeye çevrilir; çeviri bir kez yapılıp `processed_items` canonical içeriğine yazılır, orijinal İngilizce `processed_item_translations`'a saklanır. Çeviri eşiği (`translation_min_relevance_score`) ve çeviriye özel LLM provider sırası (`api_keys.request_type_scope`) admin panelinden yönetilir. Gate/enrich/score algoritması ve digest üretim akışı **değişmez**.
 
 ### 6.5.1 — ADR + Docs Semantik Güncellemesi
 
@@ -1421,6 +1422,50 @@ Oluşturulacaklar:
 - `hooks/use-news-impact.ts` — `POST /digests/news-impact` mutation (loading/typing state); `types/api.ts`
 
 **Cursor context:** `Docs/YGIP_screen_reference_mockup.html` (S-DIGEST-DETAIL), `apps/web/components/digest/source-reference-list.tsx`, `Docs/06` S-DIGEST-DETAIL
+
+---
+
+### 6.5.8 — DB: Çeviri Altyapısı (Translations Tablosu + API Key Operasyon Kapsamı + Ayar)
+
+**Çıktı:** `news.processed_item_translations` sidecar tablo + `api_keys.request_type_scope` kolonu + `translation_min_relevance_score` ayarı + `LlmRequestType.ARTICLE_TRANSLATION` enum; migration + model + seed + test
+
+Oluşturulacaklar:
+- `packages/shared/models/processed_item_translation.py` — `ProcessedItemTranslation` modeli (`news` schema; `processed_item_id` FK CASCADE; `uq_processed_item_translations_item_lang`); `packages/shared/models/__init__.py` export + `NewsProcessedItem` relationship
+- `packages/shared/models/api_key.py` — `request_type_scope` (JSONB, default `[]`); `packages/shared/enums.py` — `LlmRequestType.ARTICLE_TRANSLATION = "article_translation"`
+- `alembic/versions/0XX_translation_infra.py` (`down_revision`: Faz 6.5 newsletter config migration) — `create_table` + `add_column` + `system_settings` insert (`translation_min_relevance_score = 75`)
+- `fixtures/system_settings.json` (varsa) güncelle; `scripts/seed.py` idempotent
+- `tests/integration/test_translation_infra_migration.py`, `tests/unit/test_data_models.py` güncelle
+
+**Cursor context:** `Docs/02` §4.4b/§4.9/§4.15, `packages/shared/models/content_chunk.py` (sidecar pattern), `alembic/versions/` mevcut head
+
+---
+
+### 6.5.9 — AI Engine + Processor: TranslationProcessor + Operasyon-Scoped LLM Client
+
+**Çıktı:** `TranslationProcessor` (EN-only + eşik) zincire wire (Scorer→Chunker arası); operasyon-kapsamlı LLM client; persistence canonical TR + orijinal EN satırı; unit + integration test
+
+Oluşturulacaklar:
+- `services/processor/translator.py` — `TranslationProcessor(BaseProcessor)`: `language == "en"` ve `relevance_score*100 >= translation_min_relevance_score` koşulu; tek `LLMClient.complete()` (`operation_type=ARTICLE_TRANSLATION`, JSON `{title, content}` parse); başarı → `data.title`/`content`/`extras["clean_content"]` TR + `extras["language"]="tr"` + `extras["original_translation"]={lang:"en", title, content}`; hata → no-op passthrough + log
+- `services/processor/pipeline_orchestrator.py` — `build_processor_chain`'e `TranslationProcessor` (Scorer sonrası, Chunker öncesi) + LLM client inject; processor entrypoint'te `request_type_scope` filtreli LLM client kurulumu
+- `apps/api/services/llm_client_factory.py` — `list_llm_providers`/`build_llm_client`'a `operation_type` filtresi (`request_type_scope` ⊇ op veya `[]`)
+- `services/processor/persistence.py` — `extras["original_translation"]` varsa `ProcessedItemTranslation` (is_original=true) yaz; `language` extras'tan
+- `tests/unit/processor/test_translator.py`, `tests/integration/test_pipeline_e2e.py` güncelle (EN→TR akışı + çeviri satırı)
+
+**Cursor context:** 6.5.8 çıktıları, `services/processor/scorer.py`/`chunker.py` (chain pattern), `services/ai_engine/llm_client.py`, `Docs/04` §8.45/§9.1
+
+---
+
+### 6.5.10 — API + FE: Çeviri Ayarı + API Key Kapsam Atama + Arşiv TR/EN Görünümü
+
+**Çıktı:** Admin'in çeviri eşiğini + çeviri provider kapsamını yönettiği UI; içerik arşivi detayında TR/EN dil sekmeleri; `npm run build` + test yeşil
+
+Oluşturulacaklar:
+- `apps/api/schemas/api_key.py` + `apps/api/services/api_key_service.py` + `apps/api/routers/api_keys.py` — `request_type_scope` create/update + response; `apps/api/schemas/content_archive.py` + `services/content_archive_service.py` + `repositories/processed_item_repository.py` — detayda `translations` (varyant listesi)
+- `apps/web/app/(dashboard)/admin/api-keys/page.tsx` + key kartı — operasyon kapsam (multi-select) editör; çeviri ayar alanı (notification-settings-form benzeri veya yeni `translation-settings`): `translation_min_relevance_score` 0–100 input
+- `apps/web/components/admin/content-archive-detail-drawer.tsx` — "Türkçe (canonical)" + "Orijinal (EN)" dil sekmeleri; `apps/web/types/api.ts` + ilgili hook'lar (`use-content-archive-detail`, api-keys, settings) güncel
+- `tests/integration/test_api_key_scope.py`, `test_content_archive_translations.py`; FE tip/hook senkron
+
+**Cursor context:** 6.5.8–6.5.9 çıktıları, `apps/web/components/admin/notification-settings-form.tsx`, `apps/web/app/(dashboard)/admin/content-archive/`, `Docs/03` §6/§11/§11.6
 
 ---
 

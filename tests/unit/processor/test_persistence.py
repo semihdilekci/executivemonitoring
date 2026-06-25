@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from packages.shared.models.processed_item import NewsProcessedItem
+from packages.shared.models.processed_item_translation import ProcessedItemTranslation
 from services.processor.embedding_service import DeterministicEmbeddingBackend, EmbeddingService
 from services.processor.models import ProcessorInput, ProcessorOutput
 from services.processor.persistence import (
@@ -133,6 +134,68 @@ async def test_persist_pipeline_output_ignores_legacy_schema_category() -> None:
     added = session.add.call_args.args[0]
     assert isinstance(added, NewsProcessedItem)
     assert added.schema_category == "news"
+
+
+@pytest.mark.asyncio
+async def test_persist_pipeline_output_writes_original_translation() -> None:
+    """EN→TR çeviri sonrası orijinal EN satırı yazılır (`Docs/02` §4.4b)."""
+    raw_item_id = uuid.uuid4()
+    item = _sample_input()
+    output = _output_with_chunks(item)
+    output.title = "Türkçe Başlık"
+    output.extras["clean_content"] = "Türkçe içerik."
+    output.extras["language"] = "tr"
+    output.extras["original_translation"] = {
+        "language": "en",
+        "title": "Original English Title",
+        "content": "Original English content.",
+    }
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=_mock_scalar_result(None))
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+
+    embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
+    await persist_pipeline_output(
+        session,  # type: ignore[arg-type]
+        embedding,
+        raw_item_id=raw_item_id,
+        output=output,
+    )
+
+    added_models = [call.args[0] for call in session.add.call_args_list]
+    processed = next(m for m in added_models if isinstance(m, NewsProcessedItem))
+    assert processed.language == "tr"
+    translation = next(m for m in added_models if isinstance(m, ProcessedItemTranslation))
+    assert translation.language == "en"
+    assert translation.is_original is True
+    assert translation.title == "Original English Title"
+    assert translation.content == "Original English content."
+
+
+@pytest.mark.asyncio
+async def test_persist_pipeline_output_no_translation_when_absent() -> None:
+    """Çeviri yapılmadıysa (extras'ta `original_translation` yok) çeviri satırı yazılmaz."""
+    raw_item_id = uuid.uuid4()
+    item = _sample_input()
+    output = _output_with_chunks(item)
+
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=_mock_scalar_result(None))
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+
+    embedding = EmbeddingService(backend=DeterministicEmbeddingBackend())
+    await persist_pipeline_output(
+        session,  # type: ignore[arg-type]
+        embedding,
+        raw_item_id=raw_item_id,
+        output=output,
+    )
+
+    added_models = [call.args[0] for call in session.add.call_args_list]
+    assert not any(isinstance(m, ProcessedItemTranslation) for m in added_models)
 
 
 @pytest.mark.asyncio

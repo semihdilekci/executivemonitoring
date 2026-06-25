@@ -1,23 +1,25 @@
-"""İçerik tablo modelleri ve enum unit testleri."""
+"""İçerik tablo modelleri ve enum unit testleri (Faz 6.5 — ADR-0003).
+
+`prompt_templates`/`DigestType` kaldırıldı; serbest bülten modeli
+(`newsletter_templates` + `newsletter_sections`) + `digests.newsletter_slug`.
+"""
 
 import uuid
 
-from packages.shared.enums import DigestStatus, DigestType
+from packages.shared.enums import DigestStatus
 from packages.shared.models import (
     Base,
     ChatHistory,
     Digest,
     DigestSection,
+    NewsletterSection,
+    NewsletterTemplate,
     NotificationPreference,
-    PromptTemplate,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
 
-def test_digest_enums_values() -> None:
-    assert DigestType.TURKISH_MEDIA_WEEKLY.value == "turkish_media_weekly"
-    assert DigestType.FMCG_WEEKLY.value == "fmcg_weekly"
-    assert DigestType.STRATEGY_WEEKLY.value == "strategy_weekly"
+def test_digest_status_enum_values() -> None:
     assert DigestStatus.GENERATING.value == "generating"
     assert DigestStatus.READY.value == "ready"
     assert DigestStatus.FAILED.value == "failed"
@@ -26,7 +28,8 @@ def test_digest_enums_values() -> None:
 def test_content_table_names() -> None:
     table_names = set(Base.metadata.tables.keys())
     assert {
-        "prompt_templates",
+        "newsletter_templates",
+        "newsletter_sections",
         "digests",
         "digest_sections",
         "chat_history",
@@ -34,22 +37,48 @@ def test_content_table_names() -> None:
     }.issubset(table_names)
 
 
-def test_prompt_template_columns() -> None:
-    columns = {column.name for column in PromptTemplate.__table__.columns}
+def test_newsletter_template_columns() -> None:
+    columns = {column.name for column in NewsletterTemplate.__table__.columns}
     assert {
+        "slug",
         "name",
-        "digest_type",
-        "section_key",
-        "system_prompt",
-        "user_prompt_template",
-        "version",
+        "description",
+        "date_range_days",
+        "summary_system_prompt",
+        "summary_user_prompt",
+        "min_content_score",
+        "model_preference",
+        "is_active",
         "updated_at",
     }.issubset(columns)
 
 
-def test_prompt_template_name_unique() -> None:
-    name_column = PromptTemplate.__table__.c.name
-    assert name_column.unique is True
+def test_newsletter_section_columns() -> None:
+    columns = {column.name for column in NewsletterSection.__table__.columns}
+    assert {
+        "newsletter_template_id",
+        "name",
+        "sort_order",
+        "section_system_prompt",
+        "section_user_prompt",
+        "impact_prompt",
+        "is_active",
+    }.issubset(columns)
+
+
+def test_newsletter_section_cascade_fk_to_template() -> None:
+    template_fk = next(
+        fk
+        for fk in NewsletterSection.__table__.foreign_keys
+        if fk.parent.name == "newsletter_template_id"
+    )
+    assert template_fk.target_fullname == "newsletter_templates.id"
+    assert template_fk.ondelete == "CASCADE"
+
+
+def test_digest_has_newsletter_slug_column() -> None:
+    columns = {column.name for column in Digest.__table__.columns}
+    assert {"newsletter_slug", "newsletter_template_id", "summary"}.issubset(columns)
 
 
 def test_digest_status_default_generating() -> None:
@@ -73,11 +102,13 @@ def test_digest_section_cascade_fk_to_digests() -> None:
     assert "digests.id" in digest_fk
 
 
-def test_digest_section_prompt_template_set_null() -> None:
-    template_fk = next(
-        fk for fk in DigestSection.__table__.foreign_keys if fk.parent.name == "prompt_template_id"
+def test_digest_section_newsletter_section_set_null() -> None:
+    section_fk = next(
+        fk
+        for fk in DigestSection.__table__.foreign_keys
+        if fk.parent.name == "newsletter_section_id"
     )
-    assert template_fk.ondelete == "SET NULL"
+    assert section_fk.ondelete == "SET NULL"
 
 
 def test_digest_section_source_references_jsonb() -> None:
@@ -108,11 +139,13 @@ def test_notification_preference_no_created_at() -> None:
     assert "updated_at" in columns
 
 
-def test_digest_type_enum_on_prompt_template() -> None:
-    column = PromptTemplate.__table__.c.digest_type
-    assert column.type.name == "digest_type_enum"  # type: ignore[attr-defined]
-
-
 def test_content_models_uuid_primary_keys() -> None:
-    for model in (PromptTemplate, Digest, DigestSection, ChatHistory, NotificationPreference):
+    for model in (
+        NewsletterTemplate,
+        NewsletterSection,
+        Digest,
+        DigestSection,
+        ChatHistory,
+        NotificationPreference,
+    ):
         assert model.__table__.c.id.type.python_type is uuid.UUID

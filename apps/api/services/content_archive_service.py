@@ -27,6 +27,7 @@ from apps.api.schemas.content_archive import (
     ProcessedItemDetailResponse,
     ProcessedItemListItem,
     ProcessedItemListResponse,
+    TranslationVariant,
 )
 
 processed_item_repository = ProcessedItemRepository()
@@ -47,7 +48,7 @@ def _to_summaries(rows: list[DigestUsageRow]) -> list[DigestUsageSummary]:
         summaries.append(
             DigestUsageSummary(
                 digest_id=row.digest_id,
-                digest_type=row.digest_type,
+                newsletter_slug=row.newsletter_slug,
                 digest_title=row.digest_title,
                 period_start=row.period_start,
                 period_end=row.period_end,
@@ -68,7 +69,7 @@ def _to_details(rows: list[DigestUsageRow]) -> list[DigestUsageDetail]:
         details.append(
             DigestUsageDetail(
                 digest_id=row.digest_id,
-                digest_type=row.digest_type,
+                newsletter_slug=row.newsletter_slug,
                 digest_title=row.digest_title,
                 period_start=row.period_start,
                 period_end=row.period_end,
@@ -181,6 +182,7 @@ class ContentArchiveService:
 
         chunk_count = await self._processed_items.count_chunks(db, item_id)
         usages = await self._digest_usages.find_for_processed_item_id(db, item_id)
+        translations = await self._processed_items.list_translations(db, item_id)
 
         return ProcessedItemDetailResponse(
             id=row.id,
@@ -194,6 +196,7 @@ class ContentArchiveService:
             clean_content=row.clean_content,
             summary=row.summary,
             language=row.language,
+            translations=[TranslationVariant.model_validate(item) for item in translations],
             relevance_score=row.relevance_score,
             topics=row.topics if isinstance(row.topics, list) else [],
             entities=row.entities if isinstance(row.entities, list) else [],

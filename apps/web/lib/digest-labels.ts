@@ -1,12 +1,17 @@
-import type { DigestType } from "@/types/api";
-
-export interface DigestTypeMeta {
+export interface NewsletterBadgeMeta {
   label: string;
   emoji: string;
   badgeClass: string;
 }
 
-export const DIGEST_TYPE_META: Record<DigestType, DigestTypeMeta> = {
+/**
+ * Bilinen seed bültenleri için renkli rozet metası (Faz 6.5).
+ *
+ * Bülten slug'ları artık serbest olduğundan bu harita yalnızca tanıdık
+ * bültenlere özel görsel kimlik verir; bilinmeyen slug'lar `humanizeSlug`
+ * ile nötr rozete düşer (asla hata fırlatmaz).
+ */
+const KNOWN_NEWSLETTERS: Record<string, NewsletterBadgeMeta> = {
   fmcg_weekly: {
     label: "FMCG",
     emoji: "🛒",
@@ -24,14 +29,21 @@ export const DIGEST_TYPE_META: Record<DigestType, DigestTypeMeta> = {
   },
 };
 
-export const DIGEST_TYPE_FILTERS: { value: DigestType | "all"; label: string }[] =
-  [
-    { value: "all", label: "Tümü" },
-    { value: "turkish_media_weekly", label: "Türk Medyası" },
-    { value: "fmcg_weekly", label: "FMCG" },
-    { value: "strategy_weekly", label: "Strateji" },
-  ];
+const FALLBACK_BADGE_CLASS = "bg-gray-100 text-gray-700 border-gray-200";
 
-export function getDigestTypeMeta(digestType: DigestType): DigestTypeMeta {
-  return DIGEST_TYPE_META[digestType];
+function humanizeSlug(slug: string): string {
+  if (!slug) return "Bülten";
+  return slug
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function getNewsletterBadgeMeta(slug: string): NewsletterBadgeMeta {
+  return (
+    KNOWN_NEWSLETTERS[slug] ?? {
+      label: humanizeSlug(slug),
+      emoji: "🗞️",
+      badgeClass: FALLBACK_BADGE_CLASS,
+    }
+  );
 }

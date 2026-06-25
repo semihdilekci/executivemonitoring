@@ -40,7 +40,6 @@ from apps.api.services.api_usage_service import ApiUsageService
 from apps.api.services.audit_service import AuditService
 from apps.api.services.llm_client_factory import build_llm_client
 from apps.api.services.notification_service import notification_service
-from apps.api.services.prompt_template_resolver import db_prompt_template_resolver
 
 logger = logging.getLogger("ygip.api.pipeline_driver")
 
@@ -77,7 +76,6 @@ def _build_orchestrator(
 
         return DigestGenerator(
             llm_client=llm_client,
-            template_resolver=db_prompt_template_resolver,
             notification_hook=notification_hook,
         )
 

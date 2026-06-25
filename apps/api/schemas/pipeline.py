@@ -7,7 +7,6 @@ from typing import Any, Literal
 from uuid import UUID
 
 from packages.shared.enums import (
-    DigestType,
     PipelineRunStatus,
     PipelineRunType,
     PipelineStage,
@@ -21,7 +20,7 @@ from apps.api.schemas.common import PaginatedResponse
 class TriggerPipelineRequest(BaseModel):
     """Pipeline tetikleme isteği — `collect_pipeline` | `digest_update` (`Docs/03` §11.5).
 
-    `source_types` yalnızca `collect_pipeline` için; `digest_type`/`period_*`/
+    `source_types` yalnızca `collect_pipeline` için; `newsletter_template_id`/`period_*`/
     `send_notification` yalnızca `digest_update` için (kurallar `Docs/03` §7 ile aynı).
     Kaynak tipi **değer** doğrulaması (rss/email/gov/all) servis katmanında yapılır —
     geçersiz değer `INVALID_SOURCE_TYPE` (422) döner.
@@ -29,7 +28,7 @@ class TriggerPipelineRequest(BaseModel):
 
     run_type: PipelineRunType
     source_types: list[str] | None = None
-    digest_type: DigestType | None = None
+    newsletter_template_id: UUID | None = None
     period_start: date | None = None
     period_end: date | None = None
     send_notification: bool = True
@@ -42,7 +41,7 @@ class TriggerPipelineRequest(BaseModel):
         else:  # digest_update
             missing = [
                 name
-                for name in ("digest_type", "period_start", "period_end")
+                for name in ("newsletter_template_id", "period_start", "period_end")
                 if getattr(self, name) is None
             ]
             if missing:

@@ -24,6 +24,7 @@ from apps.api.schemas.api_key import (
     CreateApiKeyRequest,
     DeleteApiKeyResponse,
     PatchApiKeyStatusRequest,
+    UpdateApiKeyRequest,
 )
 from apps.api.services.api_key_service import ApiKeyService
 from apps.api.services.api_usage_service import ApiUsageService
@@ -69,6 +70,22 @@ async def patch_api_key_status(
     service: Annotated[ApiKeyService, Depends(get_api_key_service)],
 ) -> ApiKeyResponse:
     return await service.patch_api_key_status(
+        db,
+        actor=actor,
+        key_id=key_id,
+        body=body,
+    )
+
+
+@router.patch("/{key_id}", response_model=ApiKeyResponse)
+async def update_api_key(
+    key_id: UUID,
+    body: UpdateApiKeyRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    actor: Annotated[User, Depends(require_admin)],
+    service: Annotated[ApiKeyService, Depends(get_api_key_service)],
+) -> ApiKeyResponse:
+    return await service.update_api_key(
         db,
         actor=actor,
         key_id=key_id,

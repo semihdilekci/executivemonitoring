@@ -101,3 +101,9 @@ class ExternalServiceException(AppException):
     status_code = 502
     error_code = "EXTERNAL_SERVICE_ERROR"
     message = "Dış servis hatası."
+
+
+class AiProvidersUnavailableException(AppException):
+    status_code = 503
+    error_code = "AI_PROVIDERS_UNAVAILABLE"
+    message = "AI servisleri şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin."

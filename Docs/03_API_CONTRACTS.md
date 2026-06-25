@@ -462,7 +462,7 @@ Bülteni siler. Bölümler CASCADE; geçmiş digest'ler `newsletter_slug` ile ko
 
 ### GET /api/v1/api-keys _(Admin only)_
 
-LLM API key'lerini listeler. `encrypted_key` alanı response'ta dönmez; yalnızca `key_alias`, `provider`, `is_active`, `priority_order` görünür.
+LLM API key'lerini listeler. `encrypted_key` alanı response'ta dönmez; yalnızca `key_alias`, `provider`, `model`, `is_active`, `priority_order`, `request_type_scope` görünür.
 
 **Response (200):**
 ```json
@@ -472,13 +472,17 @@ LLM API key'lerini listeler. `encrypted_key` alanı response'ta dönmez; yalnız
       "id": "bb0e8400-...",
       "provider": "groq",
       "key_alias": "Groq Primary",
+      "model": "llama-3.3-70b-versatile",
       "is_active": true,
       "priority_order": 1,
+      "request_type_scope": ["digest_generation", "chatbot"],
       "created_at": "2026-06-01T10:00:00Z"
     }
   ]
 }
 ```
+
+`request_type_scope` (Faz 6.5): anahtarın kullanılacağı LLM operasyonları (`digest_generation` | `chatbot` | `article_translation`). Boş dizi `[]` = tüm operasyonlar. Çeviri için ayrı/ucuz bir provider sırası kurmak isteyen admin, ucuz anahtarlara `["article_translation"]` atar (`Docs/02` §4.9).
 
 ### POST /api/v1/api-keys _(Admin only)_
 
@@ -488,13 +492,17 @@ Yeni API key ekler.
 ```json
 {
   "provider": "gemini",
-  "key_alias": "Gemini Backup",
+  "key_alias": "Gemini Translate",
   "api_key": "AIzaSy...",
-  "priority_order": 2
+  "model": "gemini-2.5-flash-lite",
+  "priority_order": 2,
+  "request_type_scope": ["article_translation"]
 }
 ```
 
-`api_key` alanı şifrelenerek `encrypted_key` olarak saklanır. Response'ta plain-text key dönmez. Audit log'a `api_key.created` yazılır.
+`api_key` alanı şifrelenerek `encrypted_key` olarak saklanır. Response'ta plain-text key dönmez. `request_type_scope` verilmezse `[]` (tüm operasyonlar) varsayılır; geçerli değerler `LlmRequestType` enum üyeleridir. Audit log'a `api_key.created` yazılır.
+
+`request_type_scope` ayrıca `PATCH /api/v1/api-keys/{key_id}` ile (veya status PATCH'ine benzer bir alan güncellemesiyle) düzenlenebilir; audit log'a `api_key.updated`.
 
 ### DELETE /api/v1/api-keys/{key_id} _(Admin only)_
 
@@ -980,6 +988,12 @@ Tüm sistem ayarlarını döner.
       "updated_at": "2026-06-01T10:00:00Z"
     },
     {
+      "key": "translation_min_relevance_score",
+      "value": 75,
+      "description": "İngilizce haber çevirisi için minimum relevance skoru (0–100; Faz 6.5)",
+      "updated_at": "2026-06-01T10:00:00Z"
+    },
+    {
       "key": "notification_schedule",
       "value": {
         "strategy_weekly": { "day": "friday", "time": "18:00", "enabled": true },
@@ -1016,6 +1030,8 @@ Tek bir sistem ayarını günceller.
   "updated_at": "2026-06-16T11:00:00Z"
 }
 ```
+
+`translation_min_relevance_score` güncellenirken `value` **0–100 aralığında tam sayı** olmalıdır (aralık dışı → `422 VALIDATION_ERROR`). Admin bu ayarı S-ADMIN-NOTIFICATIONS ayar bölümünden (veya çeviri ayar bloğundan) düzenler.
 
 `embedding_model` değiştirildiğinde response'ta ek uyarı döner:
 
@@ -1240,9 +1256,17 @@ Tek işlenmiş içeriğin detayı. **`schema_category` query** varsayılan `news
   "content_category": "macro",
   "source_id": "bb0e8400-e29b-41d4-a716-446655440002",
   "source_name": "Bloomberg HT RSS",
-  "title": "TCMB faiz kararı piyasaları hareketlendirdi",
-  "clean_content": "… tam normalize edilmiş metin …",
+  "title": "Merkez bankasının faiz kararı piyasaları hareketlendirdi",
+  "clean_content": "… canonical (Türkçe) tam metin …",
   "language": "tr",
+  "translations": [
+    {
+      "language": "en",
+      "title": "Central bank rate decision shakes markets",
+      "content": "… original English full text …",
+      "is_original": true
+    }
+  ],
   "relevance_score": 0.82,
   "topics": ["tcmb", "faiz", "enflasyon"],
   "entities": [],
@@ -1263,6 +1287,8 @@ Tek işlenmiş içeriğin detayı. **`schema_category` query** varsayılan `news
 ```
 
 Bulunamaz → `404 PROCESSED_ITEM_NOT_FOUND`.
+
+**`translations` (Faz 6.5):** İçeriğin canonical olmayan dil varyantları (`processed_item_translations`; `Docs/02` §4.4b). İngilizce kaynaklı çevrilen haberlerde orijinal İngilizce varyant `is_original=true` ile döner; çevrilmemiş (TR kaynaklı) haberlerde **boş dizi** `[]`. Arşiv detay drawer'ı (S-ADMIN-CONTENT-ARCHIVE) canonical TR (`clean_content`) ile `translations` varyantlarını **dil sekmeleri** olarak gösterir (`Docs/06`). `clean_content` her zaman canonical (MVP-0'da TR) içeriktir.
 
 ---
 

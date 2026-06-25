@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 from packages.shared.enums import (
     DigestStatus,
-    DigestType,
     PipelineRunStatus,
     PipelineRunType,
     PipelineStage,
@@ -34,6 +33,8 @@ from services.orchestrator.stage_executors import (
 
 pytestmark = pytest.mark.asyncio
 
+_NEWSLETTER_TEMPLATE_ID = uuid.UUID("aa0e8400-0000-4000-8000-000000000001")
+
 
 # --- Test doubles -----------------------------------------------------------
 
@@ -52,7 +53,7 @@ class _FakeDigestRunner:
 
 def _digest_params(*, send_notification: bool = False) -> dict[str, Any]:
     return {
-        "digest_type": DigestType.FMCG_WEEKLY.value,
+        "newsletter_template_id": str(_NEWSLETTER_TEMPLATE_ID),
         "period_start": "2026-06-09",
         "period_end": "2026-06-15",
         "send_notification": send_notification,
@@ -107,7 +108,7 @@ async def test_digest_ready_marks_step_completed_and_records_id() -> None:
     assert run.stats["digest_id"] == str(digest_id)
     # Params runner'a doğru parse edildi
     request = runner.requests[0]
-    assert request.digest_type == DigestType.FMCG_WEEKLY
+    assert request.newsletter_template_id == _NEWSLETTER_TEMPLATE_ID
     assert request.period_start == date(2026, 6, 9)
     assert request.actor_user_id == run.triggered_by
     assert request.send_notification is False
@@ -145,7 +146,7 @@ async def test_invalid_digest_params_fail_without_calling_runner() -> None:
     runner = _FakeDigestRunner(
         DigestRunResult(status=DigestStatus.READY, digest_id=uuid.uuid4())
     )
-    run = _build_run(params={"digest_type": "nonexistent_type"})
+    run = _build_run(params={"newsletter_template_id": "not-a-valid-uuid"})
     executor = DigestStageExecutor(runner=runner)
 
     result = await executor.run(run, _build_step())

@@ -9,6 +9,10 @@ from packages.shared.models.content_chunk import EMBEDDING_DIMENSION, ContentChu
 from packages.shared.models.digest import Digest
 from packages.shared.models.digest_section import DigestSection
 from packages.shared.models.keyword import Keyword, KeywordCategoryRating
+from packages.shared.models.newsletter_template import (
+    NewsletterSection,
+    NewsletterTemplate,
+)
 from packages.shared.models.notification_log import NotificationLog
 from packages.shared.models.notification_preference import NotificationPreference
 from packages.shared.models.password_reset_token import PasswordResetToken
@@ -24,7 +28,7 @@ from packages.shared.models.processed_item import (
     ProcessedItem,
     TransportProcessedItem,
 )
-from packages.shared.models.prompt_template import PromptTemplate
+from packages.shared.models.processed_item_translation import ProcessedItemTranslation
 from packages.shared.models.raw_item import RawItem
 from packages.shared.models.source import Source
 from packages.shared.models.system_setting import SystemSetting
@@ -48,14 +52,16 @@ __all__ = [
     "KeywordCategoryRating",
     "MarketProcessedItem",
     "NewsProcessedItem",
+    "NewsletterSection",
+    "NewsletterTemplate",
     "NotificationLog",
     "NotificationPreference",
     "PROCESSED_ITEM_MODELS",
     "PasswordResetToken",
+    "ProcessedItemTranslation",
     "PipelineRun",
     "PipelineRunStep",
     "ProcessedItem",
-    "PromptTemplate",
     "RawItem",
     "Source",
     "SystemSetting",

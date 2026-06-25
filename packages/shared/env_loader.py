@@ -115,6 +115,8 @@ def try_resolve_sync_database_url() -> str | None:
         url = get_database_url(required=True)
     except RuntimeError:
         return None
+    if url is None:
+        return None
     sync_url = async_to_sync_database_url(url)
     if can_connect_sync(sync_url):
         return sync_url

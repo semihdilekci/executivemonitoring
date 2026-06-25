@@ -1,91 +1,69 @@
-"""DigestGenerator unit testleri — mock LLM, repo ve audit."""
+"""DigestGenerator unit testleri — 3-aşamalı editör pipeline (Faz 6.5)."""
 
 from __future__ import annotations
 
+import json
 import uuid
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from packages.shared.enums import ApiProvider, DigestStatus, DigestType
+from packages.shared.enums import ApiProvider, DigestStatus
 from packages.shared.models.digest import Digest
-from packages.shared.models.prompt_template import PromptTemplate
-from services.ai_engine.digest_generator import (
-    DigestGenerator,
-    build_digest_title,
-    format_articles_for_prompt,
-)
+from services.ai_engine.digest_generator import DigestGenerator, build_digest_title
 from services.ai_engine.digest_models import (
-    DIGEST_TYPE_QUERY_CONFIG,
     DigestArticle,
-    DigestTypeQueryConfig,
+    EditorResult,
+    ParsedDigestSection,
+    SectionAssignment,
+    SourceReference,
 )
-from services.ai_engine.exceptions import NoArticlesForDigestError
+from services.ai_engine.editor_selector import EditorSelector
+from services.ai_engine.exceptions import DigestParseError, NoArticlesForDigestError
 from services.ai_engine.llm_client import LLMClient
 from services.ai_engine.models import LLMResponse, TokenUsage
+from services.ai_engine.providers.base import LLMProvider
+from services.ai_engine.section_generator import SectionGenerator
 
-from tests.unit.ai_engine.test_llm_client import MockProvider
+# --- Fixtures / fakes -------------------------------------------------------
 
 
-def _article(*, title: str = "Haber", score: float = 0.8) -> DigestArticle:
+@dataclass
+class _FakeSection:
+    id: uuid.UUID
+    name: str
+    sort_order: int
+    section_system_prompt: str = "Sen bir analistsin."
+    section_user_prompt: str = "Haberler:\n{articles}"
+    impact_prompt: str = "Yıldız etkisini değerlendir."
+
+
+@dataclass
+class _FakeNewsletter:
+    id: uuid.UUID = field(default_factory=uuid.uuid4)
+    slug: str = "fmcg_weekly"
+    name: str = "FMCG Haftalık"
+    description: str = "FMCG sektörü haftalık bülteni."
+    summary_system_prompt: str = "Sen kıdemli bir editörsün."
+    summary_user_prompt: str = "Bölümler:\n{sections}\nHaberler:\n{articles}"
+    min_content_score: int = 50
+    content_categories: list[str] = field(default_factory=list)
+    sections: list[_FakeSection] = field(default_factory=list)
+
+
+def _article(item_id: uuid.UUID | None = None, *, title: str = "Haber") -> DigestArticle:
     return DigestArticle(
-        processed_item_id=uuid.uuid4(),
+        processed_item_id=item_id or uuid.uuid4(),
         source_id=uuid.uuid4(),
         title=title,
         clean_content="Uzun içerik metni örnek makale gövdesi.",
-        relevance_score=score,
+        relevance_score=0.8,
         published_at=None,
         url="https://example.com/1",
-        topics=["strateji"],
+        topics=["fmcg"],
     )
-
-
-def _template(
-    *,
-    section_key: str,
-    digest_type: DigestType = DigestType.FMCG_WEEKLY,
-) -> PromptTemplate:
-    return PromptTemplate(
-        id=uuid.uuid4(),
-        name=f"{digest_type.value}_{section_key}",
-        digest_type=digest_type,
-        section_key=section_key,
-        system_prompt="Sen bir analistsin.",
-        user_prompt_template="Makaleler:\n{{ articles }}",
-        model_preference="groq",
-        is_active=True,
-        version=1,
-    )
-
-
-class _FakeProcessedRepo:
-    def __init__(self, articles: list[DigestArticle]) -> None:
-        self._articles = articles
-
-    async def list_for_digest(self, *_args: Any, **_kwargs: Any) -> list[DigestArticle]:
-        return self._articles
-
-
-class _TrackingProcessedRepo:
-    """`list_for_digest` çağrısındaki config'i kaydeder."""
-
-    def __init__(self, articles: list[DigestArticle]) -> None:
-        self._articles = articles
-        self.last_config: DigestTypeQueryConfig | None = None
-
-    async def list_for_digest(
-        self,
-        _db: Any,
-        *,
-        config: DigestTypeQueryConfig,
-        period_start: date,
-        period_end: date,
-        min_relevance_score: float,
-        limit: int,
-    ) -> list[DigestArticle]:
-        self.last_config = config
-        return self._articles
 
 
 class _FakeDigestRepo:
@@ -99,7 +77,8 @@ class _FakeDigestRepo:
     async def create_generating(self, _db: Any, **kwargs: Any) -> Digest:
         self._digest = Digest(
             id=uuid.uuid4(),
-            digest_type=kwargs["digest_type"],
+            newsletter_slug=kwargs["newsletter_slug"],
+            newsletter_template_id=kwargs["newsletter_template_id"],
             title=kwargs["title"],
             status=DigestStatus.GENERATING,
             period_start=kwargs["period_start"],
@@ -112,6 +91,7 @@ class _FakeDigestRepo:
     async def reset_for_regeneration(self, _db: Any, digest: Digest, *, title: str) -> Digest:
         digest.title = title
         digest.status = DigestStatus.GENERATING
+        digest.summary = None
         return digest
 
     async def add_sections(self, _db: Any, _digest_id: uuid.UUID, sections: list[Any]) -> list[Any]:
@@ -133,204 +113,234 @@ class _FakeDigestRepo:
         return digest
 
 
-class _FakeTemplateResolver:
-    def __init__(self, templates: list[PromptTemplate]) -> None:
-        self._templates = templates
-
-    async def list_active_templates(
-        self,
-        _db: Any,
-        *,
-        digest_type: DigestType,
-    ) -> list[PromptTemplate]:
-        return [template for template in self._templates if template.digest_type == digest_type]
-
-
 class _FakeArchiveService:
     async def upload_html(self, *, digest: Digest, sections: list[Any]) -> str:
-        return f"{digest.digest_type.value}/2026/06/{digest.id}.html"
+        return f"{digest.newsletter_slug}/2026/06/{digest.id}.html"
 
 
-@pytest.fixture
-def llm_response_json() -> str:
-    return """
-    {
-      "section_title": "Piyasa Özeti",
-      "ai_summary": "FMCG piyasasında bu hafta hareketlilik arttı.",
-      "impact_note": "Yıldız Holding için olumlu sinyaller.",
-      "source_references": []
-    }
-    """
+class _FakeEditor:
+    """Aday havuz + editör çıktısını sabitler."""
+
+    def __init__(self, *, candidates: list[DigestArticle], result: EditorResult) -> None:
+        self._candidates = candidates
+        self._result = result
+
+    async def select_candidates(self, _db: Any, **_kwargs: Any) -> list[DigestArticle]:
+        return self._candidates
+
+    async def run_editor(self, **_kwargs: Any) -> EditorResult:
+        return self._result
 
 
-@pytest.mark.asyncio
-async def test_generate_success_creates_ready_digest(llm_response_json: str) -> None:
-    provider = MockProvider(
-        provider=ApiProvider.GROQ,
-        returns=LLMResponse(
-            text=llm_response_json,
+class _FakeSectionGenerator:
+    """Atanan haberlerden deterministik bölüm üretir; isteğe bağlı parse hatası."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self._fail = fail
+        self.calls: list[int] = []
+
+    async def generate_section(
+        self,
+        *,
+        section: _FakeSection,
+        newsletter_name: str,
+        articles: list[DigestArticle],
+        date_range: str,
+    ) -> ParsedDigestSection:
+        self.calls.append(section.sort_order)
+        if self._fail:
+            raise DigestParseError("bölüm parse hatası")
+        return ParsedDigestSection(
+            section_title=section.name,
+            ai_summary=f"{section.name} özeti",
+            impact_note="Yıldız etkisi",
+            source_references=[
+                SourceReference(
+                    processed_item_id=article.processed_item_id,
+                    title=article.title,
+                    url=article.url,
+                )
+                for article in articles
+            ],
+            newsletter_section_id=section.id,
+        )
+
+
+class _ScriptedProvider(LLMProvider):
+    """Çağrı sırasına göre farklı yanıt döndürür (editör → bölümler)."""
+
+    def __init__(self, responses: list[str]) -> None:
+        self._responses = responses
+        self._key_id = uuid.uuid4()
+        self.call_count = 0
+
+    @property
+    def provider(self) -> ApiProvider:
+        return ApiProvider.GROQ
+
+    @property
+    def key_id(self) -> uuid.UUID:
+        return self._key_id
+
+    @property
+    def is_active(self) -> bool:
+        return True
+
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        max_tokens: int = 4096,
+    ) -> LLMResponse:
+        index = min(self.call_count, len(self._responses) - 1)
+        text = self._responses[index]
+        self.call_count += 1
+        return LLMResponse(
+            text=text,
             usage=TokenUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
             provider=ApiProvider.GROQ,
             model="groq/test",
             latency_ms=10,
-        ),
+        )
+
+
+def _newsletter_with_two_sections() -> _FakeNewsletter:
+    return _FakeNewsletter(
+        sections=[
+            _FakeSection(id=uuid.uuid4(), name="Piyasa Genel Görünümü", sort_order=0),
+            _FakeSection(id=uuid.uuid4(), name="Marka Hamleleri", sort_order=1),
+        ]
     )
-    llm_client = LLMClient(providers=[provider])
+
+
+# --- Tests ------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_generate_persists_summary_and_sections() -> None:
+    art1, art2, art3 = _article(), _article(), _article()
+    newsletter = _newsletter_with_two_sections()
+    editor_result = EditorResult(
+        summary="Haftanın yönetici özeti.",
+        assignments=[
+            SectionAssignment(
+                section_name="Piyasa Genel Görünümü",
+                sort_order=0,
+                article_ids=[art1.processed_item_id, art2.processed_item_id],
+            ),
+            SectionAssignment(
+                section_name="Marka Hamleleri",
+                sort_order=1,
+                article_ids=[art3.processed_item_id],
+            ),
+        ],
+        dropped=[],
+    )
     digest_repo = _FakeDigestRepo()
     audit_events: list[str] = []
 
-    async def audit_hook(
-        _db: Any,
-        *,
-        event_type: str,
-        actor_user_id: uuid.UUID | None,
-        target_type: str | None,
-        target_id: uuid.UUID,
-        payload: dict[str, Any],
-    ) -> None:
+    async def audit_hook(_db: Any, *, event_type: str, **_kwargs: Any) -> None:
         audit_events.append(event_type)
 
     generator = DigestGenerator(
-        llm_client=llm_client,
-        processed_items=_FakeProcessedRepo([_article()]),
+        llm_client=LLMClient(providers=[]),
+        editor_selector=_FakeEditor(candidates=[art1, art2, art3], result=editor_result),
+        section_generator=_FakeSectionGenerator(),
         digests=digest_repo,
-        template_resolver=_FakeTemplateResolver(
-            [
-                _template(section_key="market_overview"),
-                _template(section_key="brand_moves"),
-            ]
-        ),
         archive_service=_FakeArchiveService(),
         audit_hook=audit_hook,
     )
 
     digest = await generator.generate(
         AsyncMock(),
-        digest_type=DigestType.FMCG_WEEKLY,
+        newsletter=newsletter,
         period_start=date(2026, 6, 9),
         period_end=date(2026, 6, 15),
         actor_user_id=uuid.uuid4(),
     )
 
     assert digest.status == DigestStatus.READY
+    assert digest.summary == "Haftanın yönetici özeti."
+    assert digest.newsletter_slug == "fmcg_weekly"
     assert digest.s3_archive_key is not None
-    assert digest.total_sources_used == 1
     assert len(digest_repo.sections) == 2
-    assert provider.call_count == 2
+    assert digest_repo.sections[0].section_order == 1
+    assert digest_repo.sections[0].newsletter_section_id == newsletter.sections[0].id
+    # 3 benzersiz haber kullanıldı.
+    assert digest.total_sources_used == 3
     assert audit_events == ["digest.started", "digest.completed"]
 
 
-async def _generate_for_digest_type(
-    *,
-    digest_type: DigestType,
-    section_keys: list[str],
-    llm_response_json: str,
-) -> tuple[Digest, _FakeDigestRepo, _TrackingProcessedRepo]:
-    provider = MockProvider(
-        provider=ApiProvider.GROQ,
-        returns=LLMResponse(
-            text=llm_response_json,
-            usage=TokenUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30),
-            provider=ApiProvider.GROQ,
-            model="groq/test",
-            latency_ms=10,
-        ),
+@pytest.mark.asyncio
+async def test_generate_skips_sections_with_no_assignment() -> None:
+    art1 = _article()
+    newsletter = _newsletter_with_two_sections()
+    editor_result = EditorResult(
+        summary="özet",
+        assignments=[
+            SectionAssignment(
+                section_name="Piyasa Genel Görünümü",
+                sort_order=0,
+                article_ids=[art1.processed_item_id],
+            ),
+        ],
+        dropped=[],
     )
-    llm_client = LLMClient(providers=[provider])
     digest_repo = _FakeDigestRepo()
-    processed_repo = _TrackingProcessedRepo([_article()])
-    templates = [_template(section_key=key, digest_type=digest_type) for key in section_keys]
+    section_gen = _FakeSectionGenerator()
 
     generator = DigestGenerator(
-        llm_client=llm_client,
-        processed_items=processed_repo,
+        llm_client=LLMClient(providers=[]),
+        editor_selector=_FakeEditor(candidates=[art1], result=editor_result),
+        section_generator=section_gen,
         digests=digest_repo,
-        template_resolver=_FakeTemplateResolver(templates),
         archive_service=_FakeArchiveService(),
     )
 
     digest = await generator.generate(
         AsyncMock(),
-        digest_type=digest_type,
+        newsletter=newsletter,
         period_start=date(2026, 6, 9),
         period_end=date(2026, 6, 15),
-        actor_user_id=uuid.uuid4(),
-    )
-    return digest, digest_repo, processed_repo
-
-
-@pytest.mark.asyncio
-async def test_generate_turkish_media_weekly_uses_media_query_config(
-    llm_response_json: str,
-) -> None:
-    digest, digest_repo, processed_repo = await _generate_for_digest_type(
-        digest_type=DigestType.TURKISH_MEDIA_WEEKLY,
-        section_keys=["headlines", "sector_highlights"],
-        llm_response_json=llm_response_json,
     )
 
-    expected = DIGEST_TYPE_QUERY_CONFIG["turkish_media_weekly"]
-    assert processed_repo.last_config == expected
-    assert processed_repo.last_config is not None
-    assert processed_repo.last_config.schema == "news"
-    assert processed_repo.last_config.source_category is None
     assert digest.status == DigestStatus.READY
-    assert len(digest_repo.sections) == 2
+    # Yalnızca atama yapılan ilk bölüm üretildi.
+    assert section_gen.calls == [0]
+    assert len(digest_repo.sections) == 1
+    assert digest_repo.sections[0].section_title == "Piyasa Genel Görünümü"
 
 
 @pytest.mark.asyncio
-async def test_generate_fmcg_weekly_queries_news_with_fmcg_filters(
-    llm_response_json: str,
-) -> None:
-    """Faz 6.4: fmcg_weekly artık `news` schema'sını fmcg filtreleriyle sorgular."""
-    digest, digest_repo, processed_repo = await _generate_for_digest_type(
-        digest_type=DigestType.FMCG_WEEKLY,
-        section_keys=["market_overview", "brand_moves"],
-        llm_response_json=llm_response_json,
+async def test_generate_section_parse_error_marks_failed() -> None:
+    art1 = _article()
+    newsletter = _newsletter_with_two_sections()
+    editor_result = EditorResult(
+        summary="özet",
+        assignments=[
+            SectionAssignment(
+                section_name="Piyasa Genel Görünümü",
+                sort_order=0,
+                article_ids=[art1.processed_item_id],
+            ),
+        ],
+        dropped=[],
     )
-
-    expected = DIGEST_TYPE_QUERY_CONFIG["fmcg_weekly"]
-    assert processed_repo.last_config == expected
-    assert processed_repo.last_config is not None
-    assert processed_repo.last_config.schema == "news"
-    assert processed_repo.last_config.source_category == "fmcg"
-    assert processed_repo.last_config.content_category == "fmcg"
-    assert digest.status == DigestStatus.READY
-
-
-@pytest.mark.asyncio
-async def test_generate_strategy_weekly_uses_topic_keyword_config(
-    llm_response_json: str,
-) -> None:
-    digest, digest_repo, processed_repo = await _generate_for_digest_type(
-        digest_type=DigestType.STRATEGY_WEEKLY,
-        section_keys=["executive_summary", "global_trends"],
-        llm_response_json=llm_response_json,
-    )
-
-    expected = DIGEST_TYPE_QUERY_CONFIG["strategy_weekly"]
-    assert processed_repo.last_config == expected
-    assert processed_repo.last_config is not None
-    assert processed_repo.last_config.schema == "news"
-    assert processed_repo.last_config.topic_keywords
-    assert digest.status == DigestStatus.READY
-    assert len(digest_repo.sections) == 2
-
-
-@pytest.mark.asyncio
-async def test_generate_no_articles_marks_failed() -> None:
     digest_repo = _FakeDigestRepo()
+
     generator = DigestGenerator(
-        llm_client=LLMClient(providers=[MockProvider(provider=ApiProvider.GROQ)]),
-        processed_items=_FakeProcessedRepo([]),
+        llm_client=LLMClient(providers=[]),
+        editor_selector=_FakeEditor(candidates=[art1], result=editor_result),
+        section_generator=_FakeSectionGenerator(fail=True),
         digests=digest_repo,
-        template_resolver=_FakeTemplateResolver([_template(section_key="market_overview")]),
+        archive_service=_FakeArchiveService(),
     )
 
-    with pytest.raises(NoArticlesForDigestError):
+    with pytest.raises(DigestParseError):
         await generator.generate(
             AsyncMock(),
-            digest_type=DigestType.FMCG_WEEKLY,
+            newsletter=newsletter,
             period_start=date(2026, 6, 9),
             period_end=date(2026, 6, 15),
         )
@@ -340,21 +350,92 @@ async def test_generate_no_articles_marks_failed() -> None:
     assert digest_repo._digest.error_message is not None
 
 
-def test_build_digest_title_turkish_month() -> None:
-    title = build_digest_title(
-        DigestType.FMCG_WEEKLY,
-        date(2026, 6, 9),
-        date(2026, 6, 15),
+@pytest.mark.asyncio
+async def test_generate_no_candidates_marks_failed() -> None:
+    newsletter = _newsletter_with_two_sections()
+    digest_repo = _FakeDigestRepo()
+
+    generator = DigestGenerator(
+        llm_client=LLMClient(providers=[]),
+        editor_selector=_FakeEditor(
+            candidates=[],
+            result=EditorResult(summary="", assignments=[], dropped=[]),
+        ),
+        section_generator=_FakeSectionGenerator(),
+        digests=digest_repo,
+        archive_service=_FakeArchiveService(),
     )
 
-    assert "FMCG Haftalık Bülten" in title
+    with pytest.raises(NoArticlesForDigestError):
+        await generator.generate(
+            AsyncMock(),
+            newsletter=newsletter,
+            period_start=date(2026, 6, 9),
+            period_end=date(2026, 6, 15),
+        )
+
+    assert digest_repo._digest is not None
+    assert digest_repo._digest.status == DigestStatus.FAILED
+
+
+class _FakeProcessedRepo:
+    def __init__(self, articles: list[DigestArticle]) -> None:
+        self._articles = articles
+
+    async def list_for_digest(self, *_args: Any, **_kwargs: Any) -> list[DigestArticle]:
+        return self._articles
+
+
+@pytest.mark.asyncio
+async def test_generate_end_to_end_with_real_editor_and_sections() -> None:
+    """Gerçek EditorSelector + SectionGenerator; scripted LLM ile uçtan uca."""
+    art1, art2 = _article(title="Haber A"), _article(title="Haber B")
+    newsletter = _newsletter_with_two_sections()
+
+    editor_json = json.dumps(
+        {
+            "summary": "Bu hafta FMCG'de fiyat baskısı öne çıktı.",
+            "assignments": [
+                {"section": "Piyasa Genel Görünümü", "article_ids": [str(art1.processed_item_id)]},
+                {"section": "Marka Hamleleri", "article_ids": [str(art2.processed_item_id)]},
+            ],
+            "dropped": [],
+        }
+    )
+    section_json = json.dumps({"ai_summary": "Bölüm özeti.", "impact_note": "Yıldız etkisi."})
+    provider = _ScriptedProvider([editor_json, section_json, section_json])
+    llm_client = LLMClient(providers=[provider])
+    digest_repo = _FakeDigestRepo()
+
+    generator = DigestGenerator(
+        llm_client=llm_client,
+        editor_selector=EditorSelector(
+            llm_client=llm_client,
+            processed_items=_FakeProcessedRepo([art1, art2]),  # type: ignore[arg-type]
+        ),
+        section_generator=SectionGenerator(llm_client=llm_client),
+        digests=digest_repo,
+        archive_service=_FakeArchiveService(),
+    )
+
+    digest = await generator.generate(
+        AsyncMock(),
+        newsletter=newsletter,
+        period_start=date(2026, 6, 9),
+        period_end=date(2026, 6, 15),
+    )
+
+    assert digest.status == DigestStatus.READY
+    assert digest.summary == "Bu hafta FMCG'de fiyat baskısı öne çıktı."
+    assert len(digest_repo.sections) == 2
+    # editör (1) + bölüm (2) = 3 LLM çağrısı
+    assert provider.call_count == 3
+    assert digest_repo.sections[0].ai_summary == "Bölüm özeti."
+    assert digest_repo.sections[0].impact_note == "Yıldız etkisi."
+
+
+def test_build_digest_title_uses_newsletter_name_and_turkish_month() -> None:
+    title = build_digest_title("FMCG Haftalık", date(2026, 6, 9), date(2026, 6, 15))
+
+    assert "FMCG Haftalık" in title
     assert "9-15 Haziran 2026" in title
-
-
-def test_format_articles_for_prompt_includes_metadata() -> None:
-    article = _article(title="Örnek Başlık")
-    text = format_articles_for_prompt([article])
-
-    assert "Örnek Başlık" in text
-    assert str(article.processed_item_id) in text
-    assert "https://example.com/1" in text

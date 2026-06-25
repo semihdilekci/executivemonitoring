@@ -32,4 +32,8 @@ class SettingsRepository:
         setting.value = value
         setting.updated_by = updated_by
         await db.flush()
+        # `updated_at` server-side `onupdate=func.now()` ile hesaplanır; flush
+        # sonrası expired kalır. Async session'da attribute lazy-load yasak
+        # (MissingGreenlet) olduğu için response'tan önce burada eager refresh.
+        await db.refresh(setting)
         return setting

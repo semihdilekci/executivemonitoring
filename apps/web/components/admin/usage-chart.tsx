@@ -28,6 +28,7 @@ interface DailyTokenPoint {
   label: string;
   groq: number;
   gemini: number;
+  anthropic: number;
   total: number;
 }
 
@@ -45,6 +46,7 @@ function aggregateDailyTokens(rows: UsageStatsRow[]): DailyTokenPoint[] {
       label: formatNumericDate(row.date),
       groq: 0,
       gemini: 0,
+      anthropic: 0,
       total: 0,
     };
 
@@ -52,6 +54,8 @@ function aggregateDailyTokens(rows: UsageStatsRow[]): DailyTokenPoint[] {
       existing.groq += row.total_tokens;
     } else if (row.provider === "gemini") {
       existing.gemini += row.total_tokens;
+    } else if (row.provider === "anthropic") {
+      existing.anthropic += row.total_tokens;
     }
     existing.total += row.total_tokens;
     byDate.set(row.date, existing);
@@ -172,6 +176,14 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
                 dataKey="gemini"
                 name="Gemini"
                 stroke="#8B5CF6"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="anthropic"
+                name="Claude"
+                stroke="#F59E0B"
                 strokeWidth={2}
                 dot={false}
               />

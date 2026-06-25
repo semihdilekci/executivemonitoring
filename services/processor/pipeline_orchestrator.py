@@ -22,8 +22,55 @@ from services.processor.persistence import persist_pipeline_output, resolve_raw_
 from services.processor.raw_item_lifecycle import DbRawItemLifecycle
 from services.processor.scorer import ScorerProcessor
 from services.processor.source_config_resolver import DbSourceConfigResolver
+from services.processor.translator import TranslationProcessor
 
 logger = logging.getLogger("ygip.processor.orchestrator")
+
+# Çeviri sağlayıcısı kurulamadığında (aktif `article_translation` anahtarı yok)
+# kullanılan varsayılan eşik — çeviri zaten no-op olur, değer yalnızca chain'in
+# tutarlı kurulması içindir (`Docs/02` §4.15 varsayılanı).
+_DEFAULT_TRANSLATION_MIN_SCORE = 75
+TRANSLATION_MIN_SCORE_SETTING_KEY = "translation_min_relevance_score"
+
+
+async def build_translation_dependencies(
+    session: AsyncSession,
+) -> tuple[object | None, int]:
+    """Operasyon-kapsamlı çeviri LLM client'ı + eşik ayarını okur (`Docs/04` §8.45, §9.1).
+
+    `article_translation` kapsamlı aktif anahtar yoksa client boş provider listesiyle
+    döner ve çeviri çağrısı entrypoint'te no-op'a düşer. Kurulum hatası (eksik
+    şifreleme anahtarı, DB erişimi) çeviriyi devre dışı bırakır ama ingest'i kırmaz:
+    client `None`, eşik varsayılan döner.
+    """
+    # apps.api factory'sine bağımlılık yalnızca çeviri kurulumunda (lazy) — Lambda
+    # cold-start'ında import-time coupling oluşmaz.
+    from apps.api.repositories.settings_repository import SettingsRepository
+    from apps.api.services.api_key_service import ApiKeyService
+    from apps.api.services.api_usage_service import ApiUsageService
+    from apps.api.services.llm_client_factory import build_llm_client
+    from packages.shared.enums import LlmRequestType
+
+    try:
+        client = await build_llm_client(
+            session,
+            ApiKeyService(),
+            ApiUsageService(),
+            operation_type=LlmRequestType.ARTICLE_TRANSLATION,
+        )
+        setting = await SettingsRepository().get_by_key(
+            session, TRANSLATION_MIN_SCORE_SETTING_KEY
+        )
+    except Exception:
+        logger.exception("processor_translation_setup_failed")
+        return None, _DEFAULT_TRANSLATION_MIN_SCORE
+
+    min_score = (
+        int(setting.value)
+        if setting is not None and isinstance(setting.value, (int, float))
+        else _DEFAULT_TRANSLATION_MIN_SCORE
+    )
+    return client, min_score
 
 
 def build_processor_chain(
@@ -31,10 +78,21 @@ def build_processor_chain(
     *,
     source_config_resolver: DbSourceConfigResolver | None = None,
     keyword_pool_provider: KeywordPoolProvider | None = None,
+    translation_llm_client: object | None = None,
+    translation_min_score: int | None = None,
 ) -> ProcessorChain:
-    """Dedup → normalize → gate → enrich → score → chunk (`Docs/04` §8)."""
+    """Dedup → normalize → gate → enrich → score → translate → chunk (`Docs/04` §8).
+
+    `TranslationProcessor` Scorer sonrası / Chunker öncesi eklenir (§8.45);
+    `translation_llm_client` None ise adım no-op'tur (çeviri sağlayıcısı yok).
+    """
     resolver = source_config_resolver
     provider = keyword_pool_provider
+    min_score = (
+        translation_min_score
+        if translation_min_score is not None
+        else _DEFAULT_TRANSLATION_MIN_SCORE
+    )
     return with_dedup_first(
         redis,
         [
@@ -42,6 +100,10 @@ def build_processor_chain(
             GateProcessor(resolver, keyword_pool_provider=provider),
             EnricherProcessor(resolver, keyword_pool_provider=provider),
             ScorerProcessor(),
+            TranslationProcessor(
+                llm_client=translation_llm_client,
+                min_relevance_score=min_score,
+            ),
             ChunkerProcessor(),
         ],
     )
@@ -57,6 +119,8 @@ class PipelineOrchestrator:
         redis: Redis,
         embedding_service: EmbeddingService | None = None,
         chain: ProcessorChain | None = None,
+        translation_llm_client: object | None = None,
+        translation_min_score: int | None = None,
     ) -> None:
         self._session = session
         self._redis = redis
@@ -72,6 +136,8 @@ class PipelineOrchestrator:
             redis,
             source_config_resolver=config_resolver,
             keyword_pool_provider=keyword_provider,
+            translation_llm_client=translation_llm_client,
+            translation_min_score=translation_min_score,
         )
 
     @property

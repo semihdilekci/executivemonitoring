@@ -32,9 +32,9 @@ from apps.api.routers import (
     digests,
     health,
     keyword,
+    newsletter_template,
     notifications,
     pipeline,
-    prompt_templates,
     sources,
     users,
 )
@@ -197,7 +197,7 @@ def create_app(
     app.include_router(settings_router.router)
     app.include_router(sources.router)
     app.include_router(api_keys.router)
-    app.include_router(prompt_templates.router)
+    app.include_router(newsletter_template.router)
     app.include_router(digests.router)
     app.include_router(chat.router)
     app.include_router(notifications.router)

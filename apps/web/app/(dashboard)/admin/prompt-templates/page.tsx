@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { PromptEditor } from "@/components/admin/prompt-editor";
+import { NewsletterEditor } from "@/components/admin/newsletter-editor";
 import { RoleGate } from "@/components/auth/role-gate";
 import {
   DataTable,
@@ -11,49 +11,52 @@ import {
   DataTableHeader,
   DataTableRow,
 } from "@/components/common/data-table";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorView } from "@/components/common/error-view";
 import { PromptTableSkeleton } from "@/components/common/loading-skeleton";
 import { Toast } from "@/components/common/toast";
 import { Button } from "@/components/ui/button";
-import { DigestTypeBadge } from "@/components/digest/digest-type-badge";
 import {
-  useCreatePromptTemplate,
-  usePromptTemplates,
-  useUpdatePromptTemplate,
-} from "@/hooks/use-prompts";
-import { DIGEST_TYPE_FILTERS } from "@/lib/digest-labels";
+  useCreateNewsletterTemplate,
+  useDeleteNewsletterTemplate,
+  useNewsletterTemplates,
+  useUpdateNewsletterTemplate,
+} from "@/hooks/use-newsletter-templates";
 import { formatRelativeTime } from "@/lib/date-format";
-import type { DigestType, PromptTemplateItem } from "@/types/api";
+import type {
+  CreateNewsletterTemplateRequest,
+  NewsletterTemplate,
+  UpdateNewsletterTemplateRequest,
+} from "@/types/api";
 import { isApiError } from "@/types/api";
 
-type DigestFilter = DigestType | "all";
 type ActiveFilter = "all" | "active" | "inactive";
+type View =
+  | { mode: "list" }
+  | { mode: "create" }
+  | { mode: "edit"; template: NewsletterTemplate };
 
 interface ToastState {
   message: string;
   variant: "success" | "error";
 }
 
-export default function AdminPromptTemplatesPage() {
-  const [digestFilter, setDigestFilter] = useState<DigestFilter>("all");
+export default function AdminNewsletterTemplatesPage() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
-  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
-  const [editingTemplate, setEditingTemplate] = useState<PromptTemplateItem | null>(
+  const [view, setView] = useState<View>({ mode: "list" });
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<NewsletterTemplate | null>(
     null,
   );
-  const [toast, setToast] = useState<ToastState | null>(null);
 
-  const templatesQuery = usePromptTemplates({
-    digest_type: digestFilter === "all" ? undefined : digestFilter,
-    is_active:
-      activeFilter === "all"
-        ? undefined
-        : activeFilter === "active",
+  const templatesQuery = useNewsletterTemplates({
+    is_active: activeFilter === "all" ? undefined : activeFilter === "active",
   });
 
-  const createTemplate = useCreatePromptTemplate();
-  const updateTemplate = useUpdatePromptTemplate();
+  const createTemplate = useCreateNewsletterTemplate();
+  const updateTemplate = useUpdateNewsletterTemplate();
+  const deleteTemplate = useDeleteNewsletterTemplate();
 
   const templates = useMemo(
     () => templatesQuery.data ?? [],
@@ -67,59 +70,74 @@ export default function AdminPromptTemplatesPage() {
     [],
   );
 
-  const openCreate = () => {
-    setEditingTemplate(null);
-    setFormMode("create");
-  };
-
-  const openEdit = (template: PromptTemplateItem) => {
-    setEditingTemplate(template);
-    setFormMode("edit");
-  };
-
-  const closeForm = () => {
-    setFormMode(null);
-    setEditingTemplate(null);
-  };
-
-  const handleCreate = async (
-    values: Parameters<typeof createTemplate.mutateAsync>[0],
-  ) => {
+  const handleCreate = async (body: CreateNewsletterTemplateRequest) => {
     try {
-      await createTemplate.mutateAsync(values);
-      closeForm();
-      showToast("Prompt şablonu oluşturuldu.");
+      await createTemplate.mutateAsync(body);
+      setView({ mode: "list" });
+      showToast("Bülten oluşturuldu.");
     } catch (error) {
       const message = isApiError(error)
         ? error.message
-        : "Şablon oluşturulurken bir hata oluştu.";
+        : "Bülten oluşturulurken bir hata oluştu.";
       showToast(message, "error");
       throw error;
     }
   };
 
-  const handleUpdate = async (
-    values: Parameters<typeof updateTemplate.mutateAsync>[0]["body"],
-  ) => {
-    if (!editingTemplate) return;
+  const handleUpdate = async (body: UpdateNewsletterTemplateRequest) => {
+    if (view.mode !== "edit") return;
 
     try {
-      await updateTemplate.mutateAsync({
-        templateId: editingTemplate.id,
-        body: values,
-      });
-      closeForm();
-      showToast("Prompt şablonu kaydedildi.");
+      await updateTemplate.mutateAsync({ templateId: view.template.id, body });
+      setView({ mode: "list" });
+      showToast("Bülten kaydedildi.");
     } catch (error) {
       const message = isApiError(error)
         ? error.message
-        : "Şablon kaydedilirken bir hata oluştu.";
+        : "Bülten kaydedilirken bir hata oluştu.";
       showToast(message, "error");
       throw error;
     }
   };
 
-  const hasNoFilters = digestFilter === "all" && activeFilter === "all";
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+
+    try {
+      await deleteTemplate.mutateAsync(pendingDelete.id);
+      setPendingDelete(null);
+      showToast("Bülten silindi.");
+    } catch (error) {
+      const message = isApiError(error)
+        ? error.message
+        : "Bülten silinirken bir hata oluştu.";
+      showToast(message, "error");
+    }
+  };
+
+  if (view.mode !== "list") {
+    return (
+      <RoleGate>
+        <NewsletterEditor
+          mode={view.mode}
+          template={view.mode === "edit" ? view.template : undefined}
+          isSubmitting={createTemplate.isPending || updateTemplate.isPending}
+          onCancel={() => setView({ mode: "list" })}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+        />
+        {toast ? (
+          <Toast
+            message={toast.message}
+            variant={toast.variant}
+            onDismiss={() => setToast(null)}
+          />
+        ) : null}
+      </RoleGate>
+    );
+  }
+
+  const hasNoFilters = activeFilter === "all";
 
   return (
     <RoleGate>
@@ -127,40 +145,24 @@ export default function AdminPromptTemplatesPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-navy-800">
-              Prompt Şablon Yönetimi
+              Bülten Şablonları
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              AI bülten ve sohbet üretiminde kullanılan prompt şablonlarını yönetin.
+              Serbest bülten konfigürasyonu ve sınırsız bölüm prompt&apos;larını
+              tek ekrandan yönetin.
             </p>
           </div>
-          <Button type="button" onClick={openCreate}>
-            Yeni Şablon
+          <Button type="button" onClick={() => setView({ mode: "create" })}>
+            Yeni Bülten
           </Button>
         </div>
 
         <div className="flex flex-wrap gap-3">
           <div className="space-y-1.5">
-            <label htmlFor="digest-filter" className="block text-sm font-medium text-gray-700">
-              Bülten tipi
-            </label>
-            <select
-              id="digest-filter"
-              value={digestFilter}
-              onChange={(event) =>
-                setDigestFilter(event.target.value as DigestFilter)
-              }
-              className="flex h-10 min-w-[160px] rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-600"
+            <label
+              htmlFor="active-filter"
+              className="block text-sm font-medium text-gray-700"
             >
-              {DIGEST_TYPE_FILTERS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="active-filter" className="block text-sm font-medium text-gray-700">
               Durum
             </label>
             <select
@@ -188,16 +190,16 @@ export default function AdminPromptTemplatesPage() {
         !templatesQuery.isError &&
         templates.length === 0 ? (
           <EmptyState
-            title="Henüz prompt şablonu yok"
+            title="Henüz bülten şablonu yok"
             description={
               hasNoFilters
-                ? "AI'ın bülten üretebilmesi için prompt şablonları gerekli."
-                : "Filtrelere uygun şablon bulunamadı."
+                ? "AI'ın bülten üretebilmesi için en az bir bülten şablonu gerekli."
+                : "Filtrelere uygun bülten bulunamadı."
             }
             action={
               hasNoFilters ? (
-                <Button type="button" onClick={openCreate}>
-                  Şablon Oluştur
+                <Button type="button" onClick={() => setView({ mode: "create" })}>
+                  Yeni Bülten
                 </Button>
               ) : undefined
             }
@@ -210,11 +212,11 @@ export default function AdminPromptTemplatesPage() {
           <DataTable>
             <table className="min-w-full">
               <DataTableHeader>
-                <DataTableHead>Şablon adı</DataTableHead>
-                <DataTableHead>Bülten tipi</DataTableHead>
+                <DataTableHead>Bülten adı</DataTableHead>
+                <DataTableHead>Slug</DataTableHead>
                 <DataTableHead>Bölüm</DataTableHead>
+                <DataTableHead>Min skor</DataTableHead>
                 <DataTableHead>Durum</DataTableHead>
-                <DataTableHead>Versiyon</DataTableHead>
                 <DataTableHead>Son güncelleme</DataTableHead>
                 <DataTableHead className="text-right">İşlem</DataTableHead>
               </DataTableHeader>
@@ -222,15 +224,19 @@ export default function AdminPromptTemplatesPage() {
                 {templates.map((template) => (
                   <DataTableRow key={template.id}>
                     <DataTableCell>
-                      <p className="font-semibold text-navy-800">{template.name}</p>
-                      <p className="text-xs text-gray-500">{template.section_key}</p>
+                      <button
+                        type="button"
+                        className="text-left font-semibold text-navy-800 hover:underline"
+                        onClick={() => setView({ mode: "edit", template })}
+                      >
+                        {template.name}
+                      </button>
                     </DataTableCell>
-                    <DataTableCell>
-                      <DigestTypeBadge digestType={template.digest_type} />
+                    <DataTableCell className="font-mono text-xs text-gray-500">
+                      {template.slug}
                     </DataTableCell>
-                    <DataTableCell className="font-mono text-xs">
-                      {template.section_key}
-                    </DataTableCell>
+                    <DataTableCell>{template.sections.length}</DataTableCell>
+                    <DataTableCell>{template.min_content_score}</DataTableCell>
                     <DataTableCell>
                       <span
                         className={
@@ -242,7 +248,6 @@ export default function AdminPromptTemplatesPage() {
                         {template.is_active ? "Aktif" : "Pasif"}
                       </span>
                     </DataTableCell>
-                    <DataTableCell>v{template.version}</DataTableCell>
                     <DataTableCell className="text-gray-500">
                       {formatRelativeTime(template.updated_at)}
                     </DataTableCell>
@@ -251,9 +256,18 @@ export default function AdminPromptTemplatesPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => openEdit(template)}
+                        onClick={() => setView({ mode: "edit", template })}
                       >
                         Düzenle
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:bg-red-50"
+                        onClick={() => setPendingDelete(template)}
+                      >
+                        Sil
                       </Button>
                     </DataTableCell>
                   </DataTableRow>
@@ -264,14 +278,15 @@ export default function AdminPromptTemplatesPage() {
         ) : null}
       </div>
 
-      <PromptEditor
-        mode={formMode === "edit" ? "edit" : "create"}
-        template={editingTemplate ?? undefined}
-        isOpen={formMode !== null}
-        isSubmitting={createTemplate.isPending || updateTemplate.isPending}
-        onClose={closeForm}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        title="Bülteni sil"
+        message={`"${pendingDelete?.name ?? ""}" bülteni ve tüm bölümleri silinecek. Bu işlem geri alınamaz.`}
+        confirmLabel="Sil"
+        variant="danger"
+        isLoading={deleteTemplate.isPending}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setPendingDelete(null)}
       />
 
       {toast ? (

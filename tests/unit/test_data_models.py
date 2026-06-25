@@ -7,6 +7,7 @@ from packages.shared.enums import (
     PROCESSED_ITEM_SCHEMAS,
     RESERVED_SCHEMAS,
     ApiProvider,
+    LlmRequestType,
     RawItemStatus,
     SourceCategory,
     SourceStatus,
@@ -19,6 +20,11 @@ from packages.shared.models import (
     ApiUsageLog,
     Base,
     ContentChunk,
+    Digest,
+    DigestSection,
+    NewsletterSection,
+    NewsletterTemplate,
+    ProcessedItemTranslation,
     RawItem,
     Source,
 )
@@ -130,3 +136,94 @@ def test_processed_item_relevance_check_constraint() -> None:
 
 def test_raw_item_id_type_is_uuid() -> None:
     assert RawItem.__table__.c.id.type.python_type is uuid.UUID
+
+
+def test_prompt_templates_table_removed() -> None:
+    # Faz 6.5 (ADR-0003): prompt_templates emekliye ayrıldı (migrate→drop).
+    assert "prompt_templates" not in Base.metadata.tables
+
+
+def test_newsletter_tables_registered() -> None:
+    table_names = set(Base.metadata.tables.keys())
+    assert {"newsletter_templates", "newsletter_sections"}.issubset(table_names)
+
+
+def test_newsletter_template_constraints() -> None:
+    constraint_names = {
+        constraint.name
+        for constraint in NewsletterTemplate.__table__.constraints
+        if constraint.name
+    }
+    assert "uq_newsletter_templates_slug" in constraint_names
+    assert "ck_newsletter_min_score" in constraint_names
+
+
+def test_newsletter_section_fk_and_order_constraint() -> None:
+    fks = {fk.target_fullname for fk in NewsletterSection.__table__.foreign_keys}
+    assert "newsletter_templates.id" in fks
+    fk = next(iter(NewsletterSection.__table__.foreign_keys))
+    assert fk.ondelete == "CASCADE"
+    constraint_names = {
+        constraint.name
+        for constraint in NewsletterSection.__table__.constraints
+        if constraint.name
+    }
+    assert "uq_newsletter_sections_order" in constraint_names
+
+
+def test_digest_uses_newsletter_slug_not_enum() -> None:
+    columns = {column.name for column in Digest.__table__.columns}
+    assert {"newsletter_slug", "newsletter_template_id", "summary"}.issubset(columns)
+    assert "digest_type" not in columns
+    fks = {fk.target_fullname for fk in Digest.__table__.foreign_keys}
+    assert "newsletter_templates.id" in fks
+
+
+def test_digest_section_provenance_is_newsletter_section() -> None:
+    columns = {column.name for column in DigestSection.__table__.columns}
+    assert "newsletter_section_id" in columns
+    assert "prompt_template_id" not in columns
+    fk = next(
+        fk
+        for fk in DigestSection.__table__.foreign_keys
+        if fk.column.table.name == "newsletter_sections"
+    )
+    assert fk.ondelete == "SET NULL"
+
+
+def test_article_translation_request_type_enum() -> None:
+    # Faz 6.5: ingest-time çeviri operasyon tipi.
+    assert LlmRequestType.ARTICLE_TRANSLATION.value == "article_translation"
+
+
+def test_processed_item_translation_table_in_news_schema() -> None:
+    table = ProcessedItemTranslation.__table__
+    assert table.schema == "news"
+    assert "news.processed_item_translations" in Base.metadata.tables
+
+
+def test_processed_item_translation_fk_and_constraints() -> None:
+    # Faz 6.5 (Docs/02 §4.4b): FK → news.processed_items CASCADE; (item, language) UNIQUE.
+    fks = {fk.target_fullname for fk in ProcessedItemTranslation.__table__.foreign_keys}
+    assert "news.processed_items.id" in fks
+    fk = next(iter(ProcessedItemTranslation.__table__.foreign_keys))
+    assert fk.ondelete == "CASCADE"
+    constraint_names = {
+        constraint.name
+        for constraint in ProcessedItemTranslation.__table__.constraints
+        if constraint.name
+    }
+    assert "uq_processed_item_translations_item_lang" in constraint_names
+
+
+def test_news_processed_item_has_translations_relationship() -> None:
+    news_model = PROCESSED_ITEM_MODELS["news"]
+    assert "translations" in news_model.__mapper__.relationships
+
+
+def test_api_key_request_type_scope_jsonb_default() -> None:
+    # Faz 6.5 (Docs/02 §4.9): [] = tüm operasyonlar (geriye uyumlu varsayılan).
+    column = ApiKey.__table__.c.request_type_scope
+    assert isinstance(column.type, JSONB)
+    assert column.nullable is False
+    assert column.server_default is not None

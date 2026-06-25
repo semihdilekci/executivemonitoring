@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
-from packages.shared.enums import DigestType, SourceType
+from packages.shared.enums import SourceType
 from pydantic import BaseModel, ConfigDict
 
 from apps.api.schemas.common import PaginatedResponse
@@ -58,7 +58,7 @@ class DigestUsageSummary(BaseModel):
     """İçeriğin kullanıldığı bülten özeti (liste seviyesinde — section_title yok)."""
 
     digest_id: UUID
-    digest_type: DigestType
+    newsletter_slug: str
     digest_title: str
     period_start: date
     period_end: date
@@ -97,6 +97,17 @@ class DigestUsageDetail(DigestUsageSummary):
     section_title: str
 
 
+class TranslationVariant(BaseModel):
+    """İçeriğin canonical olmayan dil varyantı (`processed_item_translations`, `Docs/03` §11.6)."""
+
+    language: str
+    title: str
+    content: str
+    is_original: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProcessedItemDetailResponse(BaseModel):
     """Tek işlenmiş içerik detayı — tam metin + bülten kullanım geçmişi.
 
@@ -114,6 +125,8 @@ class ProcessedItemDetailResponse(BaseModel):
     clean_content: str
     summary: str | None = None
     language: str
+    # Faz 6.5: canonical olmayan dil varyantları (orijinal EN vb.); TR kaynaklıda `[]`.
+    translations: list[TranslationVariant] = []
     relevance_score: float
     topics: list[Any]
     entities: list[Any]

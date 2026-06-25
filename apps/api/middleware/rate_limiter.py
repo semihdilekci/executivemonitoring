@@ -156,6 +156,11 @@ def build_rate_limit_key(category: str, request: Request) -> str:
         if user_id is not None:
             return f"rate_limit:user:{user_id}:pipeline"
         return f"rate_limit:ip:{client_ip}:pipeline"
+    if category == "news-impact":
+        user_id = getattr(request.state, "user_id", None)
+        if user_id is not None:
+            return f"rate_limit:user:{user_id}:news-impact"
+        return f"rate_limit:ip:{client_ip}:news-impact"
     user_id = getattr(request.state, "user_id", None)
     if user_id is not None:
         return f"rate_limit:user:{user_id}:general"

@@ -33,6 +33,15 @@ def _swap_db_name(url: str, db_name: str) -> str:
     return urlunparse(parsed._replace(path=f"/{db_name}"))
 
 
+def _ensure_async_driver(url: str) -> str:
+    """psycopg2/düz URL'i asyncpg sürücüsüne normalleştirir."""
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
 def guard_destructive(target: str | Engine) -> None:
     """Hedef DB adında 'test' yoksa yıkıcı işlemi `skip` ile reddeder.
 
@@ -76,6 +85,28 @@ def resolve_sync_test_database_url() -> str:
             "veya TEST_DATABASE_URL ortam değişkenini ayarlayın."
         )
     return sync_url
+
+
+def resolve_async_test_database_url() -> str:
+    """Async ygip_test URL — `TEST_DATABASE_URL` > `DATABASE_URL`'den türetme.
+
+    DB'ye yazan/silen integration testleri (api_client, seed) için. Guard +
+    `_test` türetmesi ile geliştirme DB'sine (DATABASE_URL) ASLA düşmez.
+    Bağlanılamazsa testi skip eder.
+    """
+    load_dotenv_file(override=False)
+    override = os.environ.get("TEST_DATABASE_URL", "").strip()
+    if override:
+        async_url = _ensure_async_driver(override)
+    else:
+        try:
+            base = get_database_url(required=True)
+        except RuntimeError as exc:
+            pytest.skip(str(exc))
+        async_url = _swap_db_name(base, TEST_DB_NAME)
+
+    guard_destructive(async_url)
+    return async_url
 
 
 def make_alembic_config() -> Config:

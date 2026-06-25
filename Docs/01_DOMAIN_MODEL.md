@@ -87,7 +87,7 @@ Pipeline'dan geçmiş, normalize ve zenginleştirilmiş veri birimi.
 | `title` | TEXT | NOT NULL | Normalize edilmiş başlık |
 | `clean_content` | TEXT | NOT NULL | Temizlenmiş düz metin (HTML tag'ler, reklam blokları çıkarılmış) |
 | `summary` | TEXT | NULLABLE | Kısa AI özeti (1-2 cümle) |
-| `language` | VARCHAR(5) | NOT NULL | Tespit edilen dil kodu (tr, en, vb.) |
+| `language` | VARCHAR(5) | NOT NULL | `title`/`clean_content`'in canonical dili. MVP-0'da hedef Türkçe; İngilizce haberler çevrilirse `"tr"`, çeviri başarısızsa `"en"` (Faz 6.5; `Docs/04` §8.45) |
 | `relevance_score` | FLOAT | NOT NULL, CHECK (0..1) | İçerik alaka skoru (0: alakasız, 1: çok alakalı) |
 | `topics` | JSONB | NOT NULL, DEFAULT '[]' | Tespit edilen konu etiketleri |
 | `entities` | JSONB | NOT NULL, DEFAULT '[]' | Tespit edilen named entity'ler (şirket, kişi, ülke) |
@@ -110,6 +110,22 @@ RAG pipeline için embedding'e dönüştürülmüş metin parçası.
 | `created_at` | TIMESTAMPTZ | NOT NULL | Oluşturulma zamanı |
 
 `(processed_item_id, chunk_index)` üzerinde UNIQUE constraint uygulanır.
+
+### 2.5b ProcessedItemTranslation (Faz 6.5)
+
+Bir ProcessedItem'ın **canonical olmayan dil varyantı**. MVP-0'da İngilizce kaynaklı haberin orijinali (`is_original=true`) saklanır; canonical Türkçe içerik `ProcessedItem.title`/`clean_content`'tedir. Çift-yönlü TR↔EN servise hazır altyapı (`Docs/02` §4.4b).
+
+| Attribute | Tip | Kısıt | Açıklama |
+|-----------|-----|-------|----------|
+| `id` | UUID | PK | Tekil tanımlayıcı |
+| `processed_item_id` | UUID | FK → processed_items.id, NOT NULL, CASCADE | Bağlı işlenmiş haber |
+| `language` | VARCHAR(5) | NOT NULL | Varyant dili (örn. `en`) |
+| `title` | TEXT | NOT NULL | Bu dildeki başlık |
+| `content` | TEXT | NOT NULL | Bu dildeki tam metin |
+| `is_original` | BOOLEAN | NOT NULL, DEFAULT false | Kaynak (çevrilmemiş) dildeki varyant mı |
+| `created_at` | TIMESTAMPTZ | NOT NULL | Oluşturulma zamanı |
+
+`(processed_item_id, language)` üzerinde UNIQUE constraint uygulanır.
 
 ### 2.6 Digest
 
@@ -192,11 +208,13 @@ LLM API key kaydı. Admin panelinden yönetilir.
 | Attribute | Tip | Kısıt | Açıklama |
 |-----------|-----|-------|----------|
 | `id` | UUID | PK | Tekil tanımlayıcı |
-| `provider` | ENUM('groq', 'gemini') | NOT NULL | LLM sağlayıcı |
+| `provider` | ENUM('groq', 'gemini', 'anthropic') | NOT NULL | LLM sağlayıcı |
 | `key_alias` | VARCHAR(100) | NOT NULL | İnsan okunabilir takma ad |
 | `encrypted_key` | TEXT | NOT NULL | Şifrelenmiş API key değeri |
+| `model` | VARCHAR(100) | NULLABLE | Bu anahtarla kullanılacak model (boşsa sağlayıcı varsayılanı) |
 | `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Aktif/pasif |
 | `priority_order` | INTEGER | NOT NULL | Round-robin sırası |
+| `request_type_scope` | JSONB | NOT NULL, DEFAULT '[]' | Anahtarın kullanılacağı operasyonlar (`digest_generation`/`chatbot`/`article_translation`); `[]` = tümü. Çeviri için ayrı/ucuz provider sırası kurmayı sağlar (Faz 6.5; `Docs/04` §9.1) |
 | `created_at` | TIMESTAMPTZ | NOT NULL | — |
 
 ### 2.10 ApiUsageLog
@@ -394,6 +412,7 @@ erDiagram
 
     raw_items ||--o| processed_items : "işlenir"
     processed_items ||--o{ content_chunks : "parçalanır"
+    processed_items ||--o{ processed_item_translations : "çevrilir"
 
     digests ||--o{ digest_sections : "içerir"
     newsletter_templates ||--o{ newsletter_sections : "içerir"
@@ -442,10 +461,20 @@ erDiagram
         uuid raw_item_id FK
         uuid source_id FK
         text clean_content
+        varchar language
         float relevance_score
         jsonb topics
         jsonb entities
         timestamptz processed_at
+    }
+
+    processed_item_translations {
+        uuid id PK
+        uuid processed_item_id FK
+        varchar language
+        text title
+        text content
+        boolean is_original
     }
 
     content_chunks {
@@ -611,6 +640,7 @@ erDiagram
 - `schema_category` haber kayıtlarında sabit `"news"` (Faz 6.4, ADR-0002). Kolon veri **tipi**ni ifade eder; `content_category` ile karıştırılmaz. Rezerve schema'lar (`market`, `fmcg`, `geo`, `transport`) MVP-0'da haber almaz.
 - `content_category` enricher keyword kategorisidir (`macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`). `filtered` kaynaklarda kategori, eşleşen keyword'lerin **rating toplamı en yüksek** olan kategoridir (eşitlikte `default_category`); `ingest_mode: "all"` kaynaklarda `default_category` kullanılır (`Docs/04` §8.4). Faz 6.2 öncesi kayıtlarda `NULL` olabilir.
 - `topics` JSONB dizisi gate/enricher tarafından eşleşen keyword'leri taşır (İçerik Arşivi ekranında chip olarak gösterilir).
+- **Çeviri (Faz 6.5):** `language == "en"` **ve** `relevance_score*100 >= translation_min_relevance_score` olan haberler, chunk'lanmadan önce Türkçeye çevrilir; `title`/`clean_content` canonical Türkçe olur (`language="tr"`), orijinal İngilizce `ProcessedItemTranslation` (`is_original=true`) olarak saklanır. Çeviri başarısızsa haber İngilizce kalır (düşmez). RAG chunk'ları daima canonical içerikten üretilir (`Docs/04` §8.45).
 - İşlenmiş item üzerinden content chunk'lar oluşturulur.
 - **İçerik Arşivi (Faz 6.2):** Admin-only operasyonel görünüm — yalnızca `processed_items` satırı olan (gate'i geçmiş) içerikler listelenir; `raw_items` skip/failed kayıtları arşivde görünmez.
 - **Bülten kullanımı:** Bir ProcessedItem hangi digest'lerde kaynak olarak geçtiyse `digest_sections.source_references` JSONB içindeki `processed_item_id` ile tespit edilir (ters sorgu; native FK yok).

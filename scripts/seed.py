@@ -22,7 +22,6 @@ if str(ROOT) not in sys.path:
 
 from apps.api.core.config import Settings, get_settings  # noqa: E402
 from packages.shared.enums import (  # noqa: E402
-    DigestType,
     KeywordCategory,
     SourceCategory,
     SourceStatus,
@@ -31,8 +30,11 @@ from packages.shared.enums import (  # noqa: E402
 )
 from packages.shared.env_loader import load_dotenv_file  # noqa: E402
 from packages.shared.models.keyword import Keyword, KeywordCategoryRating  # noqa: E402
+from packages.shared.models.newsletter_template import (  # noqa: E402
+    NewsletterSection,
+    NewsletterTemplate,
+)
 from packages.shared.models.notification_preference import NotificationPreference  # noqa: E402
-from packages.shared.models.prompt_template import PromptTemplate  # noqa: E402
 from packages.shared.models.source import Source  # noqa: E402
 from packages.shared.models.system_setting import SystemSetting  # noqa: E402
 from packages.shared.models.user import User  # noqa: E402
@@ -59,7 +61,7 @@ class SeedResult:
     users: SeedStats
     notification_preferences: SeedStats
     system_settings: SeedStats
-    prompt_templates: SeedStats
+    newsletter_templates: SeedStats
     sources: SeedStats
     keywords: SeedStats
 
@@ -68,7 +70,7 @@ class SeedResult:
             "users": self.users.as_dict(),
             "notification_preferences": self.notification_preferences.as_dict(),
             "system_settings": self.system_settings.as_dict(),
-            "prompt_templates": self.prompt_templates.as_dict(),
+            "newsletter_templates": self.newsletter_templates.as_dict(),
             "sources": self.sources.as_dict(),
             "keywords": self.keywords.as_dict(),
         }
@@ -177,24 +179,68 @@ async def seed_system_settings(db: AsyncSession) -> SeedStats:
     return stats
 
 
-async def seed_prompt_templates(db: AsyncSession) -> SeedStats:
+def _load_fixture_object(name: str) -> dict[str, Any]:
+    path = FIXTURES_DIR / name
+    with path.open(encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        msg = f"Fixture {name} bir JSON object olmalıdır."
+        raise ValueError(msg)
+    return data
+
+
+async def seed_newsletter_templates(db: AsyncSession) -> SeedStats:
+    """Serbest bülten + bölüm seed — `slug` anahtarıyla idempotent (Faz 6.5).
+
+    Global anlık-etki prompt'ları (`newsletter_impact_*`) `system_settings`'e idempotent
+    eklenir (migration de ekler; mevcutsa atlanır). Bülten istatistiği yalnızca yeni
+    oluşturulan bülten sayısını döner.
+    """
+    fixture = _load_fixture_object("newsletter_templates.json")
     stats = SeedStats()
-    for item in _load_fixture("prompt_templates.json"):
-        name = item["name"]
-        existing = await db.execute(select(PromptTemplate).where(PromptTemplate.name == name))
+
+    for setting in fixture.get("impact_settings", []):
+        existing_setting = await db.get(SystemSetting, setting["key"])
+        if existing_setting is None:
+            db.add(
+                SystemSetting(
+                    key=setting["key"],
+                    value=setting["value"],
+                    description=setting.get("description"),
+                )
+            )
+
+    for item in fixture.get("newsletters", []):
+        slug = item["slug"]
+        existing = await db.execute(
+            select(NewsletterTemplate).where(NewsletterTemplate.slug == slug)
+        )
         if existing.scalar_one_or_none() is not None:
             stats = SeedStats(created=stats.created, skipped=stats.skipped + 1)
             continue
         db.add(
-            PromptTemplate(
-                name=name,
-                digest_type=DigestType(item["digest_type"]),
-                section_key=item["section_key"],
-                system_prompt=item["system_prompt"],
-                user_prompt_template=item["user_prompt_template"],
+            NewsletterTemplate(
+                slug=slug,
+                name=item["name"],
+                description=item.get("description", ""),
+                date_range_days=item.get("date_range_days", 7),
+                summary_system_prompt=item["summary_system_prompt"],
+                summary_user_prompt=item["summary_user_prompt"],
+                min_content_score=item.get("min_content_score", 50),
+                content_categories=item.get("content_categories", []),
                 model_preference=item.get("model_preference"),
                 is_active=item.get("is_active", True),
-                version=item.get("version", 1),
+                sections=[
+                    NewsletterSection(
+                        name=section["name"],
+                        sort_order=section["sort_order"],
+                        section_system_prompt=section["section_system_prompt"],
+                        section_user_prompt=section["section_user_prompt"],
+                        impact_prompt=section["impact_prompt"],
+                        is_active=section.get("is_active", True),
+                    )
+                    for section in item.get("sections", [])
+                ],
             )
         )
         stats = SeedStats(created=stats.created + 1, skipped=stats.skipped)
@@ -242,8 +288,13 @@ async def seed_keywords(db: AsyncSession) -> SeedStats:
     stats = SeedStats()
     for item in _load_fixture("keywords.json"):
         term_tr = item["term_tr"]
+        # İdempotency kontrolü `uq_keywords_term_tr_lower` (PG `lower(term_tr)`) ile
+        # birebir aynı `lower()` semantiğini kullanmalı: Python `str.lower()` Türkçe
+        # İ (U+0130) için PG `lower()`'dan farklı sonuç verir ("İstegelsin", "BİM"),
+        # bu da re-run'da kontrolü kaçırıp unique ihlaline yol açardı. Her iki tarafta
+        # da PG `func.lower()` kullanılır.
         existing = await db.execute(
-            select(Keyword).where(func.lower(Keyword.term_tr) == term_tr.lower())
+            select(Keyword).where(func.lower(Keyword.term_tr) == func.lower(term_tr))
         )
         if existing.scalar_one_or_none() is not None:
             stats = SeedStats(created=stats.created, skipped=stats.skipped + 1)
@@ -271,14 +322,14 @@ async def run_seed(db: AsyncSession, *, settings: Settings | None = None) -> See
     resolved_settings = settings or get_settings()
     user_stats, pref_stats = await seed_users(db)
     settings_stats = await seed_system_settings(db)
-    template_stats = await seed_prompt_templates(db)
+    newsletter_stats = await seed_newsletter_templates(db)
     source_stats = await seed_sources(db, settings=resolved_settings)
     keyword_stats = await seed_keywords(db)
     return SeedResult(
         users=user_stats,
         notification_preferences=pref_stats,
         system_settings=settings_stats,
-        prompt_templates=template_stats,
+        newsletter_templates=newsletter_stats,
         sources=source_stats,
         keywords=keyword_stats,
     )

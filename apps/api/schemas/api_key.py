@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from packages.shared.enums import ApiProvider
+from packages.shared.enums import ApiProvider, LlmRequestType
 from packages.shared.llm_models import is_valid_model, models_for
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -22,6 +22,8 @@ class ApiKeyResponse(BaseModel):
     model: str | None
     is_active: bool
     priority_order: int
+    # Faz 6.5: anahtarın kullanılacağı LLM operasyonları; `[]` = tüm operasyonlar.
+    request_type_scope: list[LlmRequestType]
     created_at: datetime
 
 
@@ -38,6 +40,8 @@ class CreateApiKeyRequest(BaseModel):
     model: str = Field(min_length=1, max_length=100)
     priority_order: int = Field(ge=1, le=1000)
     is_active: bool = True
+    # Faz 6.5: verilmezse `[]` (tüm operasyonlar); geçersiz üye → 422.
+    request_type_scope: list[LlmRequestType] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_model_for_provider(self) -> CreateApiKeyRequest:
@@ -52,6 +56,15 @@ class PatchApiKeyStatusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     is_active: bool
+
+
+class UpdateApiKeyRequest(BaseModel):
+    """API key operasyon kapsamı (+ opsiyonel model) güncelleme (`Docs/03` §6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_type_scope: list[LlmRequestType]
+    model: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class DeleteApiKeyResponse(BaseModel):

@@ -36,6 +36,18 @@ fixtures/         → JSON sample RSS, email parse
 - DB integration: test PostgreSQL (CI service) veya testcontainers
 - Gerçek RSS çekimi unit test'te yasak — `fixtures/` JSON
 
+## Dev DB koruması (ZORUNLU — yıkıcı testler)
+
+> **Kesin kural:** Hiçbir test, geliştirme veritabanını (`ygip_dev` / `DATABASE_URL`) **drop / truncate / downgrade / DROP SCHEMA** etmez. Yıkıcı işlemler **yalnızca** adında `test` geçen izole DB'de (`ygip_test` veya `TEST_DATABASE_URL`) çalışır.
+
+- **DB'ye yazan/silen veya migration koşan her integration testi** DB URL'ini `tests/integration/migration_db.py` üzerinden çözer — düz `DATABASE_URL` / `get_database_url()` ile DB-yazan engine kurma:
+  - Migration / `DROP SCHEMA` / `downgrade("base")` testleri → `resolve_sync_test_database_url()` + `make_alembic_config()`
+  - DB-yazan API/seed testleri (async) → `resolve_async_test_database_url()`
+- **Guard zorunlu:** Yıkıcı reset yapan her fixture, engine/URL'i kullanmadan önce `guard_destructive(target)` çağırır. Hedef DB adında `test` yoksa test **skip** edilir (dev DB asla silinmez). Yeni yıkıcı fixture yazarken bu guard'ı atlamak yasak.
+- **`DROP SCHEMA ... CASCADE` / `command.downgrade(cfg, "base")`** yalnızca `migration_db` helper'larından gelen `ygip_test` hedefiyle; sabit/elle yazılmış `DATABASE_URL` ile **asla**.
+- Test DB bağlanamıyorsa helper testi **skip** eder — sessizce dev DB'ye düşmez. Bir kez kurulum: `createdb ... ygip_test && DATABASE_URL=...ygip_test alembic upgrade head` (helper skip mesajındaki komut).
+- **Faz 6.5 İter 8–10 çeviri migration testleri** (`test_translation_infra_migration.py`, `test_api_key_scope.py`, `test_content_archive_translations.py`) bu deseni birebir izler — mevcut `test_*_migration.py` dosyaları referans.
+
 ## Çalıştırma
 
 ```bash

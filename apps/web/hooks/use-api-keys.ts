@@ -11,6 +11,7 @@ import type {
   CreateApiKeyRequest,
   DeleteApiKeyResponse,
   PatchApiKeyStatusRequest,
+  UpdateApiKeyRequest,
 } from "@/types/api";
 
 export function useApiKeys() {
@@ -66,6 +67,29 @@ export function usePatchApiKeyStatus() {
     }) => {
       const response = await apiClient.patch<ApiKeyItem>(
         `/api-keys/${keyId}/status`,
+        body,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+    },
+  });
+}
+
+export function useUpdateApiKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      keyId,
+      body,
+    }: {
+      keyId: string;
+      body: UpdateApiKeyRequest;
+    }) => {
+      const response = await apiClient.patch<ApiKeyItem>(
+        `/api-keys/${keyId}`,
         body,
       );
       return response.data;

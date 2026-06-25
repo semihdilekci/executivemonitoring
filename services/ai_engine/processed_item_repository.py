@@ -71,6 +71,10 @@ class ProcessedItemRepository:
             )
         if config.content_category is not None:
             category_predicates.append(model.content_category == config.content_category)
+        if config.content_categories:
+            category_predicates.append(
+                model.content_category.in_(config.content_categories)
+            )
         if category_predicates:
             query = query.where(or_(*category_predicates))
 

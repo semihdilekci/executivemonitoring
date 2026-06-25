@@ -1,4 +1,10 @@
-"""Digest listeleme, detay ve manuel üretim iş mantığı."""
+"""Digest listeleme, detay, manuel üretim ve anlık etki iş mantığı (Faz 6.5).
+
+ADR-0003: üretim `newsletter_templates` kaydı (`newsletter_template_id`) ile
+tetiklenir; 3-aşamalı editör pipeline (`DigestGenerator`) koşar. Anlık
+"Yıldız'ı nasıl etkiler?" (`news-impact`) tek `processed_item` + global
+`system_settings` prompt'larıyla runtime LLM çağrısıdır; **kalıcılaştırılmaz**.
+"""
 
 from __future__ import annotations
 
@@ -6,18 +12,32 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
-from packages.shared.enums import DigestStatus, DigestType, UserRole
+from packages.shared.enums import DigestStatus, LlmRequestType, UserRole
 from packages.shared.models.digest import Digest
+from packages.shared.models.newsletter_template import NewsletterTemplate
 from packages.shared.models.user import User
 from services.ai_engine.digest_generator import DigestGenerator, build_digest_title
 from services.ai_engine.digest_repository import DigestRepository, digest_repository
+from services.ai_engine.editor_selector import render_prompt
+from services.ai_engine.exceptions import AIEngineHTTPError
 from services.ai_engine.llm_client import LLMClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from apps.api.core.exceptions import ForbiddenException, NotFoundException, ValidationException
+from apps.api.core.exceptions import (
+    AiProvidersUnavailableException,
+    ForbiddenException,
+    NotFoundException,
+    ValidationException,
+)
+from apps.api.repositories.newsletter_template_repository import (
+    NewsletterTemplateRepository,
+    newsletter_template_repository,
+)
+from apps.api.repositories.processed_item_repository import ProcessedItemRepository
+from apps.api.repositories.settings_repository import SettingsRepository
 from apps.api.schemas.common import PaginationMeta
 from apps.api.schemas.digest import (
     DigestDetailResponse,
@@ -26,6 +46,7 @@ from apps.api.schemas.digest import (
     DigestSectionResponse,
     GenerateDigestRequest,
     GenerateDigestResponse,
+    NewsImpactResponse,
     SourceReferenceResponse,
 )
 from apps.api.services.api_key_service import ApiKeyService
@@ -33,14 +54,27 @@ from apps.api.services.api_usage_service import ApiUsageService
 from apps.api.services.audit_service import AuditService, audit_service
 from apps.api.services.llm_client_factory import build_llm_client
 from apps.api.services.notification_service import notification_service
-from apps.api.services.prompt_template_resolver import db_prompt_template_resolver
 
 logger = logging.getLogger("ygip.api.digest_service")
 
 _DIGEST_DEFAULT_LIMIT = 10
 _DIGEST_MAX_LIMIT = 50
 
+_IMPACT_SYSTEM_KEY = "newsletter_impact_system_prompt"
+_IMPACT_USER_KEY = "newsletter_impact_user_prompt"
+_DEFAULT_IMPACT_SYSTEM_PROMPT = (
+    "Sen YıldızHolding üst yönetimine danışmanlık yapan kıdemli bir strateji "
+    "analistisin. Tek bir haberin YıldızHolding üzerindeki olası etkisini "
+    "değerlendirirsin. Yanıtın Türkçe, somut ve yönetici odaklıdır."
+)
+_DEFAULT_IMPACT_USER_PROMPT = (
+    "Haber başlığı: {title}\n\nHaber içeriği:\n{content}\n\n"
+    "Bu gelişme YıldızHolding'i nasıl etkiler? Fırsat ve riskleri, ilgili iş "
+    "kollarını ve önerilen aksiyonu kısaca açıkla."
+)
+
 GenerationScheduler = Callable[..., Awaitable[None]]
+LLMClientFactory = Callable[..., Awaitable[LLMClient]]
 
 
 def _to_list_item(digest: Digest) -> DigestListItemResponse:
@@ -71,24 +105,31 @@ def _to_detail_response(digest: Digest) -> DigestDetailResponse:
     sections = sorted(digest.sections, key=lambda item: item.section_order)
     return DigestDetailResponse(
         **_to_list_item(digest).model_dump(),
+        summary=digest.summary,
         sections=[_to_section_response(section) for section in sections],
     )
 
 
 class DigestService:
-    """Digest okuma ve asenkron üretim tetikleme."""
+    """Digest okuma, asenkron üretim tetikleme ve anlık etki analizi."""
 
     def __init__(
         self,
         digests: DigestRepository | None = None,
         audit_svc: AuditService | None = None,
-        llm_client_factory: Callable[..., Awaitable[LLMClient]] | None = None,
+        llm_client_factory: LLMClientFactory | None = None,
         generation_scheduler: GenerationScheduler | None = None,
+        newsletter_templates: NewsletterTemplateRepository | None = None,
+        processed_items: ProcessedItemRepository | None = None,
+        settings_repo: SettingsRepository | None = None,
     ) -> None:
         self._digests = digests or digest_repository
         self._audit_service = audit_svc or audit_service
         self._llm_client_factory = llm_client_factory
         self._generation_scheduler = generation_scheduler
+        self._newsletter_templates = newsletter_templates or newsletter_template_repository
+        self._processed_items = processed_items or ProcessedItemRepository()
+        self._settings_repo = settings_repo or SettingsRepository()
 
     async def list_digests(
         self,
@@ -97,7 +138,7 @@ class DigestService:
         user: User,
         cursor: str | None = None,
         limit: int = _DIGEST_DEFAULT_LIMIT,
-        digest_type: DigestType | None = None,
+        newsletter_slug: str | None = None,
         status: DigestStatus | None = None,
     ) -> DigestListResponse:
         resolved_limit = min(max(limit, 1), _DIGEST_MAX_LIMIT)
@@ -114,7 +155,7 @@ class DigestService:
             db,
             cursor=cursor_id,
             limit=resolved_limit,
-            digest_type=digest_type,
+            newsletter_slug=newsletter_slug,
             status=resolved_status,
         )
         return DigestListResponse(
@@ -144,23 +185,33 @@ class DigestService:
         api_key_service: ApiKeyService,
         api_usage_service: ApiUsageService,
     ) -> GenerateDigestResponse:
-        if body.period_end < body.period_start:
-            raise ValidationException(message="Dönem bitiş tarihi başlangıçtan önce olamaz.")
+        newsletter = await self._newsletter_templates.get_by_id(
+            db, body.newsletter_template_id
+        )
+        if newsletter is None:
+            raise NotFoundException(message="Bülten şablonu bulunamadı.")
 
-        title = build_digest_title(body.digest_type, body.period_start, body.period_end)
-        existing = await self._digests.find_for_period(
-            db,
-            digest_type=body.digest_type,
+        period_start, period_end = self._resolve_period(
+            newsletter,
             period_start=body.period_start,
             period_end=body.period_end,
+        )
+
+        title = build_digest_title(newsletter.name, period_start, period_end)
+        existing = await self._digests.find_for_period(
+            db,
+            newsletter_slug=newsletter.slug,
+            period_start=period_start,
+            period_end=period_end,
         )
         if existing is None:
             digest = await self._digests.create_generating(
                 db,
-                digest_type=body.digest_type,
+                newsletter_slug=newsletter.slug,
+                newsletter_template_id=newsletter.id,
                 title=title,
-                period_start=body.period_start,
-                period_end=body.period_end,
+                period_start=period_start,
+                period_end=period_end,
             )
         else:
             digest = await self._digests.reset_for_regeneration(db, existing, title=title)
@@ -172,9 +223,10 @@ class DigestService:
             target_type="digest",
             target_id=digest.id,
             payload={
-                "digest_type": body.digest_type.value,
-                "period_start": body.period_start.isoformat(),
-                "period_end": body.period_end.isoformat(),
+                "newsletter_slug": newsletter.slug,
+                "newsletter_template_id": str(newsletter.id),
+                "period_start": period_start.isoformat(),
+                "period_end": period_end.isoformat(),
                 "trigger": "manual",
             },
         )
@@ -182,9 +234,9 @@ class DigestService:
         scheduler = self._generation_scheduler or self._default_generation_scheduler
         await scheduler(
             session_factory=session_factory,
-            digest_type=body.digest_type,
-            period_start=body.period_start,
-            period_end=body.period_end,
+            newsletter_template_id=newsletter.id,
+            period_start=period_start,
+            period_end=period_end,
             actor_user_id=actor.id,
             api_key_service=api_key_service,
             api_usage_service=api_usage_service,
@@ -194,6 +246,97 @@ class DigestService:
             id=digest.id,
             status=DigestStatus.GENERATING,
         )
+
+    async def news_impact(
+        self,
+        db: AsyncSession,
+        *,
+        processed_item_id: uuid.UUID,
+        api_key_service: ApiKeyService,
+        api_usage_service: ApiUsageService,
+    ) -> NewsImpactResponse:
+        """Tek haber için anlık Yıldız etki analizi — global prompt, kalıcı değil."""
+        row = await self._processed_items.get_by_id(db, "news", processed_item_id)
+        if row is None:
+            raise NotFoundException(
+                message="Haber bulunamadı.",
+                error_code="PROCESSED_ITEM_NOT_FOUND",
+            )
+
+        system_prompt, user_prompt_template = await self._impact_prompts(db)
+        context = {
+            "title": row.title,
+            "article_title": row.title,
+            "content": row.clean_content,
+            "article_content": row.clean_content,
+            "source": row.source_name,
+        }
+        user_prompt = render_prompt(user_prompt_template, context)
+        rendered_system = render_prompt(system_prompt, context)
+
+        try:
+            llm_client = await self._resolve_llm_client(
+                db, api_key_service, api_usage_service
+            )
+            response = await llm_client.complete(
+                user_prompt,
+                system_prompt=rendered_system,
+                operation_type=LlmRequestType.CHATBOT,
+            )
+        except AIEngineHTTPError as exc:
+            logger.warning(
+                "news_impact_llm_unavailable",
+                extra={"processed_item_id": str(processed_item_id), "error": str(exc)},
+            )
+            raise AiProvidersUnavailableException() from exc
+
+        return NewsImpactResponse(analysis=response.text.strip())
+
+    async def _impact_prompts(self, db: AsyncSession) -> tuple[str, str]:
+        system_setting = await self._settings_repo.get_by_key(db, _IMPACT_SYSTEM_KEY)
+        user_setting = await self._settings_repo.get_by_key(db, _IMPACT_USER_KEY)
+        system_prompt = (
+            str(system_setting.value)
+            if system_setting is not None and isinstance(system_setting.value, str)
+            else _DEFAULT_IMPACT_SYSTEM_PROMPT
+        )
+        user_prompt = (
+            str(user_setting.value)
+            if user_setting is not None and isinstance(user_setting.value, str)
+            else _DEFAULT_IMPACT_USER_PROMPT
+        )
+        return system_prompt, user_prompt
+
+    async def _resolve_llm_client(
+        self,
+        db: AsyncSession,
+        api_key_service: ApiKeyService,
+        api_usage_service: ApiUsageService,
+    ) -> LLMClient:
+        if self._llm_client_factory is not None:
+            return await self._llm_client_factory(db)
+        return await build_llm_client(db, api_key_service, api_usage_service)
+
+    @staticmethod
+    def _resolve_period(
+        newsletter: NewsletterTemplate,
+        *,
+        period_start: date | None,
+        period_end: date | None,
+    ) -> tuple[date, date]:
+        if period_start is not None and period_end is not None:
+            if period_end < period_start:
+                raise ValidationException(
+                    message="Dönem bitiş tarihi başlangıçtan önce olamaz."
+                )
+            return period_start, period_end
+        if period_start is not None or period_end is not None:
+            raise ValidationException(
+                message="period_start ve period_end birlikte verilmelidir."
+            )
+        end = date.today()
+        start = end - timedelta(days=max(1, newsletter.date_range_days))
+        return start, end
 
     def _resolve_list_status(
         self,
@@ -215,7 +358,7 @@ class DigestService:
         self,
         *,
         session_factory: async_sessionmaker[AsyncSession],
-        digest_type: DigestType,
+        newsletter_template_id: uuid.UUID,
         period_start: date,
         period_end: date,
         actor_user_id: uuid.UUID,
@@ -225,7 +368,7 @@ class DigestService:
         asyncio.create_task(
             _run_digest_generation(
                 session_factory=session_factory,
-                digest_type=digest_type,
+                newsletter_template_id=newsletter_template_id,
                 period_start=period_start,
                 period_end=period_end,
                 actor_user_id=actor_user_id,
@@ -233,6 +376,7 @@ class DigestService:
                 api_usage_service=api_usage_service,
                 llm_client_factory=self._llm_client_factory,
                 audit_service=self._audit_service,
+                newsletter_templates=self._newsletter_templates,
             )
         )
 
@@ -240,17 +384,26 @@ class DigestService:
 async def _run_digest_generation(
     *,
     session_factory: async_sessionmaker[AsyncSession],
-    digest_type: DigestType,
+    newsletter_template_id: uuid.UUID,
     period_start: date,
     period_end: date,
     actor_user_id: uuid.UUID,
     api_key_service: ApiKeyService,
     api_usage_service: ApiUsageService,
-    llm_client_factory: Callable[..., Awaitable[LLMClient]] | None,
+    llm_client_factory: LLMClientFactory | None,
     audit_service: AuditService,
+    newsletter_templates: NewsletterTemplateRepository,
 ) -> None:
     async with session_factory() as db:
         try:
+            newsletter = await newsletter_templates.get_by_id(db, newsletter_template_id)
+            if newsletter is None:
+                logger.error(
+                    "digest_background_newsletter_missing",
+                    extra={"newsletter_template_id": str(newsletter_template_id)},
+                )
+                return
+
             if llm_client_factory is not None:
                 llm_client = await llm_client_factory(db)
             else:
@@ -288,13 +441,12 @@ async def _run_digest_generation(
 
             generator = DigestGenerator(
                 llm_client=llm_client,
-                template_resolver=db_prompt_template_resolver,
                 audit_hook=audit_hook,
                 notification_hook=notification_hook,
             )
             await generator.generate(
                 db,
-                digest_type=digest_type,
+                newsletter=newsletter,
                 period_start=period_start,
                 period_end=period_end,
                 actor_user_id=actor_user_id,
@@ -305,7 +457,7 @@ async def _run_digest_generation(
             logger.exception(
                 "digest_background_generation_failed",
                 extra={
-                    "digest_type": digest_type.value,
+                    "newsletter_template_id": str(newsletter_template_id),
                     "period_start": period_start.isoformat(),
                     "period_end": period_end.isoformat(),
                 },

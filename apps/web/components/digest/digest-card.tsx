@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { DigestTypeBadge } from "@/components/digest/digest-type-badge";
+import { NewsletterBadge } from "@/components/digest/newsletter-badge";
 import { ReadToggle } from "@/components/digest/read-toggle";
 import { formatPeriodRange, formatShortDate } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,7 @@ export function DigestCard({
       <div className={cn(isLarge ? "p-6" : "p-4")}>
         <Link href={`/digests/${digest.id}`} className="block space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <DigestTypeBadge digestType={digest.digest_type} />
+            <NewsletterBadge newsletterSlug={digest.newsletter_slug} />
             <span className="text-xs text-gray-500">
               {formatShortDate(publishedAt)}
             </span>

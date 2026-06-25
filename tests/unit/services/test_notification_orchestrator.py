@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock
 import pytest
 from packages.shared.enums import (
     DigestStatus,
-    DigestType,
     NotificationChannel,
     NotificationStatus,
     NotificationType,
@@ -34,7 +33,7 @@ _DIGEST_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
 def _digest(*, with_section: bool = True) -> Digest:
     digest = Digest(
         id=_DIGEST_ID,
-        digest_type=DigestType.FMCG_WEEKLY,
+        newsletter_slug="fmcg_weekly",
         title="FMCG Haftalık Bülten",
         status=DigestStatus.READY,
         period_start=date(2026, 6, 9),

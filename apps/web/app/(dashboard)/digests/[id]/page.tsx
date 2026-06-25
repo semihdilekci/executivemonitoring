@@ -10,6 +10,7 @@ import { DigestDetailHero } from "@/components/digest/digest-detail-hero";
 import { DigestDetailSkeleton } from "@/components/digest/digest-detail-skeleton";
 import { DigestScrollProgress } from "@/components/digest/digest-scroll-progress";
 import { DigestSectionCard } from "@/components/digest/digest-section";
+import { DigestSummary } from "@/components/digest/digest-summary";
 import { DigestToc } from "@/components/digest/digest-toc";
 import { sortSections } from "@/lib/digest-detail-utils";
 import { resolveDigestIsRead } from "@/lib/digest-read-cache";
@@ -113,6 +114,8 @@ export default function DigestDetailPage({ params }: DigestDetailPageProps) {
 
           <div className="digest-detail-content min-w-0 space-y-6">
             <DigestDetailHero digest={data} />
+
+            <DigestSummary digest={data} />
 
             <div className="space-y-4">
               {sections.map((section) => (

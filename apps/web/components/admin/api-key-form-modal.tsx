@@ -2,12 +2,18 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { FormErrorBanner } from "@/components/common/form-error-banner";
+import { RequestTypeScopeSelector } from "@/components/admin/request-type-scope-selector";
 import { Modal } from "@/components/common/modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { API_PROVIDER_LABELS } from "@/lib/api-labels";
 import { PROVIDER_MODELS, defaultModelFor } from "@/lib/llm-models";
-import type { ApiProvider, ApiKeyItem, CreateApiKeyRequest } from "@/types/api";
+import type {
+  ApiProvider,
+  ApiKeyItem,
+  CreateApiKeyRequest,
+  LlmRequestType,
+} from "@/types/api";
 import { isApiError } from "@/types/api";
 
 interface ApiKeyFormModalProps {
@@ -37,6 +43,7 @@ export function ApiKeyFormModal({
   const [keyAlias, setKeyAlias] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [priorityOrder, setPriorityOrder] = useState(1);
+  const [scope, setScope] = useState<LlmRequestType[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +59,7 @@ export function ApiKeyFormModal({
     setKeyAlias("");
     setApiKey("");
     setPriorityOrder(nextPriority);
+    setScope([]);
     setFormError(null);
   }, [isOpen, existingKeys]);
 
@@ -86,6 +94,7 @@ export function ApiKeyFormModal({
         model,
         priority_order: priorityOrder,
         is_active: true,
+        request_type_scope: scope,
       });
       setApiKey("");
     } catch (error) {
@@ -169,6 +178,8 @@ export function ApiKeyFormModal({
             setPriorityOrder(Number.parseInt(event.target.value, 10) || 1)
           }
         />
+
+        <RequestTypeScopeSelector value={scope} onChange={setScope} />
 
         <div className="flex justify-end gap-3 border-t border-gray-100 pt-4">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>

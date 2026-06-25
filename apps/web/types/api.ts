@@ -58,16 +58,12 @@ export interface UserMeResponse {
   created_at: string;
 }
 
-export type DigestType =
-  | "turkish_media_weekly"
-  | "fmcg_weekly"
-  | "strategy_weekly";
-
 export type DigestStatus = "generating" | "ready" | "failed";
 
 export interface DigestListItem {
   id: string;
-  digest_type: DigestType;
+  /** Serbest bülten slug'ı (Faz 6.5 — `digest_type` enum kaldırıldı). */
+  newsletter_slug: string;
   title: string;
   status: DigestStatus;
   period_start: string;
@@ -105,7 +101,7 @@ export interface TodayBrief {
 export interface DigestListParams {
   cursor?: string;
   limit?: number;
-  digest_type?: DigestType;
+  newsletter_slug?: string;
   status?: DigestStatus;
   is_read?: boolean;
 }
@@ -126,7 +122,17 @@ export interface DigestSection {
 }
 
 export interface DigestDetail extends DigestListItem {
+  /** Editör LLM tarafından üretilen haftalık bülten özeti (Faz 6.5). */
+  summary: string | null;
   sections: DigestSection[];
+}
+
+export interface NewsImpactRequest {
+  processed_item_id: string;
+}
+
+export interface NewsImpactResponse {
+  analysis: string;
 }
 
 export interface ChatSource {
@@ -256,43 +262,78 @@ export interface DeleteSourceResponse {
 
 export type ApiProvider = "groq" | "gemini" | "anthropic";
 
-export interface PromptTemplateItem {
+/**
+ * Bülten şablonu (newsletter template) — iki seviyeli serbest model (Faz 6.5).
+ * Eski `PromptTemplate*` tipleri ADR-0003 ile kaldırıldı.
+ */
+export interface NewsletterSection {
   id: string;
   name: string;
-  digest_type: DigestType;
-  section_key: string;
-  system_prompt: string;
-  user_prompt_template: string;
-  model_preference: ApiProvider | null;
+  sort_order: number;
+  section_system_prompt: string;
+  section_user_prompt: string;
+  impact_prompt: string;
   is_active: boolean;
-  version: number;
+}
+
+export interface NewsletterTemplate {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  date_range_days: number;
+  summary_system_prompt: string;
+  summary_user_prompt: string;
+  min_content_score: number;
+  /** Bülten-bazı içerik kategori ön-filtresi; boş = tüm kategoriler. */
+  content_categories: ContentCategory[];
+  model_preference: string | null;
+  is_active: boolean;
+  sections: NewsletterSection[];
   created_at: string;
   updated_at: string;
 }
 
-export interface PromptTemplateListResponse {
-  data: PromptTemplateItem[];
+export interface NewsletterTemplateListResponse {
+  data: NewsletterTemplate[];
 }
 
-export interface CreatePromptTemplateRequest {
+/** Oluştur/güncelle isteğindeki bölüm — `id` verilirse mevcut bölüm güncellenir. */
+export interface NewsletterSectionInput {
+  id?: string | null;
   name: string;
-  digest_type: DigestType;
-  section_key: string;
-  system_prompt: string;
-  user_prompt_template: string;
-  model_preference?: ApiProvider | null;
-  is_active?: boolean;
-}
-
-export interface UpdatePromptTemplateRequest {
-  name: string;
-  digest_type: DigestType;
-  section_key: string;
-  system_prompt: string;
-  user_prompt_template: string;
-  model_preference?: ApiProvider | null;
+  sort_order: number;
+  section_system_prompt: string;
+  section_user_prompt: string;
+  impact_prompt: string;
   is_active: boolean;
 }
+
+export interface CreateNewsletterTemplateRequest {
+  slug: string;
+  name: string;
+  description: string;
+  date_range_days: number;
+  summary_system_prompt: string;
+  summary_user_prompt: string;
+  min_content_score: number;
+  content_categories: ContentCategory[];
+  model_preference: string | null;
+  is_active: boolean;
+  sections: NewsletterSectionInput[];
+}
+
+/** Güncelleme isteği — `slug` değiştirilemez (benzersiz, salt-okunur). */
+export type UpdateNewsletterTemplateRequest = Omit<
+  CreateNewsletterTemplateRequest,
+  "slug"
+>;
+
+/** LLM operasyon tipi — `request_type_scope` üyeleri (`Docs/03` §6). */
+export type LlmRequestType =
+  | "digest_generation"
+  | "chatbot"
+  | "article_translation";
 
 export interface ApiKeyItem {
   id: string;
@@ -301,6 +342,8 @@ export interface ApiKeyItem {
   model: string | null;
   is_active: boolean;
   priority_order: number;
+  /** Faz 6.5: anahtarın kullanılacağı operasyonlar; `[]` = tüm operasyonlar. */
+  request_type_scope: LlmRequestType[];
   created_at: string;
   /** Backend mask desteği geldiğinde son 4 karakter. */
   key_suffix?: string | null;
@@ -317,10 +360,16 @@ export interface CreateApiKeyRequest {
   model: string;
   priority_order: number;
   is_active?: boolean;
+  request_type_scope?: LlmRequestType[];
 }
 
 export interface PatchApiKeyStatusRequest {
   is_active: boolean;
+}
+
+export interface UpdateApiKeyRequest {
+  request_type_scope: LlmRequestType[];
+  model?: string;
 }
 
 export interface DeleteApiKeyResponse {
@@ -582,7 +631,7 @@ export interface TriggerCollectPipelineRequest {
 
 export interface TriggerDigestUpdateRequest {
   run_type: "digest_update";
-  digest_type: DigestType;
+  newsletter_template_id: string;
   period_start: string;
   period_end: string;
   send_notification: boolean;
@@ -618,7 +667,7 @@ export type ContentCategory =
 
 export interface DigestUsageSummary {
   digest_id: string;
-  digest_type: DigestType;
+  newsletter_slug: string;
   digest_title: string;
   period_start: string;
   period_end: string;
@@ -657,6 +706,8 @@ export interface ProcessedItemDetail {
   clean_content: string;
   summary: string | null;
   language: string;
+  /** Faz 6.5: canonical olmayan dil varyantları (orijinal EN vb.); TR kaynaklıda boş. */
+  translations: TranslationVariant[];
   relevance_score: number;
   topics: string[];
   entities: unknown[];
@@ -664,6 +715,13 @@ export interface ProcessedItemDetail {
   processed_at: string;
   chunk_count: number;
   digest_usages: DigestUsageDetail[];
+}
+
+export interface TranslationVariant {
+  language: string;
+  title: string;
+  content: string;
+  is_original: boolean;
 }
 
 export type ProcessedItemSortField =

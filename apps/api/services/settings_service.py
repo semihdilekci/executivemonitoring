@@ -10,7 +10,7 @@ from packages.shared.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.config import Settings, get_settings
-from apps.api.core.exceptions import NotFoundException
+from apps.api.core.exceptions import NotFoundException, ValidationException
 from apps.api.repositories.settings_repository import SettingsRepository
 from apps.api.schemas.settings import SettingListResponse, SettingResponse
 from apps.api.services.audit_service import AuditService, audit_service
@@ -24,6 +24,20 @@ EMBEDDING_MODEL_WARNING = "Embedding modeli değişti. Reindex job arka planda b
 
 JWT_ACCESS_TOKEN_MINUTES_KEY = "jwt_access_token_minutes"
 JWT_REFRESH_TOKEN_DAYS_KEY = "jwt_refresh_token_days"
+
+# Faz 6.5: ingest-time EN→TR çeviri eşiği (`Docs/03` §11, `Docs/02` §4.15).
+TRANSLATION_MIN_RELEVANCE_SCORE_KEY = "translation_min_relevance_score"
+
+
+def _validate_setting_value(key: str, value: Any) -> None:
+    """Anahtara özel değer kısıtları; ihlal → 422 (`Docs/03` §11)."""
+    if key == TRANSLATION_MIN_RELEVANCE_SCORE_KEY:
+        # bool `int` alt-tipidir; açıkça reddedilir.
+        is_int = isinstance(value, int) and not isinstance(value, bool)
+        if not is_int or not (0 <= value <= 100):
+            raise ValidationException(
+                message="translation_min_relevance_score 0–100 aralığında tam sayı olmalıdır.",
+            )
 
 
 def _to_setting_response(
@@ -80,6 +94,8 @@ class SettingsService:
         setting = await self._settings_repo.get_by_key(db, key)
         if setting is None:
             raise NotFoundException(message="Sistem ayarı bulunamadı.")
+
+        _validate_setting_value(key, value)
 
         old_value = setting.value
         if old_value == value:

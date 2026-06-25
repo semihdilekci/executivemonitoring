@@ -221,7 +221,7 @@ class NotificationOrchestrator:
                 [push_recipient],
                 teaser=teaser,
                 digest_id=digest.id,
-                digest_type=digest.digest_type.value,
+                digest_type=digest.newsletter_slug,
             )
         except PushDeliveryError as exc:
             await self._logs.create(

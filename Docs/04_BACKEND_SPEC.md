@@ -835,6 +835,35 @@ Sonuç: `{schema}.processed_items.relevance_score` (0.0–1.0; `Docs/02` CHECK).
 
 `LLMEnricherProcessor` swap: sentiment, entity extraction (`entities` JSONB), LLM-based Yıldız ilgi skoru (0–10). Batch LLM (5–10 makale/prompt). Gate, chunk ve embedding adımları değişmez.
 
+### 8.45 Translate (TR Normalizasyon) — Faz 6.5
+
+> **Amaç:** Bültendeki tüm haberlerin Türkçe olması. İngilizce kaynaklı haberler **ingest sırasında** Türkçeye çevrilir; çeviri **bir kez** yapılır ve `processed_items` canonical içeriğine yazılır (digest üretiminde tekrar çevrilmez). Böylece bülten, RAG embedding'leri ve içerik arşivi otomatik Türkçe olur.
+
+**Zincirdeki konum:** `Scorer` (§8.4) **sonrası**, `Chunker` (§8.5) **öncesi**. Gate/enrich/score `term_en` yüzeyleriyle çalıştığından (§8.3–8.4) İngilizce haberler bu adımlara kadar İngilizce ilerler; yalnızca **gate'i geçen alakalı** haberler çevrilir (boşa çeviri yok). Chunker'dan önce olduğundan embedding'ler Türkçe metinden üretilir.
+
+```
+Dedup → Normalize → Gate → Enrich → Score → Translate → Chunk → persist
+```
+
+**Çeviri koşulu (gate):** `TranslationProcessor` yalnızca şu iki koşul birlikte sağlanırsa çevirir:
+
+| Koşul | Kaynak |
+| ----- | ------ |
+| `language == "en"` | Normalizer'ın dil algılaması (§8.2). Yalnızca İngilizce; TR ve diğer diller dokunulmaz. |
+| `relevance_score * 100 >= translation_min_relevance_score` | `system_settings.translation_min_relevance_score` (0–100, varsayılan 75; `Docs/02` §4.15) |
+
+Koşul sağlanmazsa adım içeriği **değiştirmeden** geçirir (no-op).
+
+**LLM çağrısı:** Tek `LLMClient.complete()` çağrısı (§9.1), `operation_type=LlmRequestType.ARTICLE_TRANSLATION`. System prompt davranışı dayatır: iş/finans istihbaratı için profesyonel Türkçe; **özel isim/kurum/şirket/marka/sayıları koru**, **özetleme/ekleme/çıkarma yapma**, finans-iş terminolojisini doğru Türkçeleştir. Çıktı JSON: `{"title": "...", "content": "..."}`. Başlık + metin tek istekte çevrilir.
+
+**Provider seçimi (ucuz sıra):** Çeviri, `article_translation` kapsamına atanmış API anahtarlarıyla koşar (`Docs/02` §4.9 `request_type_scope`). Admin bu kapsama ucuz/hızlı modelleri (örn. Gemini Flash, Groq Llama) atar; pahalı bülten anahtarları (Claude) kapsam dışıdır. Her anahtar kendi `model` değerini taşıdığından çeviri otomatik ucuz modelle koşar.
+
+**Çıktı (persist, `Docs/02` §4.4 + §4.4b):**
+- Başarı → `processed_items.title`/`clean_content` = **çevrilmiş Türkçe** (canonical), `language = "tr"`; orijinal İngilizce başlık+metin `processed_item_translations`'a `language='en', is_original=true` ile yazılır.
+- **Hata/başarısızlık → haber DÜŞMEZ:** içerik İngilizce haliyle persist edilir (`language = "en"`, çeviri satırı yazılmaz), olay loglanır. (Çeviri hatası `ProcessorStepError`'a yükseltilmez; aksi halde haber DLQ'ya düşerdi.)
+
+**Değişmeyen:** Gate/enrich/score rating algoritması (Faz 6.3); chunk/embedding mekaniği (§8.5); `relevance_score` (zaten çeviri öncesi hesaplanmış İngilizce metin üzerinden).
+
 ### 8.5 Chunk
 
 pgvector similarity search için makale içeriği chunk'lara bölünür:
@@ -914,6 +943,8 @@ class LLMClient:
 ```
 
 Token tükenmesi (429) veya servis hatası (503) alındığında round-robin ile sıradaki aktif key'e geçilir. Tüm key'ler başarısızsa `AllProvidersFailedError` fırlatılır ve digest üretimi admin'e hata bildirimi ile raporlanır.
+
+**Operasyon-kapsamlı provider seçimi (Faz 6.5):** Client bir operasyon için (`digest_generation`, `chatbot`, `article_translation`) kurulurken yalnızca `request_type_scope`'u o operasyonu içeren **veya** boş (`[]` = tümü) aktif anahtarlar `priority_order`'a göre seçilir (`Docs/02` §4.9). Böylece çeviri (§8.45) bülten/chatbot'tan **ayrı, daha ucuz bir provider sırasıyla** koşabilir. Provider listesini operasyona göre filtreleme `apps/api` factory katmanındadır; round-robin/fallback mantığı değişmez.
 
 Her API çağrısının token kullanımı `api_usage_logs` tablosunda saklanır: provider, key ID, model, prompt/completion/total token sayıları, timestamp. Admin paneli bu veriden günlük/haftalık/aylık kullanım grafikleri üretir.
 

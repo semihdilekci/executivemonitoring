@@ -1,9 +1,5 @@
-import { DigestTypeBadge } from "@/components/digest/digest-type-badge";
-import {
-  buildDigestTldr,
-  computeDigestStats,
-  sortSections,
-} from "@/lib/digest-detail-utils";
+import { NewsletterBadge } from "@/components/digest/newsletter-badge";
+import { computeDigestStats } from "@/lib/digest-detail-utils";
 import { formatDateTime, formatPeriodRange } from "@/lib/date-format";
 import type { DigestDetail } from "@/types/api";
 
@@ -12,9 +8,7 @@ interface DigestDetailHeroProps {
 }
 
 export function DigestDetailHero({ digest }: DigestDetailHeroProps) {
-  const sections = sortSections(digest.sections);
   const stats = computeDigestStats(digest);
-  const tldr = buildDigestTldr(sections);
   const publishedAt = digest.completed_at ?? digest.created_at;
 
   return (
@@ -23,7 +17,7 @@ export function DigestDetailHero({ digest }: DigestDetailHeroProps) {
       className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm"
     >
       <div className="space-y-4">
-        <DigestTypeBadge digestType={digest.digest_type} />
+        <NewsletterBadge newsletterSlug={digest.newsletter_slug} />
 
         <div>
           <h1
@@ -37,13 +31,6 @@ export function DigestDetailHero({ digest }: DigestDetailHeroProps) {
             {digest.total_sources_used} kaynaktan derlendi · {stats.sectionCount}{" "}
             bölüm
           </p>
-        </div>
-
-        <div className="rounded-lg border border-gray-100 border-l-[3px] border-l-gold-500 bg-gray-50 px-4 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gold-500">
-            Özet
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-gray-700">{tldr}</p>
         </div>
 
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

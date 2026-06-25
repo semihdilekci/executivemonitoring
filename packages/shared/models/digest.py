@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Date, DateTime, Enum, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from packages.shared.enums import DigestStatus, DigestType
+from packages.shared.enums import DigestStatus
 from packages.shared.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
-from packages.shared.models.prompt_template import digest_type_enum
 
 if TYPE_CHECKING:
     from packages.shared.models.digest_section import DigestSection
+    from packages.shared.models.newsletter_template import NewsletterTemplate
 
 digest_status_enum = Enum(
     DigestStatus,
@@ -30,14 +40,22 @@ class Digest(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
 
     __tablename__ = "digests"
     __table_args__ = (
-        Index("idx_digests_digest_type", "digest_type"),
+        Index("idx_digests_newsletter_slug", "newsletter_slug"),
         Index("idx_digests_status", "status"),
         Index("idx_digests_created_at", "created_at", postgresql_ops={"created_at": "DESC"}),
         Index("idx_digests_period", "period_start", "period_end"),
     )
 
-    digest_type: Mapped[DigestType] = mapped_column(digest_type_enum, nullable=False)
+    # Faz 6.5 (ADR-0003): serbest bülten — `digest_type` enum yerine FK + denormalize slug.
+    newsletter_template_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("newsletter_templates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    newsletter_slug: Mapped[str] = mapped_column(String(100), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
+    # Editör LLM'in ürettiği haftalık Bülten Özeti (en tepede gösterilir).
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[DigestStatus] = mapped_column(
         digest_status_enum,
         nullable=False,
@@ -59,4 +77,7 @@ class Digest(Base, UUIDPrimaryKeyMixin, CreatedAtMixin):
         "DigestSection",
         back_populates="digest",
         cascade="all, delete-orphan",
+    )
+    newsletter_template: Mapped[NewsletterTemplate | None] = relationship(
+        "NewsletterTemplate",
     )

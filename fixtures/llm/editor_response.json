@@ -1,0 +1,21 @@
+{
+  "summary": "Bu hafta FMCG tarafında fiyatlama baskısı ve rakip marka hamleleri öne çıktı; perakende kanalında talep göreceli zayıfladı. Yıldız markaları için maliyet ve raf rekabeti gündemin başında.",
+  "assignments": [
+    {
+      "section": "Piyasa Genel Görünümü",
+      "article_ids": [
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222"
+      ]
+    },
+    {
+      "section": "Marka Hamleleri",
+      "article_ids": [
+        "33333333-3333-3333-3333-333333333333"
+      ]
+    }
+  ],
+  "dropped": [
+    "44444444-4444-4444-4444-444444444444"
+  ]
+}

@@ -1,5 +1,5 @@
 ---
-description: "[Faz 6.5] Bülten iyileştirme — serbest bülten konfig (2 seviye) + 3-aşamalı editör pipeline (editör dağıtım+özet → bölüm özet+Yıldız etki → anlık etki), tek-ekran şablon yönetimi, çekmece haber kartları — 7 iterasyon/chat (ADR+Docs → DB → editör LLM → bölüm+generator → API → FE şablon → FE detay). Mesajda \"Faz 6.5 — İterasyon M\" belirt."
+description: "[Faz 6.5] Bülten iyileştirme — serbest bülten konfig (2 seviye) + 3-aşamalı editör pipeline (editör dağıtım+özet → bölüm özet+Yıldız etki → anlık etki), tek-ekran şablon yönetimi, çekmece haber kartları + ingest-time EN→TR çeviri (TranslationProcessor + çok-dilli depolama + admin eşik/provider kapsamı) — 10 iterasyon/chat (ADR+Docs → DB → editör LLM → bölüm+generator → API → FE şablon → FE detay → çeviri DB → çeviri processor → çeviri API+FE). Mesajda \"Faz 6.5 — İterasyon M\" belirt."
 ---
 
 # Faz 6.5: Bülten İyileştirme
@@ -17,9 +17,10 @@ Bu faz **kendi feature branch'inde**: `feature/f65-newsletter-improvement` (`48-
 ## Bu fazın çalışma modeli
 
 - Tek sohbet fazı bitirmez. Her chat: `@63-phase-065-newsletter-improvement` + **「Faz 6.5 — İterasyon M」**.
-- Katman sırası: **ADR+Docs → DB → ai-engine (editör) → ai-engine (bölüm+generator) → API → FE şablon → FE detay** — karıştırma.
+- Katman sırası: **ADR+Docs → DB → ai-engine (editör) → ai-engine (bölüm+generator) → API → FE şablon → FE detay → çeviri DB → çeviri processor → çeviri API+FE** — karıştırma.
 - Agent **yalnızca o iterasyonun Docs okuma sırasını** okur; tüm spec değil. Plan moduna geçme — iterasyon blueprint yeterli.
-- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Gate/enrich/score **algoritması değişmez** (Faz 6.3); yalnızca digest üretim katmanı ve konfig modeli değişir.
+- **Spec çelişkisinde `Docs/` kazanır** (CLAUDE.md). Gate/enrich/score **algoritması değişmez** (Faz 6.3); yalnızca digest üretim katmanı, konfig modeli ve (İter 8–10) ingest-time çeviri katmanı eklenir/değişir.
+- **Çeviri (İter 8–10):** İngilizce haberler processor zincirinde Scorer→Chunker arası çevrilir; canonical TR `processed_items`'a, orijinal EN `processed_item_translations`'a yazılır. Çeviri **digest üretiminde değil**, ingest'te yapılır.
 
 ## Required Context
 
@@ -39,15 +40,21 @@ Bu faz **kendi feature branch'inde**: `feature/f65-newsletter-improvement` (`48-
 - [ ] `POST /api/v1/newsletter-templates` CRUD (nested section) admin-only + audit; `POST /api/v1/digests/news-impact` authenticated + rate-limit
 - [ ] Admin tek ekrandan serbest bülten + sınırsız bölüm tanımlıyor
 - [ ] Digest detay: haftalık özet + bölüm çekmece kartları (kaynağa git + "Yıldız'ı nasıl etkiler?") render ediyor
+- [ ] (İter 8) `processed_item_translations` tablosu + `api_keys.request_type_scope` + `translation_min_relevance_score` ayarı + `ARTICLE_TRANSLATION` enum migration uygulanmış
+- [ ] (İter 9) `TranslationProcessor` zincirde (Scorer→Chunker); `language=="en"` + eşik üstü haberler TR'ye çevriliyor, canonical TR + orijinal EN satırı persist; çeviri hatası haberi düşürmüyor
+- [ ] (İter 10) Admin çeviri eşiğini + çeviri provider kapsamını yönetiyor; içerik arşivi detayı TR/EN sekmeleri gösteriyor
 - [ ] `pytest tests/` + `ruff` + `mypy` + `npm run build` yeşil; ADR-0003 + `Docs/` ile kod uyumlu
 
 ## Explicit Don'ts
 
 - Cron/bildirim zamanlaması revizyonu (mevcut manuel trigger / Faz 6.1 `digest_update` kalır)
-- Gate/enrich/score rating algoritmasını değiştirme (Faz 6.3 kapsamı)
-- Yeni schema veya haber depolama değişikliği (Faz 6.4 kapsamı)
+- Gate/enrich/score rating algoritmasını değiştirme (Faz 6.3 kapsamı) — çeviri Scorer'dan **sonra** eklenir, skoru değiştirmez
+- Faz 6.4 `news` konsolidasyon kararını bozacak schema değişikliği (translations **sidecar** tablodur; `processed_items` yapısı korunur, yalnızca `language` semantiği netleşir)
 - Bülten/bölüm başına ayrı anlık-etki prompt'u (tek global karar — ADR-0003)
 - Anlık etki sonucunu DB'ye kalıcılaştırma (anlık/runtime)
+- **Çeviri için hazır MT servisi (Google/DeepL/AWS Translate)** — mevcut `LLMClient` kullanılır (karar: LLM)
+- Türkçe veya İngilizce-dışı dilleri çevirme (yalnızca `language == "en"`); digest üretiminde çeviri (ingest-time karar)
+- TR→EN ters çeviri **kodu** (şema hazır; EN servis sonraki faz)
 - Mobil (Faz 7); prompt "Test Et" / versiyon geçmişi (eski S-ADMIN-PROMPT-EDIT özellikleri — kapsam dışı)
 - Production migration onaysız çalıştırma
 
@@ -497,5 +504,210 @@ Bu faz **kendi feature branch'inde**: `feature/f65-newsletter-improvement` (`48-
 
 **Stop:**
 - [ ] `cd apps/web && npm run build`
-- [ ] Faz 6.5 Done Definition tamam; roadmap işareti
+- [ ] Bülten akışı (İter 1–7) Done; roadmap §6.5.7 işareti
+- [ ] PR/onay → İterasyon 8 (çeviri altyapısı)
+
+---
+
+### İterasyon 8 — DB: Çeviri Altyapısı (Translations Tablosu + API Key Kapsamı + Ayar) (6.5.8)
+
+**Hedef:** `news.processed_item_translations` sidecar tablo + `api_keys.request_type_scope` kolonu + `system_settings.translation_min_relevance_score` (varsayılan 75) + `LlmRequestType.ARTICLE_TRANSLATION` enum oluşur; migration round-trip + model + seed + test yeşil. Kod davranışı (processor/digest) **değişmez** — yalnızca şema + enum + ayar hazırlanır.
+
+**Teslim çıktısı:**
+- `packages/shared/models/processed_item_translation.py` — `ProcessedItemTranslation` (`__table_args__ = {"schema": "news"}`, `processed_item_id` FK CASCADE, `uq_processed_item_translations_item_lang` UNIQUE(`processed_item_id`,`language`), `idx_processed_item_translations_item`)
+- `packages/shared/models/api_key.py` — `request_type_scope: Mapped[list[str]]` (JSONB, `server_default="[]"`); `packages/shared/models/processed_item.py` — `NewsProcessedItem.translations` relationship (CASCADE)
+- `packages/shared/enums.py` — `LlmRequestType.ARTICLE_TRANSLATION = "article_translation"`; `packages/shared/models/__init__.py` export
+- `alembic/versions/0XX_translation_infra.py` (`down_revision` = Faz 6.5 newsletter config migration `013_*`) — `create_table` + `add_column(api_keys.request_type_scope)` + `system_settings` insert (`translation_min_relevance_score=75`)
+- `fixtures/system_settings.json` (varsa) + `scripts/seed.py` idempotent yükleme
+- `tests/integration/test_translation_infra_migration.py`, `tests/unit/test_data_models.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 1–7 Stop (bülten akışı + `013_newsletter_config` uygulanmış)
+- [ ] `alembic current` = head
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.8 — kapsam
+2. `Docs/02_DATABASE_SCHEMA.md` §4.4b (translations), §4.9 (api_keys `request_type_scope`), §4.15 (`translation_min_relevance_score`)
+3. `Docs/01_DOMAIN_MODEL.md` §2.5b (ProcessedItemTranslation), §2.9 (ApiKey)
+4. `Docs/08_TESTING_STRATEGY.md` — migration + seed test senaryoları (referans)
+5. `packages/shared/models/content_chunk.py` — `news` schema-qualified sidecar pattern (referans)
+
+**Uygulama planı:**
+1. `processed_item_translation.py` — model; `news` schema; FK→`news.processed_items.id` CASCADE; UNIQUE+index (`Docs/02` §4.4b)
+2. `processed_item.py` — `translations` relationship; `api_key.py` — `request_type_scope` JSONB default `[]` (`Docs/02` §4.9)
+3. `enums.py` — `ARTICLE_TRANSLATION` üyesi (`Docs/04` §8.45); `__init__.py` export
+4. `0XX_translation_infra.py` — `create_table` (news schema) + `add_column` + `system_settings` insert; `upgrade`/`downgrade` simetrik (`Docs/02` migration kuralları)
+5. seed: `translation_min_relevance_score` idempotent upsert; `scripts/seed.py`
+6. testler: upgrade sonrası tablo/kolon/ayar var; downgrade temiz; `ProcessedItemTranslation` örnekleme
+7. `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`; `pytest tests/integration/test_translation_infra_migration.py tests/unit/test_data_models.py -v`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `packages/shared/models/processed_item_translation.py`, `alembic/versions/0XX_translation_infra.py`, `tests/integration/test_translation_infra_migration.py` |
+| Güncelle | `packages/shared/models/processed_item.py`, `api_key.py`, `__init__.py`, `packages/shared/enums.py`, `scripts/seed.py`, `fixtures/system_settings.json`, `tests/unit/test_data_models.py` |
+| Dokunma | processor (İter 9), API/FE (İter 10), digest üretim kodu |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| translations sidecar tablo | `Docs/02` §4.4b | news schema; UNIQUE(item,lang); CASCADE |
+| api_keys operasyon kapsamı | `Docs/02` §4.9 | JSONB array default `[]` = tümü |
+| çeviri eşiği ayarı | `Docs/02` §4.15 | `translation_min_relevance_score=75` |
+| ARTICLE_TRANSLATION enum | `Docs/04` §8.45 | `LlmRequestType` üyesi |
+
+**Kalite kapıları:**
+- [ ] Migration round-trip yeşil (veya belgelenmiş kısıt)
+- [ ] Seed idempotent (tekrar çalıştırılabilir)
+- [ ] `ruff check packages && mypy packages` yeşil
+
+**Bu iterasyonda yok:**
+- `TranslationProcessor` mantığı (İter 9); LLM client filtresi (İter 9); API/FE (İter 10)
+
+**Risk / dikkat:**
+- `down_revision` mutlaka mevcut head (`013_newsletter_config`) olmalı — yanlış zincir migration'ı kırar
+- `request_type_scope` `NOT NULL DEFAULT '[]'` — mevcut anahtarlar otomatik "tüm operasyonlar" (geriye uyumlu); enum kısıtı uygulama katmanında (`topics` gibi)
+- Production migration **kullanıcı onayı** (`01`/`03` yasak listesi)
+
+**Stop:**
+- [ ] `alembic upgrade head` + round-trip
+- [ ] `pytest tests/integration/test_translation_infra_migration.py tests/unit/test_data_models.py -v`
+- [ ] `ruff check packages && mypy packages`
+- [ ] PR/onay → İterasyon 9
+
+---
+
+### İterasyon 9 — AI Engine + Processor: TranslationProcessor + Operasyon-Scoped LLM Client (6.5.9)
+
+**Hedef:** `TranslationProcessor` processor zincirine Scorer sonrası / Chunker öncesi eklenir; `language == "en"` **ve** `relevance_score*100 >= translation_min_relevance_score` haberleri tek LLM çağrısıyla TR'ye çevirir; canonical TR (`title`/`clean_content`, `language="tr"`) + orijinal EN `processed_item_translations` (is_original=true) persist edilir. LLM client operasyon-kapsamlı kurulur (çeviri = `article_translation` scope). Çeviri hatası haberi **düşürmez**. Unit + integration test yeşil.
+
+**Teslim çıktısı:**
+- `services/processor/translator.py` — `TranslationProcessor(BaseProcessor)`: eşik/dil gate, `LLMClient.complete(..., operation_type=ARTICLE_TRANSLATION)`, JSON `{title, content}` parse + doğrulama; başarı → `data.title`/`data.content`/`extras["clean_content"]` TR, `extras["language"]="tr"`, `extras["original_translation"]={language:"en", title, content}`; hata → no-op passthrough + log (asla raise etmez)
+- `services/processor/pipeline_orchestrator.py` — `build_processor_chain`'e `TranslationProcessor` (Scorer→Chunker arası) + LLM client + ayar enjekte; processor entrypoint'te operasyon-scoped client + `translation_min_relevance_score` okuma
+- `apps/api/services/llm_client_factory.py` — `list_llm_providers`/`build_llm_client`'a `operation_type` filtresi (`request_type_scope ⊇ op` veya `[]`)
+- `services/processor/persistence.py` — `extras["original_translation"]` varsa `ProcessedItemTranslation` (is_original=true) yaz; `language` extras'tan canonical
+- `tests/unit/processor/test_translator.py`, `tests/integration/test_pipeline_e2e.py` güncel
+
+**Önkoşullar:**
+- [ ] İterasyon 8 Stop (`0XX_translation_infra` uygulanmış, modeller + enum hazır)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.9 — kapsam
+2. `Docs/04_BACKEND_SPEC.md` §8.45 (Translate: konum, gate koşulu, prompt davranışı, hata=passthrough) + §9.1 (operasyon-scoped client)
+3. `Docs/02_DATABASE_SCHEMA.md` §4.4b (translations persist), §4.9 (`request_type_scope`)
+4. `services/processor/scorer.py` + `chunker.py` — `BaseProcessor` chain pattern + `ProcessorContext.extras` kullanımı (referans)
+5. `services/ai_engine/llm_client.py` — `complete()` imzası + `operation_type` (referans)
+
+**Uygulama planı:**
+1. `translator.py` — `process(ctx)`: `extras["language"] != "en"` veya `relevance_score*100 < eşik` → `return data` (no-op); aksi halde system prompt (özel isim/sayı koru, özetleme yok, finans-iş TR) + JSON çıktı; parse başarısız/boş → log + no-op (`Docs/04` §8.45)
+2. `llm_client_factory.py` — `list_llm_providers(..., operation_type=None)`: op verildiyse `request_type_scope` filtrele; `build_llm_client(..., operation_type=...)` (`Docs/04` §9.1)
+3. `pipeline_orchestrator.py` — `build_processor_chain`'e `TranslationProcessor(llm_client, min_score_provider)` Scorer sonrası, Chunker öncesi; entrypoint'te `operation_type=ARTICLE_TRANSLATION` client + ayar okuma
+4. `persistence.py` — `extras["original_translation"]` → `ProcessedItemTranslation` insert (aynı transaction, processed_item flush sonrası); canonical `language` yazımı korunur
+5. testler: EN+yüksek skor → TR + çeviri satırı; EN+düşük skor → no-op; TR → no-op; LLM hata → EN kalır, haber düşmez, chunk üretilir
+6. `pytest tests/unit/processor/test_translator.py tests/integration/test_pipeline_e2e.py -v`; `ruff` + `mypy`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `services/processor/translator.py`, `tests/unit/processor/test_translator.py` |
+| Güncelle | `services/processor/pipeline_orchestrator.py`, `persistence.py`, processor entrypoint, `apps/api/services/llm_client_factory.py`, `tests/integration/test_pipeline_e2e.py` |
+| Dokunma | DB modelleri (İter 8 tamam); API/FE (İter 10); gate/enrich/scorer algoritması |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| Çeviri konumu (Scorer→Chunker) | `Docs/04` §8.45 | embedding TR olsun diye Chunker öncesi |
+| Gate koşulu (EN + eşik) | `Docs/04` §8.45 | `language=="en"` & `score*100>=eşik` |
+| Operasyon-scoped provider | `Docs/04` §9.1 | `request_type_scope` filtresi |
+| Orijinal EN persist | `Docs/02` §4.4b | `is_original=true` satır |
+| Hata=passthrough | `Docs/04` §8.45 | `ProcessorStepError`'a yükseltme |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/unit/processor tests/integration/test_pipeline_e2e.py` yeşil
+- [ ] Çeviri hatası ingest'i kırmıyor (haber EN haliyle persist, chunk üretiliyor)
+- [ ] `ruff` + `mypy services` yeşil
+
+**Bu iterasyonda yok:**
+- Admin çeviri ayar UI'ı + arşiv TR/EN görünümü (İter 10); TR→EN ters çeviri
+
+**Risk / dikkat:**
+- Çeviri Scorer'dan **sonra** → `relevance_score` zaten İngilizce metinden hesaplanmış olur (skor değişmez, doğru davranış)
+- Uzun metinde `max_tokens` yetersizliği → truncation; makul üst sınır + parse doğrulama; bozuksa no-op
+- LLM çağrısı processor Lambda'sına ilk LLM bağımlılığını ekler — DB key'leri + `request_type_scope` filtresi entrypoint'te kurulmalı (yoksa `NoActiveLLMProvider` → no-op + log)
+- `processed_item_translations` insert idempotency: `uq_(item,language)` — yeniden işlemede çakışma yakalanmalı (persist idempotent skip mevcut)
+
+**Stop:**
+- [ ] `pytest tests/unit/processor/test_translator.py tests/integration/test_pipeline_e2e.py -v`
+- [ ] `ruff check services && mypy services`
+- [ ] PR/onay → İterasyon 10
+
+---
+
+### İterasyon 10 — API + FE: Çeviri Ayarı + API Key Kapsam Atama + Arşiv TR/EN Görünümü (6.5.10)
+
+**Hedef:** Admin (a) `translation_min_relevance_score`'u (0–100) ve (b) her API key'in `request_type_scope`'unu UI'dan yönetir; içerik arşivi detayı canonical TR + orijinal EN'i **dil sekmeleri** olarak gösterir. API + FE + test + `npm run build` yeşil.
+
+**Teslim çıktısı:**
+- `apps/api/schemas/api_key.py` — create/update + response'a `request_type_scope` (+ `model`); `apps/api/services/api_key_service.py`, `routers/api_keys.py` — scope set/update + audit (`api_key.updated`)
+- `apps/api/schemas/content_archive.py` — `ProcessedItemDetailResponse.translations: list[TranslationVariant]`; `services/content_archive_service.py` + `repositories/processed_item_repository.py` — detayda translations join
+- `apps/web/app/(dashboard)/admin/api-keys/page.tsx` + key kartı — `request_type_scope` multi-select; çeviri eşiği input (notification-settings-form pattern veya yeni alan) `translation_min_relevance_score`
+- `apps/web/components/admin/content-archive-detail-drawer.tsx` — "Türkçe (canonical)" + "Orijinal (EN)" sekmeleri; `apps/web/types/api.ts` + hook'lar (`use-content-archive-detail`, api-keys, settings) güncel
+- `tests/integration/test_api_key_scope.py`, `test_content_archive_translations.py`
+
+**Önkoşullar:**
+- [ ] İterasyon 9 Stop (translations yazılıyor, `request_type_scope` modelde)
+
+**Docs okuma sırası:**
+1. `Docs/10_IMPLEMENTATION_ROADMAP.md` §6.5.10 — kapsam
+2. `Docs/03_API_CONTRACTS.md` §6 (api-keys `request_type_scope`), §11 (`translation_min_relevance_score` PUT, 0–100), §11.6 (processed-items detay `translations`)
+3. `Docs/06_SCREEN_CATALOG.md` — S-ADMIN-CONTENT-ARCHIVE (dil sekmeleri), S-ADMIN-API-KEYS, ayar bölümü
+4. `apps/web/components/admin/notification-settings-form.tsx` — ayar input + `useUpdateSetting` pattern (referans)
+5. `apps/web/components/admin/content-archive-detail-drawer.tsx` — mevcut `clean_content`/`language` render (referans)
+
+**Uygulama planı:**
+1. API: `api_key` schema/service/router — `request_type_scope` create/update + response; geçerli `LlmRequestType` doğrulama; audit (`Docs/03` §6)
+2. API: `content_archive` schema/service/repo — detayda `translations` (language/title/content/is_original); liste değişmez (`Docs/03` §11.6)
+3. FE api-keys: kartta scope multi-select (`digest_generation`/`chatbot`/`article_translation`); kaydet → PATCH; aktif çeviri zinciri gösterimi
+4. FE ayar: `translation_min_relevance_score` 0–100 input (min/max validasyon) + `useUpdateSetting` (`Docs/03` §11)
+5. FE arşiv drawer: TR (canonical `clean_content`) + EN (translations[is_original]) sekmeleri; translations boşsa tek görünüm
+6. `types/api.ts` + hook'lar senkron; `tests/integration/test_api_key_scope.py` + `test_content_archive_translations.py`; `cd apps/web && npm run build`
+
+**Dosya kapsamı:**
+
+| İşlem | Path |
+| ----- | ---- |
+| Oluştur | `tests/integration/test_api_key_scope.py`, `tests/integration/test_content_archive_translations.py` |
+| Güncelle | `apps/api/schemas/api_key.py`, `services/api_key_service.py`, `routers/api_keys.py`, `apps/api/schemas/content_archive.py`, `services/content_archive_service.py`, `repositories/processed_item_repository.py`, `apps/web/app/(dashboard)/admin/api-keys/page.tsx`, `components/admin/content-archive-detail-drawer.tsx`, `apps/web/types/api.ts` + ilgili hook'lar |
+| Dokunma | processor/ai-engine (İter 8–9 tamam); digest üretim akışı |
+
+**Spec → kod eşlemesi:**
+
+| Gereksinim | Docs referansı | Uygulama notu |
+| ---------- | -------------- | ------------- |
+| api-key scope CRUD | `Docs/03` §6 | create/update + audit |
+| çeviri eşiği ayarı UI | `Docs/03` §11 | 0–100 validasyon |
+| arşiv translations | `Docs/03` §11.6 | detay `translations[]`; TR/EN sekme |
+| dil sekmeleri | `Docs/06` S-ADMIN-CONTENT-ARCHIVE | translations boşsa tek görünüm |
+
+**Kalite kapıları:**
+- [ ] `pytest tests/integration/test_api_key_scope.py test_content_archive_translations.py` yeşil
+- [ ] `cd apps/web && npm run build` yeşil; TS strict
+- [ ] `ruff` + `mypy apps/api` yeşil
+
+**Bu iterasyonda yok:**
+- TR→EN ters çeviri servisi/UI; mobil; liste endpoint'ine translations ekleme (yalnızca detay)
+
+**Risk / dikkat:**
+- `request_type_scope` boş seçim → `[]` (tümü) anlamına gelir; UI bunu "tüm operasyonlar" olarak açıkça göstermeli (yanlışlıkla kısıtlama algısı önlenir)
+- Arşiv liste endpoint'i `clean_content`/translations **dönmez** (detayda) — performans korunur (`Docs/04` §8.8)
+- Admin tüm key'leri yanlışlıkla `article_translation` dışı bırakırsa çeviri provider'sız kalır → İter 9 no-op + log; UI uyarısı opsiyonel
+
+**Stop:**
+- [ ] `pytest tests/integration/test_api_key_scope.py tests/integration/test_content_archive_translations.py -v`
+- [ ] `cd apps/web && npm run build`
+- [ ] Faz 6.5 Done Definition (İter 8–10 dahil) tamam; roadmap §6.5.8–6.5.10 işareti
 - [ ] PR/onay → Faz 7 veya kullanıcı yönlendirmesi

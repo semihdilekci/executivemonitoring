@@ -41,6 +41,7 @@ class ApiKeyRepository:
         model: str,
         priority_order: int,
         is_active: bool = True,
+        request_type_scope: list[str] | None = None,
     ) -> ApiKey:
         api_key = ApiKey(
             provider=provider,
@@ -49,6 +50,7 @@ class ApiKeyRepository:
             model=model,
             priority_order=priority_order,
             is_active=is_active,
+            request_type_scope=request_type_scope or [],
         )
         db.add(api_key)
         await db.flush()
@@ -60,5 +62,19 @@ class ApiKeyRepository:
 
     async def update_status(self, db: AsyncSession, api_key: ApiKey, *, is_active: bool) -> ApiKey:
         api_key.is_active = is_active
+        await db.flush()
+        return api_key
+
+    async def update_scope(
+        self,
+        db: AsyncSession,
+        api_key: ApiKey,
+        *,
+        request_type_scope: list[str],
+        model: str | None = None,
+    ) -> ApiKey:
+        api_key.request_type_scope = request_type_scope
+        if model is not None:
+            api_key.model = model
         await db.flush()
         return api_key

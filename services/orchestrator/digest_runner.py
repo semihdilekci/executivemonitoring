@@ -19,8 +19,10 @@ from collections.abc import Awaitable, Callable
 
 from packages.shared.enums import DigestStatus
 from packages.shared.models.digest_section import DigestSection
+from packages.shared.models.newsletter_template import NewsletterTemplate
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from services.ai_engine.digest_generator import DigestGenerator
 from services.ai_engine.exceptions import DigestGenerationError
@@ -47,10 +49,20 @@ class AiEngineDigestRunner:
     async def run(self, request: DigestRequest) -> DigestRunResult:
         async with self._session_factory() as db:
             try:
+                newsletter = await db.scalar(
+                    select(NewsletterTemplate)
+                    .options(selectinload(NewsletterTemplate.sections))
+                    .where(NewsletterTemplate.id == request.newsletter_template_id)
+                )
+                if newsletter is None:
+                    return DigestRunResult(
+                        status=DigestStatus.FAILED,
+                        error="Bülten şablonu bulunamadı.",
+                    )
                 generator = await self._generator_factory(db, request)
                 digest = await generator.generate(
                     db,
-                    digest_type=request.digest_type,
+                    newsletter=newsletter,
                     period_start=request.period_start,
                     period_end=request.period_end,
                     actor_user_id=request.actor_user_id,
@@ -84,7 +96,7 @@ class AiEngineDigestRunner:
                 await db.rollback()
                 logger.exception(
                     "pipeline_digest_generation_unexpected_error",
-                    extra={"digest_type": request.digest_type.value},
+                    extra={"newsletter_template_id": str(request.newsletter_template_id)},
                 )
                 return DigestRunResult(
                     status=DigestStatus.FAILED,

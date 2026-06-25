@@ -310,11 +310,11 @@ class PipelineService:
     def _resolve_params(body: TriggerPipelineRequest) -> dict[str, Any]:
         if body.run_type != PipelineRunType.DIGEST_UPDATE:
             return {}
-        assert body.digest_type is not None  # model_validator garanti eder
+        assert body.newsletter_template_id is not None  # model_validator garanti eder
         assert body.period_start is not None
         assert body.period_end is not None
         return {
-            "digest_type": body.digest_type.value,
+            "newsletter_template_id": str(body.newsletter_template_id),
             "period_start": body.period_start.isoformat(),
             "period_end": body.period_end.isoformat(),
             "send_notification": body.send_notification,

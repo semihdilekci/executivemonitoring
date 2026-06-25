@@ -222,6 +222,31 @@ CREATE INDEX idx_{schema}_processed_items_content_category ON {schema}.processed
 
 **`content_category` (Faz 6.2):** Enricher'ın keyword kategorisi (`macro`, `fmcg`, `finance`, `geopolitical`, `strategy`, `regulatory`; `keyword_category_enum` değerleri — Faz 6.3'ten itibaren DB `keywords` havuzundan). **İnce sınıflandırma** — depolama schema'sını belirlemez. Faz 6.2 öncesi kayıtlar için `NULL` kabul edilir; yeni processor persist zorunlu doldurur. Migration: `006_content_category.py` (`down_revision`: `005_pipeline_tables`).
 
+**`language` semantiği (Faz 6.5):** `title` + `clean_content` artık platformun **canonical (birincil) dilindeki** içeriği tutar; MVP-0'da bu **Türkçe**'dir. İngilizce kaynaklı haberler processor `TranslationProcessor` adımında (`Docs/04` §8.45) Türkçeye çevrilir; çeviri başarılıysa `language = "tr"` olur ve orijinal İngilizce metin `processed_item_translations`'a `is_original=true` ile yazılır. Çeviri başarısızsa içerik İngilizce kalır (`language = "en"`, çeviri satırı yazılmaz). RAG `content_chunks` ve bülten editörü daima `clean_content` (canonical) üzerinden çalışır → embedding'ler ve bülten Türkçe olur.
+
+### 4.4b processed_item_translations (Faz 6.5 — çok-dilli içerik)
+
+İçeriğin **canonical olmayan dil varyantlarını** saklar. MVP-0'da yalnızca İngilizce kaynaklı haberlerin orijinali (`is_original=true`) yazılır; canonical Türkçe içerik `processed_items.title`/`clean_content`'tedir (varyant tablosunda **tekrarlanmaz**). Altyapı ileride TR↔EN çift-yönlü servise uygundur: TR kaynaklı bir haberin İngilizce çevirisi gerektiğinde yeni bir satır (`language='en'`, `is_original=false`) eklenir — **şema değişikliği gerekmez**.
+
+```sql
+CREATE TABLE news.processed_item_translations (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    processed_item_id   UUID NOT NULL REFERENCES news.processed_items(id) ON DELETE CASCADE,
+    language            VARCHAR(5) NOT NULL,
+    title               TEXT NOT NULL,
+    content             TEXT NOT NULL,
+    is_original         BOOLEAN NOT NULL DEFAULT false,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_processed_item_translations_item_lang UNIQUE (processed_item_id, language)
+);
+
+CREATE INDEX idx_processed_item_translations_item ON news.processed_item_translations (processed_item_id);
+```
+
+- **`is_original`:** Kaynak dildeki ham (çevrilmemiş) varyantı işaretler. İçerik arşivi detayında "Orijinal (EN)" sekmesi bu satırdan beslenir (`Docs/03` §archive); canonical TR sekmesi `processed_items.clean_content`'ten.
+- **Migration:** `alembic/versions/0XX_processed_item_translations.py` (`down_revision`: Faz 6.5 newsletter config migration'ı). `news` schema-qualified.
+
 ### 4.5 content_chunks
 
 ```sql
@@ -342,18 +367,22 @@ CREATE INDEX idx_newsletter_sections_template_id ON newsletter_sections (newslet
 
 ```sql
 CREATE TABLE api_keys (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider        api_provider_enum NOT NULL,
-    key_alias       VARCHAR(100) NOT NULL,
-    encrypted_key   TEXT NOT NULL,
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    priority_order  INTEGER NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider            api_provider_enum NOT NULL,
+    key_alias           VARCHAR(100) NOT NULL,
+    encrypted_key       TEXT NOT NULL,
+    model               VARCHAR(100),
+    is_active           BOOLEAN NOT NULL DEFAULT true,
+    priority_order      INTEGER NOT NULL,
+    request_type_scope  JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_api_keys_provider ON api_keys (provider);
 CREATE INDEX idx_api_keys_is_active ON api_keys (is_active);
 ```
+
+**`request_type_scope` (Faz 6.5 — operasyon kapsamı):** Bu anahtarın hangi LLM operasyonlarında kullanılacağını sınırlayan `LlmRequestType` değer dizisi (`digest_generation`, `chatbot`, `article_translation`). **Boş dizi `[]` = tüm operasyonlar** (geriye uyumlu varsayılan). LLM client (`Docs/04` §9.1) bir operasyon için provider listesi kurarken yalnızca kapsamı o operasyonu içeren (veya boş kapsamlı) aktif anahtarları `priority_order`'a göre seçer. Böylece **çeviri için ayrı, daha ucuz bir provider sırası** (örn. Gemini Flash / Groq) kurulabilir; pahalı bülten anahtarları (Claude) `article_translation` kapsamı dışında bırakılır. Her anahtar kendi `model` değerini taşıdığından çeviri otomatik olarak ucuz modelle koşar — ayrı model parametresi gerekmez.
 
 ### 4.10 api_usage_logs
 
@@ -496,6 +525,9 @@ Bu tablo UUID PK kullanmaz; `key` alanı doğal primary key'dir.
 | `embedding_model` | `"openai/text-embedding-3-small"` | Aktif embedding modeli |
 | `embedding_chunk_size` | `512` | Chunk boyutu (token) |
 | `embedding_chunk_overlap` | `64` | Chunk overlap (token) |
+| `translation_min_relevance_score` | `75` | İngilizce haber çevirisi için minimum relevance skoru (0–100); `relevance_score*100` bu değerin altındaki haberler çevrilmez (Faz 6.5) |
+
+> **Çeviri eşiği (Faz 6.5):** `translation_min_relevance_score` newsletter editörünün `min_content_score`'u ile aynı 0–100 konvansiyonunu kullanır. `TranslationProcessor` (`Docs/04` §8.45) yalnızca `language == "en"` **ve** `relevance_score*100 >= translation_min_relevance_score` koşulunu sağlayan haberleri çevirir; bülten eşiğinin altında kalıp zaten bültene girmeyecek haberler boşuna çevrilmez.
 
 ### 4.16 alarms (MVP-1)
 
@@ -706,6 +738,7 @@ erDiagram
     raw_items ||--o| fmcg_processed_items : "raw_item_id"
 
     news_processed_items ||--o{ content_chunks : "processed_item_id (FK)"
+    news_processed_items ||--o{ processed_item_translations : "processed_item_id (FK)"
 
     digests ||--o{ digest_sections : "digest_id"
     newsletter_templates ||--o{ newsletter_sections : "newsletter_template_id"
@@ -760,6 +793,15 @@ erDiagram
         integer token_count
     }
 
+    processed_item_translations {
+        uuid id PK
+        uuid processed_item_id FK
+        varchar language
+        text title
+        text content
+        boolean is_original
+    }
+
     digests {
         uuid id PK
         uuid newsletter_template_id FK
@@ -800,7 +842,9 @@ erDiagram
         api_provider_enum provider
         varchar key_alias
         text encrypted_key
+        varchar model
         integer priority_order
+        jsonb request_type_scope
     }
 
     api_usage_logs {
@@ -914,7 +958,7 @@ Migration dosyaları `NNN_kısa_açıklama.py` formatında adlandırılır. Sır
 4. `sources`
 5. `raw_items`
 6. `processed_items` (5 schema'da)
-7. `content_chunks`
+7. `content_chunks`; `news.processed_item_translations` (Faz 6.5; ayrı migration `0XX_processed_item_translations.py`)
 8. `digests`
 9. `digest_sections`
 10. `newsletter_templates` + `newsletter_sections` (Faz 6.5; MVP-0 çekirdekte `prompt_templates` idi → `013_newsletter_config.py` ile migrate→drop)

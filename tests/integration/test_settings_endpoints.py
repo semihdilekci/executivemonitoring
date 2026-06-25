@@ -203,3 +203,74 @@ async def test_settings_unauthenticated_returns_401(
     )
     assert update_response.status_code == 401
     assert update_response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+_TRANSLATION_KEY = "translation_min_relevance_score"
+
+
+@pytest.fixture
+async def translation_score_setting(database_url: str) -> AsyncIterator[None]:
+    """`translation_min_relevance_score` ayarını 75'e sabitler; teardown geri yükler.
+
+    Migration 016 ayarı ekler; test deterministik olsun diye upsert + restore yapılır
+    (silinmez — processor varsayılan-okuma davranışı korunur).
+    """
+    engine = create_async_engine(database_url)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as session:
+        row = await session.get(SystemSetting, _TRANSLATION_KEY)
+        if row is None:
+            session.add(
+                SystemSetting(
+                    key=_TRANSLATION_KEY,
+                    value=75,
+                    description="İngilizce haber çevirisi için minimum relevance skoru (0–100)",
+                )
+            )
+        else:
+            row.value = 75
+        await session.commit()
+
+    yield
+
+    async with session_factory() as session:
+        row = await session.get(SystemSetting, _TRANSLATION_KEY)
+        if row is not None:
+            row.value = 75
+            await session.commit()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_update_translation_score_valid(
+    api_client: AsyncClient,
+    admin_test_user: AuthTestUser,
+    translation_score_setting: None,
+) -> None:
+    token = await login_and_get_token(api_client, admin_test_user)
+    response = await api_client.put(
+        f"/api/v1/settings/{_TRANSLATION_KEY}",
+        headers=auth_headers(token),
+        json={"value": 80},
+    )
+    assert response.status_code == 200
+    assert response.json()["value"] == 80
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid_value", [150, -1, 75.5, True, "80"])
+async def test_update_translation_score_out_of_range_returns_422(
+    api_client: AsyncClient,
+    admin_test_user: AuthTestUser,
+    translation_score_setting: None,
+    invalid_value: object,
+) -> None:
+    token = await login_and_get_token(api_client, admin_test_user)
+    response = await api_client.put(
+        f"/api/v1/settings/{_TRANSLATION_KEY}",
+        headers=auth_headers(token),
+        json={"value": invalid_value},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"

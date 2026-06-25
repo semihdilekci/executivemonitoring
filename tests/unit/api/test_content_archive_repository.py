@@ -21,7 +21,6 @@ from apps.api.repositories.processed_item_repository import (
     encode_cursor,
 )
 from apps.api.services.content_archive_service import ContentArchiveService
-from packages.shared.enums import DigestType
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -203,7 +202,7 @@ async def test_find_for_processed_item_ids_maps_usages() -> None:
     )
     digest = SimpleNamespace(
         id=uuid.uuid4(),
-        digest_type=DigestType.STRATEGY_WEEKLY,
+        newsletter_slug="strategy_weekly",
         title="Strateji Haftalık",
         period_start=date(2026, 6, 9),
         period_end=date(2026, 6, 15),
@@ -231,7 +230,7 @@ async def test_find_for_processed_item_ids_empty_input() -> None:
 def _usage_row(digest_id: uuid.UUID) -> DigestUsageRow:
     return DigestUsageRow(
         digest_id=digest_id,
-        digest_type=DigestType.STRATEGY_WEEKLY,
+        newsletter_slug="strategy_weekly",
         digest_title="Strateji Haftalık",
         period_start=date(2026, 6, 9),
         period_end=date(2026, 6, 15),

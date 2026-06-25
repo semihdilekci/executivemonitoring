@@ -11,6 +11,7 @@ Cursor pagination `{schema}:{uuid}`. Liste yanıtında `clean_content` yer almaz
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
@@ -18,6 +19,7 @@ from typing import Any
 from packages.shared.models.content_chunk import ContentChunk
 from packages.shared.models.digest_section import DigestSection
 from packages.shared.models.processed_item import PROCESSED_ITEM_MODELS, ProcessedItem
+from packages.shared.models.processed_item_translation import ProcessedItemTranslation
 from packages.shared.models.raw_item import RawItem
 from packages.shared.models.source import Source
 from sqlalchemy import Select, String, and_, cast, func, literal, or_, select
@@ -297,3 +299,23 @@ class ProcessedItemRepository:
             .where(ContentChunk.processed_item_id == item_id)
         )
         return int(result.scalar_one() or 0)
+
+    async def list_translations(
+        self,
+        db: AsyncSession,
+        item_id: uuid.UUID,
+    ) -> Sequence[ProcessedItemTranslation]:
+        """İçeriğin dil varyantları (`processed_item_translations`); orijinal önce.
+
+        Dönüş tipi `Sequence` — sınıf içi `list` metodu builtin `list`'i gölgelediğinden
+        annotation'da builtin yerine `Sequence` kullanılır.
+        """
+        result = await db.execute(
+            select(ProcessedItemTranslation)
+            .where(ProcessedItemTranslation.processed_item_id == item_id)
+            .order_by(
+                ProcessedItemTranslation.is_original.desc(),
+                ProcessedItemTranslation.language.asc(),
+            )
+        )
+        return list(result.scalars().all())

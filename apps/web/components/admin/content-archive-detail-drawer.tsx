@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ErrorView } from "@/components/common/error-view";
 import { LoadingSkeleton } from "@/components/common/loading-skeleton";
@@ -40,11 +40,37 @@ export function ContentArchiveDetailDrawer({
 }: ContentArchiveDetailDrawerProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const [activeLang, setActiveLang] = useState<string>("canonical");
 
   const detailQuery = useContentArchiveDetail(
     isOpen && item ? item.id : null,
     isOpen && item ? item.schema_category : null,
   );
+
+  const detail = detailQuery.data;
+
+  // Canonical (TR) + her dil varyantı için sekme; varyant yoksa tek görünüm.
+  const languageTabs = useMemo(() => {
+    if (!detail) return [];
+    const canonical = {
+      key: "canonical",
+      label: `${detail.language.toUpperCase()} (canonical)`,
+      title: null as string | null,
+      content: detail.clean_content,
+    };
+    const variants = detail.translations.map((variant) => ({
+      key: `${variant.language}${variant.is_original ? "-orig" : ""}`,
+      label: `${variant.language.toUpperCase()}${variant.is_original ? " (orijinal)" : ""}`,
+      title: variant.title,
+      content: variant.content,
+    }));
+    return [canonical, ...variants];
+  }, [detail]);
+
+  // Yeni içerik yüklendiğinde canonical sekmesine dön.
+  useEffect(() => {
+    setActiveLang("canonical");
+  }, [detail?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -68,8 +94,9 @@ export function ContentArchiveDetailDrawer({
 
   if (!isOpen || !item) return null;
 
-  const detail = detailQuery.data;
   const safeUrl = getSafeExternalUrl(item.url);
+  const activeTab =
+    languageTabs.find((tab) => tab.key === activeLang) ?? languageTabs[0];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -194,14 +221,46 @@ export function ContentArchiveDetailDrawer({
             <ErrorView onRetry={() => void detailQuery.refetch()} />
           ) : null}
 
-          {detail ? (
+          {detail && activeTab ? (
             <>
               <div className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                   Tam metin
                 </h3>
+
+                {languageTabs.length > 1 ? (
+                  <div
+                    className="flex flex-wrap gap-1 border-b border-gray-100"
+                    role="tablist"
+                    aria-label="Dil varyantları"
+                  >
+                    {languageTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab.key === activeTab.key}
+                        onClick={() => setActiveLang(tab.key)}
+                        className={cn(
+                          "-mb-px border-b-2 px-3 py-1.5 text-sm font-medium",
+                          tab.key === activeTab.key
+                            ? "border-navy-600 text-navy-800"
+                            : "border-transparent text-gray-500 hover:text-navy-700",
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {activeTab.title ? (
+                  <p className="text-sm font-semibold text-navy-800">
+                    {activeTab.title}
+                  </p>
+                ) : null}
                 <p className="whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-sm leading-relaxed text-gray-700">
-                  {detail.clean_content}
+                  {activeTab.content}
                 </p>
               </div>
 

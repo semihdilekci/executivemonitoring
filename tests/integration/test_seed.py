@@ -9,8 +9,8 @@ from apps.api.main import create_app
 from apps.api.middleware.rate_limiter import InMemoryRateLimiterBackend
 from httpx import ASGITransport, AsyncClient
 from packages.shared.models.keyword import Keyword
+from packages.shared.models.newsletter_template import NewsletterTemplate
 from packages.shared.models.notification_preference import NotificationPreference
-from packages.shared.models.prompt_template import PromptTemplate
 from packages.shared.models.source import Source
 from packages.shared.models.system_setting import SystemSetting
 from packages.shared.models.user import User
@@ -29,7 +29,7 @@ async def seed_database(database_url: str) -> AsyncIterator[None]:
         await session.execute(delete(NotificationPreference))
         await session.execute(delete(User).where(User.email.like("%@ygip.test")))
         await session.execute(delete(SystemSetting))
-        await session.execute(delete(PromptTemplate))
+        await session.execute(delete(NewsletterTemplate))
         await session.execute(delete(Source))
         await session.execute(delete(Keyword))
         await session.commit()
@@ -40,7 +40,7 @@ async def seed_database(database_url: str) -> AsyncIterator[None]:
         await session.execute(delete(NotificationPreference))
         await session.execute(delete(User).where(User.email.like("%@ygip.test")))
         await session.execute(delete(SystemSetting))
-        await session.execute(delete(PromptTemplate))
+        await session.execute(delete(NewsletterTemplate))
         await session.execute(delete(Source))
         await session.execute(delete(Keyword))
         await session.commit()
@@ -59,16 +59,17 @@ async def test_seed_is_idempotent(seed_database: None, database_url: str) -> Non
         await session.commit()
 
     assert first.users.created == 3
-    assert first.system_settings.created == 8
-    assert first.prompt_templates.created == 6
-    assert first.sources.created == 36
+    assert first.system_settings.created == 9
+    assert first.newsletter_templates.created == 3
+    assert first.sources.created == 66
     assert first.notification_preferences.created == 3
 
     assert second.users.created == 0
     assert second.users.skipped == 3
     assert second.system_settings.created == 0
-    assert second.system_settings.skipped == 8
-    assert second.prompt_templates.created == 0
+    assert second.system_settings.skipped == 9
+    assert second.newsletter_templates.created == 0
+    assert second.newsletter_templates.skipped == 3
     assert second.sources.created == 0
 
     await engine.dispose()
@@ -133,13 +134,13 @@ async def test_seed_record_counts(seed_database: None, database_url: str) -> Non
         )
         pref_count = await session.scalar(select(func.count()).select_from(NotificationPreference))
         settings_count = await session.scalar(select(func.count()).select_from(SystemSetting))
-        template_count = await session.scalar(select(func.count()).select_from(PromptTemplate))
+        template_count = await session.scalar(select(func.count()).select_from(NewsletterTemplate))
         source_count = await session.scalar(select(func.count()).select_from(Source))
 
     await engine.dispose()
 
     assert user_count == 3
     assert pref_count == 3
-    assert settings_count == 8
-    assert template_count == 6
-    assert source_count == 36
+    assert settings_count == 11
+    assert template_count == 3
+    assert source_count == 66

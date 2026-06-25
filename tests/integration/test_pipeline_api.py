@@ -123,7 +123,7 @@ async def test_digest_update_skips_non_digest_stages(
         headers=headers,
         json={
             "run_type": "digest_update",
-            "digest_type": "fmcg_weekly",
+            "newsletter_template_id": "aa0e8400-0000-4000-8000-000000000001",
             "period_start": "2026-06-09",
             "period_end": "2026-06-15",
             "send_notification": False,

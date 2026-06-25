@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from packages.shared.enums import DigestStatus, DigestType
+from packages.shared.enums import DigestStatus
 from packages.shared.models.digest import Digest
 from packages.shared.models.digest_section import DigestSection
 from sqlalchemy import Select, and_, delete, or_, select
@@ -31,14 +31,14 @@ class DigestRepository:
         *,
         cursor: uuid.UUID | None = None,
         limit: int = 10,
-        digest_type: DigestType | None = None,
+        newsletter_slug: str | None = None,
         status: DigestStatus | None = None,
     ) -> tuple[list[Digest], str | None, bool]:
         """Cursor pagination — sıralama: created_at DESC, id DESC."""
         query: Select[tuple[Digest]] = select(Digest)
 
-        if digest_type is not None:
-            query = query.where(Digest.digest_type == digest_type)
+        if newsletter_slug is not None:
+            query = query.where(Digest.newsletter_slug == newsletter_slug)
         if status is not None:
             query = query.where(Digest.status == status)
 
@@ -70,13 +70,13 @@ class DigestRepository:
         self,
         db: AsyncSession,
         *,
-        digest_type: DigestType,
+        newsletter_slug: str,
         period_start: date,
         period_end: date,
     ) -> Digest | None:
         result = await db.execute(
             select(Digest).where(
-                Digest.digest_type == digest_type,
+                Digest.newsletter_slug == newsletter_slug,
                 Digest.period_start == period_start,
                 Digest.period_end == period_end,
             )
@@ -87,13 +87,15 @@ class DigestRepository:
         self,
         db: AsyncSession,
         *,
-        digest_type: DigestType,
+        newsletter_slug: str,
+        newsletter_template_id: uuid.UUID | None,
         title: str,
         period_start: date,
         period_end: date,
     ) -> Digest:
         digest = Digest(
-            digest_type=digest_type,
+            newsletter_slug=newsletter_slug,
+            newsletter_template_id=newsletter_template_id,
             title=title,
             status=DigestStatus.GENERATING,
             period_start=period_start,
@@ -115,6 +117,7 @@ class DigestRepository:
         await db.execute(delete(DigestSection).where(DigestSection.digest_id == digest.id))
         digest.title = title
         digest.status = DigestStatus.GENERATING
+        digest.summary = None
         digest.s3_archive_key = None
         digest.total_sources_used = 0
         digest.generation_metadata = {}

@@ -29,7 +29,6 @@ if str(ROOT) not in sys.path:
 from apps.api.core.config import Settings, get_settings  # noqa: E402
 from packages.shared.enums import (  # noqa: E402
     DigestStatus,
-    DigestType,
     RawItemStatus,
 )
 from packages.shared.env_loader import load_dotenv_file  # noqa: E402
@@ -323,7 +322,7 @@ def _ref(idx: int) -> dict[str, Any]:
 DIGESTS: list[dict[str, Any]] = [
     {
         "id": "c3000000-0000-4000-8000-000000000001",
-        "digest_type": DigestType.STRATEGY_WEEKLY,
+        "newsletter_slug": "strategy_weekly",
         "title": "Strateji Haftalık — 9–15 Haziran 2026",
         "period_start": date(2026, 6, 9),
         "period_end": date(2026, 6, 15),
@@ -351,7 +350,7 @@ DIGESTS: list[dict[str, Any]] = [
     },
     {
         "id": "c3000000-0000-4000-8000-000000000002",
-        "digest_type": DigestType.FMCG_WEEKLY,
+        "newsletter_slug": "fmcg_weekly",
         "title": "FMCG Haftalık — 9–15 Haziran 2026",
         "period_start": date(2026, 6, 9),
         "period_end": date(2026, 6, 15),
@@ -371,7 +370,7 @@ DIGESTS: list[dict[str, Any]] = [
     },
     {
         "id": "c3000000-0000-4000-8000-000000000003",
-        "digest_type": DigestType.TURKISH_MEDIA_WEEKLY,
+        "newsletter_slug": "turkish_media_weekly",
         "title": "Türk Medyası Haftalık — 2–8 Haziran 2026",
         "period_start": date(2026, 6, 2),
         "period_end": date(2026, 6, 8),
@@ -482,7 +481,7 @@ async def _seed_digests(db: AsyncSession) -> tuple[int, int]:
             db.add(
                 Digest(
                     id=digest_id,
-                    digest_type=d["digest_type"],
+                    newsletter_slug=d["newsletter_slug"],
                     title=d["title"],
                     status=DigestStatus.READY,
                     period_start=d["period_start"],
