@@ -260,6 +260,114 @@ export function deriveCollectBreakdown(
   return out;
 }
 
+/**
+ * Bülten (digest) aşamasının `detail` JSONB'sinden dağıtım diagnostiği + yakalanan
+ * logları türetir. Güvenli okunur: eksik/bilinmeyen alanlar atlanır, ham JSON
+ * render edilmez (`Docs/06`). Anlamlı veri yoksa `null` döner.
+ */
+export interface DigestDistributionRow {
+  sortOrder: number;
+  name: string;
+  assignedCount: number;
+  generated: boolean;
+}
+
+export interface DigestLogEntry {
+  level: string;
+  logger: string;
+  message: string;
+  time: string | null;
+  context: Record<string, unknown> | null;
+  /** `logger.exception` ile basılan kayıtlarda yakalanan traceback metni. */
+  exc: string | null;
+}
+
+export interface DigestStepDetailData {
+  candidateCount: number | null;
+  droppedCount: number | null;
+  definedSectionCount: number | null;
+  sectionCount: number | null;
+  totalSourcesUsed: number | null;
+  distribution: DigestDistributionRow[];
+  logs: DigestLogEntry[];
+  logsTruncated: number;
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export function deriveDigestDetail(
+  detail: Record<string, unknown> | null | undefined,
+): DigestStepDetailData | null {
+  if (!detail) return null;
+  const diag = asRecord(detail.diagnostics);
+
+  const distribution: DigestDistributionRow[] = (
+    Array.isArray(diag.distribution) ? diag.distribution : []
+  ).flatMap((raw) => {
+    if (!raw || typeof raw !== "object") return [];
+    const row = raw as Record<string, unknown>;
+    return [
+      {
+        sortOrder: typeof row.sort_order === "number" ? row.sort_order : 0,
+        name: typeof row.name === "string" ? row.name : "—",
+        assignedCount:
+          typeof row.assigned_count === "number" ? row.assigned_count : 0,
+        generated: row.generated === true,
+      },
+    ];
+  });
+
+  const logs: DigestLogEntry[] = (
+    Array.isArray(detail.logs) ? detail.logs : []
+  ).flatMap((raw) => {
+    if (!raw || typeof raw !== "object") return [];
+    const entry = raw as Record<string, unknown>;
+    if (typeof entry.message !== "string") return [];
+    return [
+      {
+        level: typeof entry.level === "string" ? entry.level : "INFO",
+        logger: typeof entry.logger === "string" ? entry.logger : "",
+        message: entry.message,
+        time: typeof entry.time === "string" ? entry.time : null,
+        context:
+          entry.context && typeof entry.context === "object"
+            ? (entry.context as Record<string, unknown>)
+            : null,
+        exc: typeof entry.exc === "string" ? entry.exc : null,
+      },
+    ];
+  });
+
+  const data: DigestStepDetailData = {
+    candidateCount: asNumber(diag.candidate_count),
+    droppedCount: asNumber(diag.dropped_count),
+    definedSectionCount: asNumber(diag.defined_section_count),
+    sectionCount: asNumber(diag.section_count),
+    totalSourcesUsed: asNumber(diag.total_sources_used),
+    distribution,
+    logs,
+    logsTruncated:
+      typeof detail.logs_truncated === "number" ? detail.logs_truncated : 0,
+  };
+
+  if (
+    distribution.length === 0 &&
+    logs.length === 0 &&
+    data.candidateCount === null
+  ) {
+    return null;
+  }
+  return data;
+}
+
 const TERMINAL_RUN_STATUSES = new Set<PipelineRunStatus>([
   "completed",
   "partial",

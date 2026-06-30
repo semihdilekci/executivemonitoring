@@ -13,6 +13,10 @@ export const metadata: Metadata = {
   title: "YGIP — YıldızHolding Global Intelligence Platform",
   description:
     "YıldızHolding Global Intelligence Platform — haftalık bültenler ve AI destekli içgörüler.",
+  icons: {
+    icon: "/yildiz-holding-logo-transparent.png",
+    apple: "/yildiz-holding-logo-transparent.png",
+  },
 };
 
 export default function RootLayout({

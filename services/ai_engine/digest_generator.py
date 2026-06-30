@@ -165,6 +165,25 @@ class DigestGenerator:
                 for assignment in editor_result.assignments
             }
 
+            distribution = _build_distribution(newsletter.sections, assigned_by_order)
+            logger.info(
+                "digest_distribution_summary",
+                extra={
+                    "candidate_count": len(candidates),
+                    "dropped_count": len(editor_result.dropped),
+                    "defined_section_count": len(newsletter.sections),
+                    "assigned_section_count": sum(
+                        1 for row in distribution if row["generated"]
+                    ),
+                },
+            )
+            for row in distribution:
+                if not row["generated"]:
+                    logger.warning(
+                        "section_no_articles_assigned",
+                        extra={"section": row["name"], "sort_order": row["sort_order"]},
+                    )
+
             date_range = f"{period_start.isoformat()} — {period_end.isoformat()}"
             parsed_sections = await self._generate_sections(
                 newsletter=newsletter,
@@ -188,8 +207,10 @@ class DigestGenerator:
                 {
                     "candidate_count": len(candidates),
                     "section_count": len(digest_sections),
+                    "defined_section_count": len(newsletter.sections),
                     "dropped_count": len(editor_result.dropped),
                     "total_sources_used": total_sources_used,
+                    "distribution": distribution,
                 }
             )
 
@@ -399,3 +420,27 @@ def _count_distinct_sources(parsed_sections: Sequence[ParsedDigestSection]) -> i
         for ref in section.source_references:
             used.add(ref.processed_item_id)
     return len(used)
+
+
+def _build_distribution(
+    sections: Sequence[GeneratableSection],
+    assigned_by_order: dict[int, list[DigestArticle]],
+) -> list[dict[str, Any]]:
+    """Tanımlı her bölüm için editörün atadığı haber sayısı + üretilip üretilmediği.
+
+    `_generate_sections` haber atanmamış bölümü atladığından (`generated=False`),
+    bu liste "5 bölüm tanımlı ama 4'ü üretildi" durumunu ve sebebini (0 atama)
+    pipeline detayında görünür kılar.
+    """
+    rows: list[dict[str, Any]] = []
+    for section in sorted(sections, key=lambda item: item.sort_order):
+        count = len(assigned_by_order.get(section.sort_order, []))
+        rows.append(
+            {
+                "sort_order": section.sort_order,
+                "name": section.name,
+                "assigned_count": count,
+                "generated": count > 0,
+            }
+        )
+    return rows

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ApiKeyCard } from "@/components/admin/api-key-card";
 import { ApiKeyFormModal } from "@/components/admin/api-key-form-modal";
+import { NewsletterImpactSettingsForm } from "@/components/admin/newsletter-impact-settings-form";
 import { TranslationSettingsForm } from "@/components/admin/translation-settings-form";
 import { UsageChart } from "@/components/admin/usage-chart";
 import { RoleGate } from "@/components/auth/role-gate";
@@ -276,6 +277,8 @@ export default function AdminApiKeysPage() {
         </section>
 
         <TranslationSettingsForm />
+
+        <NewsletterImpactSettingsForm />
       </div>
 
       <ApiKeyFormModal

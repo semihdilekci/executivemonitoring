@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DigestStepDetail } from "@/components/admin/digest-step-detail";
 import { formatNumericDateTime } from "@/lib/date-format";
 import {
   PIPELINE_STAGE_LABELS,
@@ -225,6 +226,10 @@ function TimelineStep({
           <div className="mt-2">
             <CollectBreakdown step={step} />
           </div>
+        ) : null}
+
+        {step.stage === "digest" && !isSkipped ? (
+          <DigestStepDetail step={step} />
         ) : null}
 
         {step.started_at ? (

@@ -30,6 +30,14 @@ ARTICLE_SCHEMA = "news"
 
 
 @dataclass(frozen=True, slots=True)
+class SourceReferenceMetadata:
+    """Bülten kaynak referansı zenginleştirmesi — kaynak adı + yayın tarihi."""
+
+    source_name: str | None
+    published_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
 class ProcessedItemListFilters:
     """`GET /admin/processed-items` filtre seti (`Docs/03` §11.6)."""
 
@@ -250,6 +258,38 @@ class ProcessedItemRepository:
             encode_cursor(rows[-1].schema_category, rows[-1].id) if has_more and rows else None
         )
         return rows, next_cursor, has_more
+
+    async def get_source_metadata_by_ids(
+        self,
+        db: AsyncSession,
+        item_ids: Sequence[uuid.UUID],
+    ) -> dict[uuid.UUID, SourceReferenceMetadata]:
+        """`processed_item_id` → kaynak adı + yayın tarihi (bülten detay zenginleştirme).
+
+        Yalnızca `news` şeması sorgulanır (Faz 6.4 konsolidasyon). Bulunamayan id'ler
+        sözlükte yer almaz.
+        """
+        if not item_ids:
+            return {}
+
+        model = PROCESSED_ITEM_MODELS[ARTICLE_SCHEMA]
+        stmt: Select[Any] = (
+            select(
+                model.id.label("id"),
+                Source.name.label("source_name"),
+                model.published_at.label("published_at"),
+            )
+            .join(Source, Source.id == model.source_id)
+            .where(model.id.in_(tuple(item_ids)))
+        )
+        result = await db.execute(stmt)
+        return {
+            row.id: SourceReferenceMetadata(
+                source_name=row.source_name,
+                published_at=row.published_at,
+            )
+            for row in result.all()
+        }
 
     async def get_by_id(
         self,

@@ -92,6 +92,7 @@ class SourceService:
         source_type: SourceType | None = None,
         status: SourceStatus | None = None,
         category: SourceCategory | None = None,
+        q: str | None = None,
     ) -> SourceListResponse:
         resolved_limit = min(max(limit, 1), _SOURCES_MAX_LIMIT)
         cursor_id: uuid.UUID | None = None
@@ -101,6 +102,10 @@ class SourceService:
             except ValueError as exc:
                 raise NotFoundException(message="Geçersiz pagination cursor.") from exc
 
+        normalized_q = q.strip() if q is not None else None
+        if normalized_q == "":
+            normalized_q = None
+
         sources, next_cursor, has_more = await self._sources.list_paginated(
             db,
             cursor=cursor_id,
@@ -108,6 +113,7 @@ class SourceService:
             source_type=source_type,
             status=status,
             category=category,
+            q=normalized_q,
         )
         return SourceListResponse(
             data=[_to_source_response(source) for source in sources],

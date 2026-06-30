@@ -19,6 +19,7 @@ from services.ai_engine.editor_selector import (
     parse_editor_response,
     render_prompt,
 )
+from services.ai_engine.exceptions import DigestParseError
 from services.ai_engine.llm_client import LLMClient
 from services.ai_engine.models import LLMResponse, TokenUsage
 
@@ -289,21 +290,90 @@ def test_parse_section_by_index() -> None:
     assert result.assignments[0].sort_order == 1
 
 
-def test_parse_broken_json_falls_back_to_first_section() -> None:
+def test_parse_unparseable_json_raises_instead_of_dumping_to_first_section() -> None:
+    """Regresyon: bozuk/parse edilemez editör çıktısı eskiden tüm haberleri ilk
+    bölüme atıyordu ("hepsi tek bölümde" yanlış bülteni). Artık açıkça başarısız
+    olmalı ki üretim "failed" işaretlensin ve admin yeniden tetiklesin.
+    """
     art1, art2 = uuid.uuid4(), uuid.uuid4()
     sections = _FakeNewsletter().sections
     articles = [_article(art1), _article(art2)]
 
-    result = parse_editor_response(
-        "Bu JSON değil, sadece düz metin.",
-        sections=sections,
-        articles=articles,
-    )
+    with pytest.raises(DigestParseError):
+        parse_editor_response(
+            "Bu JSON değil, sadece düz metin.",
+            sections=sections,
+            articles=articles,
+        )
 
-    assert result.summary == ""
-    assert len(result.assignments) == 1
-    assert result.assignments[0].sort_order == 0
-    assert result.assignments[0].article_ids == [art1, art2]
+
+def test_parse_matches_section_with_index_prefix_label() -> None:
+    """Editör bölümü prompt'taki "1: Ad" etiketinin tamamıyla döndürürse de eşleşmeli."""
+    real = uuid.uuid4()
+    raw = json.dumps(
+        {
+            "summary": "özet",
+            "assignments": [
+                {"section": "1: Marka Hamleleri", "article_ids": [str(real)]}
+            ],
+            "dropped": [],
+        }
+    )
+    sections = _FakeNewsletter().sections
+
+    result = parse_editor_response(raw, sections=sections, articles=[_article(real)])
+
+    assert result.assignments[0].sort_order == 1
+    assert result.assignments[0].article_ids == [real]
+
+
+def test_parse_tolerates_literal_newline_in_summary() -> None:
+    """`summary` serbest metninde kaçışsız yeni satır parse'ı düşürmemeli (strict=False)."""
+    real = uuid.uuid4()
+    raw = (
+        '{"summary": "Birinci cümle.\nİkinci cümle.", '
+        '"assignments": [{"section": 0, "article_ids": ["' + str(real) + '"]}], '
+        '"dropped": []}'
+    )
+    sections = _FakeNewsletter().sections
+
+    result = parse_editor_response(raw, sections=sections, articles=[_article(real)])
+
+    assert result.assignments[0].article_ids == [real]
+    assert "İkinci cümle" in result.summary
+
+
+def test_parse_ignores_trailing_prose_after_json_object() -> None:
+    """Bloktan sonra gelen serbest metindeki `}` dengeli-nesne taramasıyla atlanmalı."""
+    real = uuid.uuid4()
+    raw = (
+        "İşte sonuç:\n"
+        '{"summary": "özet", '
+        '"assignments": [{"section": 0, "article_ids": ["' + str(real) + '"]}], '
+        '"dropped": []}\n'
+        "Not: bazı haberler {atlandı}."
+    )
+    sections = _FakeNewsletter().sections
+
+    result = parse_editor_response(raw, sections=sections, articles=[_article(real)])
+
+    assert result.summary == "özet"
+    assert result.assignments[0].article_ids == [real]
+
+
+def test_parse_tolerates_trailing_commas() -> None:
+    """Uzun dizilerde LLM'in bıraktığı sondaki virgül parse'ı düşürmemeli."""
+    real = uuid.uuid4()
+    raw = (
+        '{"summary": "özet", '
+        '"assignments": [{"section": 0, "article_ids": ["' + str(real) + '",]},], '
+        '"dropped": [],}'
+    )
+    sections = _FakeNewsletter().sections
+
+    result = parse_editor_response(raw, sections=sections, articles=[_article(real)])
+
+    assert result.assignments[0].article_ids == [real]
 
 
 def test_parse_json_inside_code_fence() -> None:

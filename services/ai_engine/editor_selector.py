@@ -34,6 +34,7 @@ from services.ai_engine.digest_models import (
     EditorResult,
     SectionAssignment,
 )
+from services.ai_engine.exceptions import DigestParseError
 from services.ai_engine.llm_client import LLMClient
 from services.ai_engine.processed_item_repository import (
     ProcessedItemRepository,
@@ -50,13 +51,21 @@ _NEWS_SCHEMA = "news"
 # haber) tek prompt'a sığacak şekilde yükseltilir. Aksi halde tek bir uzun haber
 # bütçeyi tüketip diğer adayların editöre hiç ulaşmamasına yol açar.
 # ~100 haber × ~1000 krk ≈ 130k krk ≈ ~32k token (groq 128k context içinde).
-_EDITOR_PER_ARTICLE_CHARS = 700
+_EDITOR_PER_ARTICLE_CHARS = 1000
 _EDITOR_MAX_CHARS = 130000
+
+# Editör ÇIKTISI ~100 adayın UUID'lerini (assignments + dropped) geri yazmak zorunda.
+# UUID'ler token-yoğun olduğundan varsayılan 4096 çıktı bütçesi büyük aday havuzunda
+# JSON'u ortadan kesip parse hatasına yol açıyordu — bu da dağıtımın tümüyle ilk
+# bölüme düşmesine (parse hatası → DigestParseError) neden oluyordu. Geniş çıktı
+# bütçesi bu kesilmeyi önler.
+_EDITOR_MAX_OUTPUT_TOKENS = 8192
 
 # Aday havuz tavanı — tüm bültenler için en az 100 haber editöre ulaşabilsin
 # (skor sırasına göre ilk N). Yeterli aday yoksa havuzdaki kadarı gönderilir.
 _DEFAULT_CANDIDATE_LIMIT = 100
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.DOTALL | re.IGNORECASE)
+_TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
 
 class SectionLike(Protocol):
@@ -153,8 +162,18 @@ class EditorSelector:
         response = await self._llm_client.complete(
             user_prompt,
             system_prompt=system_prompt,
+            max_tokens=_EDITOR_MAX_OUTPUT_TOKENS,
             operation_type=LlmRequestType.DIGEST_GENERATION,
         )
+        if response.usage.completion_tokens >= _EDITOR_MAX_OUTPUT_TOKENS:
+            logger.warning(
+                "editor_response_output_truncated",
+                extra={
+                    "completion_tokens": response.usage.completion_tokens,
+                    "max_tokens": _EDITOR_MAX_OUTPUT_TOKENS,
+                    "candidates": len(articles),
+                },
+            )
         return parse_editor_response(
             response.text,
             sections=newsletter.sections,
@@ -224,17 +243,31 @@ def parse_editor_response(
     sections: Sequence[SectionLike],
     articles: Sequence[DigestArticle],
 ) -> EditorResult:
-    """Editör JSON çıktısını parse eder; bozuk JSON'da deterministik fallback.
+    """Editör JSON çıktısını parse eder; parse edilemezse `DigestParseError`.
 
     Halüsinasyon koruması: yalnızca aday havuzdaki `processed_item_id`'ler
     eşleştirilir; bilinmeyen id'ler atılır. Editörün `dropped` olarak işaretlediği
     haberler hiçbir bölüme atanmaz.
+
+    Geçmişte bozuk JSON'da tüm haberler sessizce ilk bölüme atanıyordu; bu
+    "hepsi tek bölümde" görünen yanlış bültenlere yol açtığından artık üretim
+    açıkça başarısız olur (admin yeniden tetikler).
     """
     valid_ids = {article.processed_item_id for article in articles}
     payload = _extract_json_object(raw_text)
     if payload is None:
-        logger.warning("editor_response_unparseable_fallback")
-        return _fallback_result(sections, articles)
+        logger.error(
+            "editor_response_unparseable",
+            extra={
+                "candidates": len(articles),
+                "raw_len": len(raw_text),
+                "raw_preview": raw_text[:1500],
+                **_describe_json_error(raw_text),
+            },
+        )
+        raise DigestParseError(
+            "Editör LLM çıktısı geçerli JSON değil; bülten bölüm dağıtımı yapılamadı.",
+        )
 
     summary = _coerce_str(payload.get("summary"))
     dropped = _parse_id_list(payload.get("dropped"), valid_ids)
@@ -247,22 +280,6 @@ def parse_editor_response(
     return EditorResult(summary=summary, assignments=assignments, dropped=dropped)
 
 
-def _fallback_result(
-    sections: Sequence[SectionLike],
-    articles: Sequence[DigestArticle],
-) -> EditorResult:
-    """Bozuk JSON: tüm aday haberleri ilk bölüme ata, özet boş (uyarı loglanır)."""
-    if not sections or not articles:
-        return EditorResult(summary="", assignments=[], dropped=[])
-    first = min(sections, key=lambda section: section.sort_order)
-    assignment = SectionAssignment(
-        section_name=first.name,
-        sort_order=first.sort_order,
-        article_ids=[article.processed_item_id for article in articles],
-    )
-    return EditorResult(summary="", assignments=[assignment], dropped=[])
-
-
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     stripped = text.strip()
     if not stripped:
@@ -272,6 +289,12 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     block = _JSON_BLOCK_RE.search(stripped)
     if block:
         candidates.append(block.group(1))
+    # String-duyarlı denge taraması: ilk dengeli {..} nesnesi (kod bloğu/önsöz/sonsöz
+    # ne olursa olsun) — naif `rfind("}")` ile takip eden serbest metindeki `}`'lerin
+    # nesneyi bozmasını engeller.
+    balanced = _balanced_json_object(stripped)
+    if balanced:
+        candidates.append(balanced)
     candidates.append(stripped)
     start = stripped.find("{")
     end = stripped.rfind("}")
@@ -279,12 +302,82 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
         candidates.append(stripped[start : end + 1])
 
     for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
+        parsed = _loads_tolerant(candidate)
         if isinstance(parsed, dict):
             return parsed
+    return None
+
+
+def _describe_json_error(raw_text: str) -> dict[str, Any]:
+    """Parse edilemeyen çıktı için kesin JSON hatasını (sebep + konum + pencere) çıkarır.
+
+    En iyi adayı (dengeli nesne, yoksa ham metin) `strict=False` ile parse etmeyi
+    dener; `JSONDecodeError`'ın mesajını ve hatanın geçtiği konumun etrafındaki
+    ~200 karakterlik pencereyi döner — log'da kök sebebi tek bakışta gösterir.
+    """
+    candidate = _balanced_json_object(raw_text) or raw_text.strip()
+    try:
+        json.loads(candidate, strict=False)
+    except json.JSONDecodeError as exc:
+        window = candidate[max(0, exc.pos - 100) : exc.pos + 100]
+        return {
+            "json_error": f"{exc.msg} (satır {exc.lineno}, sütun {exc.colno}, poz {exc.pos})",
+            "error_window": window,
+        }
+    except (TypeError, ValueError):  # pragma: no cover - beklenmeyen tip
+        return {}
+    return {}
+
+
+def _balanced_json_object(text: str) -> str | None:
+    """İlk `{`'ten başlayıp string-içi tırnakları sayarak dengeli ilk nesneyi döner.
+
+    String durumu izlenir (kaçışlı `\\"` dahil) — bu yüzden değer içindeki `{`/`}`
+    derinliği bozmaz. Nesne kapanmadan metin biterse (truncation) `None` döner.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
+
+
+def _loads_tolerant(candidate: str) -> Any:
+    """`json.loads`; yaygın LLM-JSON kusurlarına toleranslı.
+
+    İki kurtarma uygulanır:
+    - **Trailing-comma temizliği**: uzun `article_ids`/`dropped` dizilerinde LLM'in
+      bıraktığı sondaki virgül (`[..., ]`, `{..., }`) standart JSON'da hata verir.
+    - **`strict=False`**: string değeri içinde kaçışsız yeni satır/tab gibi literal
+      kontrol karakterlerine izin verir — uzun `summary` serbest metninde sık görülür
+      ve tek başına editör çıktısını parse edilemez kılıp dağıtımı düşürebiliyordu.
+    """
+    for text in (candidate, _TRAILING_COMMA_RE.sub(r"\1", candidate)):
+        for strict in (True, False):
+            try:
+                return json.loads(text, strict=strict)
+            except json.JSONDecodeError:
+                continue
     return None
 
 
@@ -350,6 +443,18 @@ def _match_section(
                 return section
         if key.isdigit():
             return _match_section_index(int(key), sections)
+        # Editör prompt'ta bölümler "0: Ad" biçiminde listelendiğinden, LLM bazen
+        # etiketin tamamını ("0: yıldız holding...") döndürür. Önekteki "N:" kısmını
+        # ayırıp hem indeksle hem isimle eşleştirmeyi dener.
+        prefix, sep, rest = key.partition(":")
+        if sep and prefix.strip().isdigit():
+            matched = _match_section_index(int(prefix.strip()), sections)
+            if matched is not None:
+                return matched
+            rest_key = rest.strip()
+            for section in sections:
+                if section.name.casefold() == rest_key:
+                    return section
         return None
     if isinstance(raw, int):
         return _match_section_index(raw, sections)

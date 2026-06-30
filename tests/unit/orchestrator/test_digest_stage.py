@@ -7,6 +7,7 @@ yalnızca digest aşamasının koştuğu (`Docs/01` §5.5) doğrulanır.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
 from typing import Any
@@ -127,6 +128,47 @@ async def test_digest_failed_marks_step_failed_and_aborts() -> None:
     assert result.abort is True
     assert result.error == "LLM key tükendi"
     assert "digest_id" not in run.stats
+
+
+async def test_digest_detail_includes_diagnostics_and_captured_logs() -> None:
+    digest_id = uuid.uuid4()
+    diagnostics = {
+        "candidate_count": 42,
+        "dropped_count": 5,
+        "defined_section_count": 5,
+        "section_count": 4,
+        "distribution": [
+            {"sort_order": 0, "name": "A", "assigned_count": 3, "generated": True},
+            {"sort_order": 4, "name": "E", "assigned_count": 0, "generated": False},
+        ],
+    }
+
+    class _LoggingRunner:
+        """Üretim sırasında ai_engine logu basar; diagnostikli sonuç döner."""
+
+        async def run(self, request: DigestRequest) -> DigestRunResult:
+            logging.getLogger("ygip.ai_engine.section_generator").warning(
+                "section_no_articles_assigned",
+                extra={"section": "E", "sort_order": 4},
+            )
+            return DigestRunResult(
+                status=DigestStatus.READY,
+                digest_id=digest_id,
+                section_count=4,
+                diagnostics=diagnostics,
+            )
+
+    executor = DigestStageExecutor(runner=_LoggingRunner())  # type: ignore[arg-type]
+
+    result = await executor.run(_build_run(), _build_step())
+
+    assert result.detail["diagnostics"] == diagnostics
+    logs = result.detail["logs"]
+    assert any(
+        entry["message"] == "section_no_articles_assigned"
+        and entry.get("context", {}).get("section") == "E"
+        for entry in logs
+    )
 
 
 async def test_digest_send_notification_flag_passed_through() -> None:

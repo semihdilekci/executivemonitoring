@@ -45,7 +45,7 @@ export default function AdminSourcesPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setDebouncedSearch(searchInput.trim().toLowerCase());
+      setDebouncedSearch(searchInput.trim());
     }, 300);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
@@ -53,6 +53,7 @@ export default function AdminSourcesPage() {
   const sourcesQuery = useSources({
     source_type: typeFilter === "all" ? undefined : typeFilter,
     status: statusFilter === "all" ? undefined : statusFilter,
+    q: debouncedSearch || undefined,
     limit: 20,
   });
 
@@ -65,13 +66,6 @@ export default function AdminSourcesPage() {
     () => flattenSourcePages(sourcesQuery.data),
     [sourcesQuery.data],
   );
-
-  const filteredSources = useMemo(() => {
-    if (!debouncedSearch) return allSources;
-    return allSources.filter((item) =>
-      item.name.toLowerCase().includes(debouncedSearch),
-    );
-  }, [allSources, debouncedSearch]);
 
   const showToast = useCallback(
     (message: string, variant: "success" | "error" = "success") => {
@@ -156,7 +150,7 @@ export default function AdminSourcesPage() {
   const isEmpty =
     !sourcesQuery.isLoading &&
     !sourcesQuery.isError &&
-    filteredSources.length === 0;
+    allSources.length === 0;
 
   const hasNoFilters =
     typeFilter === "all" &&
@@ -164,21 +158,17 @@ export default function AdminSourcesPage() {
     debouncedSearch === "";
 
   const sourceCountLabel = useMemo(() => {
-    const count = filteredSources.length;
+    const count = allSources.length;
     if (count === 0) return null;
     if (sourcesQuery.hasNextPage) {
-      return `${count} kaynak gösteriliyor`;
+      return debouncedSearch
+        ? `${count}+ eşleşen kaynak`
+        : `${count} kaynak gösteriliyor`;
     }
-    if (debouncedSearch && count !== allSources.length) {
-      return `${count} / ${allSources.length} kaynak`;
-    }
-    return `Toplam ${count} kaynak`;
-  }, [
-    allSources.length,
-    debouncedSearch,
-    filteredSources.length,
-    sourcesQuery.hasNextPage,
-  ]);
+    return debouncedSearch
+      ? `${count} eşleşen kaynak`
+      : `Toplam ${count} kaynak`;
+  }, [allSources.length, debouncedSearch, sourcesQuery.hasNextPage]);
 
   return (
     <RoleGate>
@@ -201,7 +191,7 @@ export default function AdminSourcesPage() {
               label="Ara"
               name="search"
               type="search"
-              placeholder="Kaynak adı"
+              placeholder="Kaynak adında ara…"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
             />
@@ -278,10 +268,10 @@ export default function AdminSourcesPage() {
           />
         ) : null}
 
-        {!sourcesQuery.isLoading && !sourcesQuery.isError && filteredSources.length > 0 ? (
+        {!sourcesQuery.isLoading && !sourcesQuery.isError && allSources.length > 0 ? (
           <>
             <SourceTable
-              sources={filteredSources}
+              sources={allSources}
               onEdit={openEditModal}
               onDelete={setDeleteTarget}
               onToggleStatus={(source) => void handleToggleStatus(source)}

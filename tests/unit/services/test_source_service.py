@@ -106,3 +106,27 @@ async def test_patch_source_status_resets_error_count_from_error() -> None:
     )
     audit.log_event.assert_awaited_once()
     assert result.status == SourceStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_list_sources_passes_name_search_query() -> None:
+    source = _rss_source()
+    repo = MagicMock()
+    repo.list_paginated = AsyncMock(return_value=([source], None, False))
+
+    service = SourceService(sources=repo)
+    db = AsyncMock()
+
+    result = await service.list_sources(db, q="  Reuters  ")
+
+    repo.list_paginated.assert_awaited_once_with(
+        db,
+        cursor=None,
+        limit=20,
+        source_type=None,
+        status=None,
+        category=None,
+        q="Reuters",
+    )
+    assert len(result.data) == 1
+    assert result.data[0].name == "RSS"

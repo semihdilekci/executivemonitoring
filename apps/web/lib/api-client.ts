@@ -13,9 +13,15 @@ interface RetryableRequest extends InternalAxiosRequestConfig {
 
 let refreshPromise: Promise<string> | null = null;
 
+// `ngrok-skip-browser-warning`: ngrok free interstitial uyarı sayfasının XHR
+// yanıtlarına HTML enjekte etmesini engeller. Gerçek backend bu header'ı yok
+// sayar; sadece ngrok demosunda etkilidir.
 const authProxyClient = axios.create({
   withCredentials: true,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
+  },
   timeout: 30_000,
 });
 
@@ -70,7 +76,10 @@ function createApiClient(): AxiosInstance {
   const client = axios.create({
     baseURL: API_BASE_URL,
     timeout: 30_000,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+    },
     withCredentials: true,
   });
 

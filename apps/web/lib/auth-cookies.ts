@@ -54,7 +54,14 @@ export function clearAuthCookies(response: NextResponse): void {
 }
 
 export function getServerApiBaseUrl(): string {
+  // Next route handler'ları (login/refresh/logout/session) backend'e SERVER-side
+  // gider; bu yüzden her zaman absolute bir URL gerekir. ngrok tek-tünel
+  // demosunda NEXT_PUBLIC_API_BASE_URL relative ("/api/v1") yapılır, o durumda
+  // API_INTERNAL_BASE_URL devreye girer. Normal local dev'de ikisi de boşsa
+  // localhost'a düşer.
   return (
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1"
+    process.env.API_INTERNAL_BASE_URL ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    "http://localhost:8000/api/v1"
   );
 }

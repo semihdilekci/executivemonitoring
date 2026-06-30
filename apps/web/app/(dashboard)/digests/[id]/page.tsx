@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { useEffect, useMemo } from "react";
+import type { CSSProperties } from "react";
 import { ErrorView } from "@/components/common/error-view";
 import { ChatFab } from "@/components/chatbot/chat-fab";
 import { DigestDetailFooterNav } from "@/components/digest/digest-detail-footer-nav";
 import { DigestDetailHero } from "@/components/digest/digest-detail-hero";
 import { DigestDetailSkeleton } from "@/components/digest/digest-detail-skeleton";
+import { DigestReadingComfortWidget } from "@/components/digest/digest-reading-comfort-widget";
 import { DigestScrollProgress } from "@/components/digest/digest-scroll-progress";
 import { DigestSectionCard } from "@/components/digest/digest-section";
 import { DigestSummary } from "@/components/digest/digest-summary";
@@ -16,6 +18,7 @@ import { sortSections } from "@/lib/digest-detail-utils";
 import { resolveDigestIsRead } from "@/lib/digest-read-cache";
 import { useAuth } from "@/hooks/use-auth";
 import { useDigestDetail } from "@/hooks/use-digest-detail";
+import { useDigestReadingComfort } from "@/hooks/use-digest-reading-comfort";
 import { useDigestReadToggle } from "@/hooks/use-digest-read";
 import {
   flattenDigestPages,
@@ -37,6 +40,13 @@ export default function DigestDetailPage({ params }: DigestDetailPageProps) {
   const listQuery = useDigests({ limit: 50 });
   const markRead = useDigestReadToggle();
   const { data: sessionReadIds } = useDigestReadState();
+  const {
+    scale,
+    theme,
+    increaseScale,
+    decreaseScale,
+    setTheme,
+  } = useDigestReadingComfort();
 
   const sections = useMemo(
     () => (data ? sortSections(data.sections) : []),
@@ -96,8 +106,15 @@ export default function DigestDetailPage({ params }: DigestDetailPageProps) {
     <>
       <ChatFab digestId={data.id} />
       <DigestScrollProgress />
+      <DigestReadingComfortWidget
+        scale={scale}
+        theme={theme}
+        onIncreaseScale={increaseScale}
+        onDecreaseScale={decreaseScale}
+        onThemeChange={setTheme}
+      />
 
-      <div className="space-y-6">
+      <div className="space-y-6 overflow-x-visible">
         <Link
           href="/digests"
           className="no-print inline-flex items-center text-sm font-semibold text-navy-800 hover:text-gold-500"
@@ -107,12 +124,23 @@ export default function DigestDetailPage({ params }: DigestDetailPageProps) {
 
         <DigestToc sections={sections} variant="mobile" />
 
-        <div className="grid items-start gap-8 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <div className="grid items-start gap-8 overflow-visible lg:grid-cols-[200px_minmax(0,1fr)]">
           <aside className="digest-print-hide lg:sticky lg:top-6">
             <DigestToc sections={sections} variant="sidebar" />
           </aside>
 
-          <div className="digest-detail-content min-w-0 space-y-6">
+          <div
+            className="digest-detail-scale-shell justify-self-center overflow-visible"
+            style={
+              {
+                "--digest-scale": scale,
+              } as CSSProperties
+            }
+          >
+            <div
+              className="digest-detail-content space-y-6"
+              data-reading-theme={theme}
+            >
             <DigestDetailHero digest={data} />
 
             <DigestSummary digest={data} />
@@ -127,6 +155,7 @@ export default function DigestDetailPage({ params }: DigestDetailPageProps) {
               previousId={neighbors.previousId}
               nextId={neighbors.nextId}
             />
+            </div>
           </div>
         </div>
       </div>

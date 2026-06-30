@@ -42,11 +42,10 @@ export function DigestSectionCard({ section }: DigestSectionCardProps) {
           <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">
             Kaynak haberler
           </h4>
-          {section.source_references.map((reference, index) => (
+          {section.source_references.map((reference) => (
             <NewsDrawerCard
               key={reference.processed_item_id}
               reference={reference}
-              defaultExpanded={index === 0}
             />
           ))}
         </div>

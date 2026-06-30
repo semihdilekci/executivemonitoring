@@ -61,7 +61,7 @@ async def test_seed_is_idempotent(seed_database: None, database_url: str) -> Non
     assert first.users.created == 3
     assert first.system_settings.created == 9
     assert first.newsletter_templates.created == 3
-    assert first.sources.created == 66
+    assert first.sources.created == 68
     assert first.notification_preferences.created == 3
 
     assert second.users.created == 0
@@ -143,4 +143,4 @@ async def test_seed_record_counts(seed_database: None, database_url: str) -> Non
     assert pref_count == 3
     assert settings_count == 11
     assert template_count == 3
-    assert source_count == 66
+    assert source_count == 68

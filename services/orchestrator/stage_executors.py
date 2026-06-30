@@ -28,12 +28,17 @@ from services.orchestrator.aws_clients import (
     QueueDepth,
     SqsObserver,
 )
+from services.orchestrator.log_capture import capture_logs
 
 if TYPE_CHECKING:
     from packages.shared.models.pipeline_run import PipelineRun
     from packages.shared.models.pipeline_run_step import PipelineRunStep
 
 logger = logging.getLogger("ygip.orchestrator.stages")
+
+# Digest adımı boyunca yakalanıp step.detail'e yazılacak logger'lar — bülten
+# üretiminin tüm LLM/pipeline kodu (editör, bölüm, generator) + runner.
+_DIGEST_LOG_LOGGERS = ("ygip.ai_engine", "ygip.orchestrator.digest")
 
 # Manuel pipeline'da invoke edilebilen collector tipleri (`Docs/04` §7 COLLECTOR_MAP).
 # `["all"]` yalnızca bu kümeyle kesişen aktif tiplere genişletilir.
@@ -483,6 +488,7 @@ class DigestRunResult:
     digest_id: uuid.UUID | None = None
     section_count: int = 0
     error: str | None = None
+    diagnostics: dict[str, Any] | None = None
 
 
 class DigestRunner(Protocol):
@@ -538,7 +544,8 @@ class DigestStageExecutor:
                 detail={"params": dict(run.params or {})},
             )
 
-        result = await self._runner.run(request)
+        with capture_logs(_DIGEST_LOG_LOGGERS) as captured:
+            result = await self._runner.run(request)
         digest_id = str(result.digest_id) if result.digest_id is not None else None
         detail: dict[str, Any] = {
             "digest_id": digest_id,
@@ -548,6 +555,12 @@ class DigestStageExecutor:
             "section_count": result.section_count,
             "send_notification": request.send_notification,
         }
+        if result.diagnostics:
+            detail["diagnostics"] = result.diagnostics
+        if captured.records:
+            detail["logs"] = captured.records
+            if captured.dropped:
+                detail["logs_truncated"] = captured.dropped
         if digest_id is not None:
             # JSONB in-place mutasyon izlenmez — yeniden ata ki commit'te kalıcılaşsın.
             run.stats = {**(run.stats or {}), "digest_id": digest_id}

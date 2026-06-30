@@ -1044,5 +1044,35 @@
     "status": "active",
     "category": "fmcg",
     "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000067-0000-4000-8000-000000000067",
+    "name": "Cumhuriyet — Ekonomi",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.cumhuriyet.com.tr/rss/ekonomi.xml",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "finance"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "finance",
+    "target_phase": "mvp-0"
+  },
+  {
+    "id": "b0000068-0000-4000-8000-000000000068",
+    "name": "Evrensel",
+    "source_type": "rss",
+    "config": {
+      "feed_url": "https://www.evrensel.net/rss/haber.xml",
+      "language": "tr",
+      "ingest_mode": "filtered",
+      "default_category": "macro"
+    },
+    "polling_interval_minutes": 15,
+    "status": "active",
+    "category": "macro",
+    "target_phase": "mvp-0"
   }
 ]

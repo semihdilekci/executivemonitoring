@@ -249,3 +249,46 @@ async def test_delete_source_returns_raw_items_count(
     assert response.status_code == 200
     assert response.json()["deleted_raw_items_count"] == 1
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_list_sources_name_contains_search(
+    api_client: AsyncClient,
+    admin_test_user: AuthTestUser,
+    database_url: str,
+) -> None:
+    token = await login_and_get_token(api_client, admin_test_user)
+    headers = auth_headers(token)
+
+    unique_token = uuid.uuid4().hex[:8]
+    matching_name = f"Alpha Search Token {unique_token} Beta"
+    other_name = f"Unrelated Source {uuid.uuid4()}"
+
+    created_ids: list[uuid.UUID] = []
+    engine = create_async_engine(database_url)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    try:
+        for name in (matching_name, other_name):
+            response = await api_client.post(
+                "/api/v1/sources",
+                headers=headers,
+                json=_valid_rss_payload(name=name),
+            )
+            assert response.status_code == 201
+            created_ids.append(uuid.UUID(response.json()["id"]))
+
+        list_response = await api_client.get(
+            "/api/v1/sources",
+            headers=headers,
+            params={"q": unique_token},
+        )
+        assert list_response.status_code == 200
+        names = [item["name"] for item in list_response.json()["data"]]
+        assert matching_name in names
+        assert other_name not in names
+    finally:
+        async with session_factory() as session:
+            await session.execute(delete(Source).where(Source.id.in_(created_ids)))
+            await session.commit()
+        await engine.dispose()

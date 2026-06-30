@@ -24,11 +24,16 @@ class DigestArticle:
 
 @dataclass(frozen=True, slots=True)
 class SourceReference:
-    """Bülten bölümü kaynak referansı."""
+    """Bülten bölümü kaynak referansı.
+
+    `summary`: bölüm LLM'inin bu kaynak haber için ürettiği en fazla iki cümlelik
+    özet (Faz 6.5 — "Kaynak Haberler" çekmecesinde gösterilir). Üretilemezse `None`.
+    """
 
     processed_item_id: UUID
     title: str
     url: str | None = None
+    summary: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -37,6 +42,8 @@ class SourceReference:
         }
         if self.url:
             payload["url"] = self.url
+        if self.summary:
+            payload["summary"] = self.summary
         return payload
 
 

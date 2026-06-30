@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { AdminTopbar } from "@/components/layout/admin-topbar";
 import { PillNav } from "@/components/layout/pill-nav";
 import { Sidebar } from "@/components/layout/sidebar";
+import { AppLogo } from "@/components/common/app-logo";
 import { UserMenu } from "@/components/layout/user-menu";
 import { PageLoadingSkeleton } from "@/components/common/loading-skeleton";
 
@@ -50,7 +51,10 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-bg">
       <header className="no-print sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <PillNav activeHref={pillActiveHref} />
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <AppLogo size="sm" className="max-w-[100px] shrink-0 sm:max-w-[130px]" />
+            <PillNav activeHref={pillActiveHref} />
+          </div>
           <UserMenu />
         </div>
       </header>

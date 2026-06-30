@@ -36,7 +36,10 @@ from apps.api.repositories.newsletter_template_repository import (
     NewsletterTemplateRepository,
     newsletter_template_repository,
 )
-from apps.api.repositories.processed_item_repository import ProcessedItemRepository
+from apps.api.repositories.processed_item_repository import (
+    ProcessedItemRepository,
+    SourceReferenceMetadata,
+)
 from apps.api.repositories.settings_repository import SettingsRepository
 from apps.api.schemas.common import PaginationMeta
 from apps.api.schemas.digest import (
@@ -65,12 +68,16 @@ _IMPACT_USER_KEY = "newsletter_impact_user_prompt"
 _DEFAULT_IMPACT_SYSTEM_PROMPT = (
     "Sen YıldızHolding üst yönetimine danışmanlık yapan kıdemli bir strateji "
     "analistisin. Tek bir haberin YıldızHolding üzerindeki olası etkisini "
-    "değerlendirirsin. Yanıtın Türkçe, somut ve yönetici odaklıdır."
+    "değerlendirirsin. SADECE düz metin yaz; markdown, başlık, tablo, madde "
+    "işareti, kalın yazı veya emoji KULLANMA. Yanıtın Türkçe, somut, ağdasız "
+    "ve en fazla 3-4 cümle olmalıdır."
 )
 _DEFAULT_IMPACT_USER_PROMPT = (
     "Haber başlığı: {title}\n\nHaber içeriği:\n{content}\n\n"
-    "Bu gelişme YıldızHolding'i nasıl etkiler? Fırsat ve riskleri, ilgili iş "
-    "kollarını ve önerilen aksiyonu kısaca açıkla."
+    "Bu gelişmenin etkisini şu yapıda, kısa ve somut değerlendir: "
+    "(1) etkilenen YıldızHolding iş kolu veya markası, "
+    "(2) kurumsal/M&A açısından fırsat veya risk, (3) önerilen aksiyon. "
+    "En fazla 3-4 cümle, düz metin, ağdasız bir dille."
 )
 
 GenerationScheduler = Callable[..., Awaitable[None]]
@@ -81,16 +88,50 @@ def _to_list_item(digest: Digest) -> DigestListItemResponse:
     return DigestListItemResponse.model_validate(digest)
 
 
-def _to_section_response(section: Any) -> DigestSectionResponse:
-    refs = [
-        SourceReferenceResponse(
-            processed_item_id=uuid.UUID(str(item["processed_item_id"])),
-            title=str(item.get("title", "")),
-            url=item.get("url"),
+def _collect_reference_ids(digest: Digest) -> list[uuid.UUID]:
+    """Bölüm `source_references` JSONB içindeki tüm processed_item id'lerini toplar."""
+    ids: list[uuid.UUID] = []
+    seen: set[uuid.UUID] = set()
+    for section in digest.sections:
+        if not isinstance(section.source_references, list):
+            continue
+        for item in section.source_references:
+            if not isinstance(item, dict):
+                continue
+            raw_id = item.get("processed_item_id")
+            if not raw_id:
+                continue
+            try:
+                item_id = uuid.UUID(str(raw_id))
+            except ValueError:
+                continue
+            if item_id not in seen:
+                seen.add(item_id)
+                ids.append(item_id)
+    return ids
+
+
+def _to_section_response(
+    section: Any,
+    metadata: dict[uuid.UUID, SourceReferenceMetadata] | None = None,
+) -> DigestSectionResponse:
+    metadata = metadata or {}
+    refs = []
+    for item in section.source_references:
+        if not isinstance(item, dict) or not item.get("processed_item_id") or not item.get("title"):
+            continue
+        item_id = uuid.UUID(str(item["processed_item_id"]))
+        meta = metadata.get(item_id)
+        refs.append(
+            SourceReferenceResponse(
+                processed_item_id=item_id,
+                title=str(item.get("title", "")),
+                url=item.get("url"),
+                summary=item.get("summary"),
+                source_name=meta.source_name if meta else None,
+                published_at=meta.published_at if meta else None,
+            )
         )
-        for item in section.source_references
-        if isinstance(item, dict) and item.get("processed_item_id") and item.get("title")
-    ]
     return DigestSectionResponse(
         id=section.id,
         section_order=section.section_order,
@@ -101,12 +142,15 @@ def _to_section_response(section: Any) -> DigestSectionResponse:
     )
 
 
-def _to_detail_response(digest: Digest) -> DigestDetailResponse:
+def _to_detail_response(
+    digest: Digest,
+    metadata: dict[uuid.UUID, SourceReferenceMetadata] | None = None,
+) -> DigestDetailResponse:
     sections = sorted(digest.sections, key=lambda item: item.section_order)
     return DigestDetailResponse(
         **_to_list_item(digest).model_dump(),
         summary=digest.summary,
-        sections=[_to_section_response(section) for section in sections],
+        sections=[_to_section_response(section, metadata) for section in sections],
     )
 
 
@@ -173,7 +217,9 @@ class DigestService:
         digest = await self._digests.get_by_id(db, digest_id)
         if digest is None or self._is_hidden_from_user(digest, user):
             raise NotFoundException(message="Bülten bulunamadı.")
-        return _to_detail_response(digest)
+        ref_ids = _collect_reference_ids(digest)
+        metadata = await self._processed_items.get_source_metadata_by_ids(db, ref_ids)
+        return _to_detail_response(digest, metadata)
 
     async def initiate_generation(
         self,
@@ -281,6 +327,7 @@ class DigestService:
             response = await llm_client.complete(
                 user_prompt,
                 system_prompt=rendered_system,
+                max_tokens=512,
                 operation_type=LlmRequestType.CHATBOT,
             )
         except AIEngineHTTPError as exc:

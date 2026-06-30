@@ -311,6 +311,19 @@ async def test_generate_skips_sections_with_no_assignment() -> None:
     assert len(digest_repo.sections) == 1
     assert digest_repo.sections[0].section_title == "Piyasa Genel Görünümü"
 
+    # Diagnostik: 2 bölüm tanımlı, 1'i üretildi; boş bölüm açıkça işaretli
+    # (pipeline detayında "neden 4/5 bölüm oluştu" görünür kılar).
+    metadata = digest.generation_metadata
+    assert metadata["defined_section_count"] == 2
+    assert metadata["section_count"] == 1
+    distribution = metadata["distribution"]
+    assert [(row["sort_order"], row["generated"]) for row in distribution] == [
+        (0, True),
+        (1, False),
+    ]
+    assert distribution[0]["assigned_count"] == 1
+    assert distribution[1]["assigned_count"] == 0
+
 
 @pytest.mark.asyncio
 async def test_generate_section_parse_error_marks_failed() -> None:

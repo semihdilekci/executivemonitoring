@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useNewsImpact } from "@/hooks/use-news-impact";
+import { formatShortDate } from "@/lib/date-format";
 import { getSafeExternalUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 import type { SourceReference } from "@/types/api";
@@ -9,6 +10,18 @@ import type { SourceReference } from "@/types/api";
 interface NewsDrawerCardProps {
   reference: SourceReference;
   defaultExpanded?: boolean;
+}
+
+function formatReferenceMeta(reference: SourceReference): string | null {
+  const parts: string[] = [];
+  const sourceName = reference.source_name?.trim();
+  if (sourceName) {
+    parts.push(sourceName);
+  }
+  if (reference.published_at) {
+    parts.push(formatShortDate(reference.published_at));
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function ImpactAnalysis({
@@ -79,6 +92,7 @@ export function NewsDrawerCard({
 }: NewsDrawerCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const safeUrl = getSafeExternalUrl(reference.url);
+  const referenceMeta = formatReferenceMeta(reference);
 
   return (
     <div className="rounded-lg border border-gray-100 bg-gray-50/60">
@@ -101,15 +115,16 @@ export function NewsDrawerCard({
           <span className="block text-sm font-semibold text-navy-800">
             {reference.title}
           </span>
-          {safeUrl ? (
-            <span className="mt-1 block text-xs font-semibold text-blue-700">
-              Kaynak bağlantısı mevcut
+          {referenceMeta ? (
+            <span className="mt-1 block text-xs font-medium text-gray-500">
+              {referenceMeta}
             </span>
-          ) : (
-            <span className="mt-1 block text-xs text-gray-500">
-              Harici bağlantı yok
+          ) : null}
+          {reference.summary ? (
+            <span className="mt-1 block text-xs leading-relaxed text-gray-500">
+              {reference.summary}
             </span>
-          )}
+          ) : null}
         </span>
       </button>
 

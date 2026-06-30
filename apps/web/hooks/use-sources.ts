@@ -30,6 +30,7 @@ async function fetchSourcePage(
         source_type: params.source_type,
         status: params.status,
         category: params.category,
+        q: params.q,
       },
     },
   );
@@ -40,6 +41,7 @@ export function useSources(filters?: {
   source_type?: SourceListParams["source_type"];
   status?: SourceListParams["status"];
   category?: SourceListParams["category"];
+  q?: string;
   limit?: number;
 }) {
   const limit = filters?.limit ?? 20;
@@ -49,6 +51,7 @@ export function useSources(filters?: {
       source_type: filters?.source_type,
       status: filters?.status,
       category: filters?.category,
+      q: filters?.q,
       limit,
     }),
     queryFn: ({ pageParam }) =>
@@ -58,6 +61,7 @@ export function useSources(filters?: {
         source_type: filters?.source_type,
         status: filters?.status,
         category: filters?.category,
+        q: filters?.q,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>

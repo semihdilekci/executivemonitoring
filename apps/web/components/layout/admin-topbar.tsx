@@ -1,14 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { AppLogo } from "@/components/common/app-logo";
 import { Sidebar } from "./sidebar";
 import { cn } from "@/lib/utils";
 
-interface AdminTopbarProps {
-  title?: string;
-}
-
-export function AdminTopbar({ title = "YGIP Yönetim" }: AdminTopbarProps) {
+export function AdminTopbar() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
@@ -23,7 +20,7 @@ export function AdminTopbar({ title = "YGIP Yönetim" }: AdminTopbarProps) {
         >
           <span className="text-lg leading-none">☰</span>
         </button>
-        <p className="text-sm font-semibold text-navy-800">{title}</p>
+        <AppLogo size="sm" variant="default" href={undefined} />
         <div className="w-10" aria-hidden />
       </header>
 

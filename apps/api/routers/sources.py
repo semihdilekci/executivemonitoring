@@ -33,6 +33,7 @@ async def list_sources(
     source_type: Annotated[SourceType | None, Query()] = None,
     status: Annotated[SourceStatus | None, Query()] = None,
     category: Annotated[SourceCategory | None, Query()] = None,
+    q: Annotated[str | None, Query(min_length=1, max_length=255)] = None,
 ) -> SourceListResponse:
     return await source_service.list_sources(
         db,
@@ -41,6 +42,7 @@ async def list_sources(
         source_type=source_type,
         status=status,
         category=category,
+        q=q,
     )
 
 

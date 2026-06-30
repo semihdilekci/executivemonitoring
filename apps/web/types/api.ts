@@ -110,6 +110,12 @@ export interface SourceReference {
   processed_item_id: string;
   title: string;
   url: string | null;
+  /** Kaynak haberin en fazla iki cümlelik özeti (Faz 6.5). Eski bültenlerde olmayabilir. */
+  summary?: string | null;
+  /** RSS/API/e-posta kaynağının görünen adı. */
+  source_name?: string | null;
+  /** Haberin yayın tarihi (ISO 8601). */
+  published_at?: string | null;
 }
 
 export interface DigestSection {
@@ -232,6 +238,7 @@ export interface SourceListParams {
   source_type?: SourceType;
   status?: SourceStatus;
   category?: SourceCategory;
+  q?: string;
 }
 
 export interface CreateSourceRequest {

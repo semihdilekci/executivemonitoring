@@ -135,10 +135,11 @@ async def test_generate_section_empty_response_raises_parse_error() -> None:
 
 def test_parse_section_response_from_code_fence() -> None:
     raw = '```json\n{"ai_summary": "özet", "impact_note": "etki"}\n```'
-    summary, impact = parse_section_response(raw)
+    summary, impact, source_summaries = parse_section_response(raw)
 
     assert summary == "özet"
     assert impact == "etki"
+    assert source_summaries == {}
 
 
 def test_build_section_prompt_embeds_impact_instruction() -> None:
@@ -157,4 +158,63 @@ def test_build_source_references_keeps_article_order_and_urls() -> None:
     assert len(refs) == 2
     assert refs[0].title == "A"
     assert refs[0].url == "https://example.com/1"
+    assert refs[0].summary is None
     assert refs[1].processed_item_id == art2.processed_item_id
+
+
+def test_build_source_references_attaches_summaries() -> None:
+    art1, art2 = _article(title="A"), _article(title="B")
+    refs = build_source_references([art1, art2], {art1.processed_item_id: "A özeti."})
+
+    assert refs[0].summary == "A özeti."
+    assert refs[1].summary is None
+
+
+def test_parse_section_response_drops_unknown_source_summary_ids() -> None:
+    known = uuid.uuid4()
+    raw = json.dumps(
+        {
+            "ai_summary": "özet",
+            "impact_note": "etki",
+            "source_summaries": [
+                {"id": str(known), "summary": "Geçerli özet."},
+                {"id": str(uuid.uuid4()), "summary": "Halüsinasyon — bölüme atanmamış."},
+                {"id": "geçersiz-uuid", "summary": "Bozuk id."},
+                {"id": str(known), "summary": "   "},
+            ],
+        }
+    )
+    _, _, source_summaries = parse_section_response(raw, valid_ids={known})
+
+    assert source_summaries == {known: "Geçerli özet."}
+
+
+@pytest.mark.asyncio
+async def test_generate_section_attaches_source_summaries() -> None:
+    art1 = _article(item_id=uuid.uuid4(), title="Haber A")
+    art2 = _article(item_id=uuid.uuid4(), title="Haber B")
+    response = json.dumps(
+        {
+            "ai_summary": "Bölüm özeti.",
+            "impact_note": "Etki.",
+            "source_summaries": [
+                {
+                    "id": str(art1.processed_item_id),
+                    "summary": "A haberinin iki cümlelik özeti.",
+                },
+                {"id": str(uuid.uuid4()), "summary": "Bilinmeyen makale — atılmalı."},
+            ],
+        }
+    )
+    generator = SectionGenerator(llm_client=_llm_client(response))
+
+    result = await generator.generate_section(
+        section=_FakeSection(id=uuid.uuid4()),
+        newsletter_name="FMCG Haftalık",
+        articles=[art1, art2],
+        date_range="2026-06-09 — 2026-06-15",
+    )
+
+    by_id = {ref.processed_item_id: ref for ref in result.source_references}
+    assert by_id[art1.processed_item_id].summary == "A haberinin iki cümlelik özeti."
+    assert by_id[art2.processed_item_id].summary is None

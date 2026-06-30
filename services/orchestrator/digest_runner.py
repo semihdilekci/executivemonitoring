@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 from packages.shared.enums import DigestStatus
 from packages.shared.models.digest_section import DigestSection
@@ -29,6 +30,24 @@ from services.ai_engine.exceptions import DigestGenerationError
 from services.orchestrator.stage_executors import DigestRequest, DigestRunResult
 
 logger = logging.getLogger("ygip.orchestrator.digest")
+
+# `digest.generation_metadata` içinden pipeline detayında gösterilecek alanlar.
+_DIAGNOSTIC_KEYS = (
+    "candidate_count",
+    "dropped_count",
+    "defined_section_count",
+    "section_count",
+    "total_sources_used",
+    "distribution",
+)
+
+
+def _diagnostics_from_metadata(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    """`generation_metadata`'dan dağıtım diagnostiğini ayıklar (yoksa `None`)."""
+    if not metadata:
+        return None
+    diagnostics = {key: metadata[key] for key in _DIAGNOSTIC_KEYS if key in metadata}
+    return diagnostics or None
 
 # (db, request) -> kurulu DigestGenerator. send_notification gating'i factory'de.
 GeneratorFactory = Callable[[AsyncSession, DigestRequest], Awaitable[DigestGenerator]]
@@ -87,6 +106,7 @@ class AiEngineDigestRunner:
                     status=status,
                     digest_id=digest.id,
                     section_count=section_count,
+                    diagnostics=_diagnostics_from_metadata(digest.generation_metadata),
                 )
             except DigestGenerationError as exc:
                 # `generate` digest'i `failed` işaretledi (flush); commit ile kalıcılaştır.

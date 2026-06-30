@@ -70,6 +70,7 @@ export const queryKeys = {
       source_type?: string;
       status?: string;
       category?: string;
+      q?: string;
       limit?: number;
     }) => ["sources", "list", filters ?? {}] as const,
     detail: (id: string) => ["sources", "detail", id] as const,

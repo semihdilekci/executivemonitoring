@@ -17,7 +17,11 @@ from sqlalchemy import engine_from_config, pool
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # `disable_existing_loggers=False`: aksi halde fileConfig mevcut tüm `ygip.*`
+    # logger'larını `disabled=True` yapar — migration sonrası (ör. API process'i
+    # startup'ta migrate ediyorsa) uygulama logları tümüyle susar; ayrıca testlerde
+    # caplog'u sıra-bağımlı bozar.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

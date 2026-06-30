@@ -29,6 +29,7 @@ class SourceRepository:
         source_type: SourceType | None = None,
         status: SourceStatus | None = None,
         category: SourceCategory | None = None,
+        q: str | None = None,
     ) -> tuple[list[Source], str | None, bool]:
         """Cursor pagination — sıralama: created_at DESC, id DESC."""
         query: Select[tuple[Source]] = select(Source)
@@ -39,6 +40,8 @@ class SourceRepository:
             query = query.where(Source.status == status)
         if category is not None:
             query = query.where(Source.category == category)
+        if q is not None:
+            query = query.where(Source.name.ilike(f"%{q}%"))
 
         if cursor is not None:
             cursor_source = await self.get_by_id(db, cursor)

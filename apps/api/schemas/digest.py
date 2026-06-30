@@ -18,11 +18,18 @@ from apps.api.schemas.common import PaginatedResponse
 
 
 class SourceReferenceResponse(BaseModel):
-    """Bülten bölümü kaynak referansı."""
+    """Bülten bölümü kaynak referansı.
+
+    `summary`: kaynak haberin en fazla iki cümlelik özeti (Faz 6.5). Eski
+    bültenlerde alan bulunmayabilir → `None`.
+    """
 
     processed_item_id: UUID
     title: str
     url: str | None = None
+    summary: str | None = None
+    source_name: str | None = None
+    published_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
